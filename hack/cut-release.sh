@@ -130,9 +130,9 @@ For example (in policy repo):
 You have some flexibility around what sha to use, but the current upstream/main is probably good choice.
 
 The config PR should add one more of these for ${RELEASE_NAME}:
-https://github.com/enterprise-contract/config/blob/ddfe77d02b8feb20e0701290dcf84e6d6d10abf0/src/data.json#L31-L40
+https://github.com/conforma/config/blob/ddfe77d02b8feb20e0701290dcf84e6d6d10abf0/src/data.json#L31-L40
 Don't forget to do 'make refresh' and check in the changes.
-When it's merged we should see it at https://github.com/enterprise-contract/config/blob/main/default-${RELEASE_NAME}/policy.yaml
+When it's merged we should see it at https://github.com/conforma/config/blob/main/default-${RELEASE_NAME}/policy.yaml
 
 Deciding when to update the tssc-sample-pipelines repo is up to the RHTAP developers and may depend on their release
 schedule and the release schedule of RHTAS. Note that there are two places to change it:

@@ -60,8 +60,8 @@ PUBLIC_KEY=${PUBLIC_KEY:-$KONFLUX_PROD_KEY}
 #PUBLIC_KEY=${PUBLIC_KEY:-$KONFLUX_STAGE_KEY}
 
 # Adjust as required
-POLICY_YAML=${POLICY_YAML:-"github.com/enterprise-contract/config//default"}
-#POLICY_YAML=${POLICY_YAML:-"github.com/enterprise-contract/config//redhat-no-hermetic"}
+POLICY_YAML=${POLICY_YAML:-"github.com/conforma/config//default"}
+#POLICY_YAML=${POLICY_YAML:-"github.com/conforma/config//redhat-no-hermetic"}
 #POLICY_YAML=${POLICY_YAML:-"./policy.yaml"}
 
 OUTPUT=${OUTPUT:-text}
