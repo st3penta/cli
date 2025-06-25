@@ -25,7 +25,7 @@ IDENTITY_ISSUER=${IDENTITY_ISSUER:-"https://token.actions.githubusercontent.com"
 #IDENTITY_REGEXP=${IDENTITY_REGEXP:-"https:\/\/github\.com\/(slsa-framework\/slsa-github-generator|lcarva\/festoji)\/"}
 #IDENTITY_ISSUER=${IDENTITY_ISSUER:-"https://token.actions.githubusercontent.com"}
 
-POLICY_YAML=${POLICY_YAML:-"github.com/enterprise-contract/config//github-default"}
+POLICY_YAML=${POLICY_YAML:-"github.com/conforma/config//github-default"}
 #POLICY_YAML=${POLICY_YAML:-"./policy.yaml"}
 
 OUTPUT=${OUTPUT:-yaml}
