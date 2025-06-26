@@ -25,7 +25,7 @@ spec:
   - name: output-image
     value: quay.io/redhat-user-workloads/rhtap-contract-tenant/ec-main/cli-main:{{revision}}
   - name: bundle-cli-ref-repo
-    value: quay.io/enterprise-contract/cli
+    value: quay.io/conforma/cli
   - name: dockerfile
     value: Dockerfile.dist
   - name: image-expires-after
