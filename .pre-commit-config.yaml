@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: Apache-2.0
 ---
 repos:
-  - repo: https://github.com/enterprise-contract/hooks
+  - repo: https://github.com/conforma/hooks
     rev: v0.0.2
     hooks:
       - id: check-commit-message 
