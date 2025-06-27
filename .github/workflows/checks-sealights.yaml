@@ -70,7 +70,7 @@ jobs:
           cache: false
 
       - name: Check go versions
-        uses: enterprise-contract/github-workflows/golang-version-check@main
+        uses: conforma/github-workflows/golang-version-check@main
 
       - name: Download SeaLights Go agent and CLI tool
         run: |
