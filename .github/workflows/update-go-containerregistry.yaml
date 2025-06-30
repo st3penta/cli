@@ -44,12 +44,12 @@ jobs:
 
       - name: update
         run: |
-          go mod edit -replace github.com/google/go-containerregistry=github.com/enterprise-contract/go-containerregistry@main
+          go mod edit -replace github.com/google/go-containerregistry=github.com/conforma/go-containerregistry@main
           go mod tidy
         env:
           # Hack to ensure this repo is always updated, see:
           #   https://github.com/golang/go/issues/45413
-          GOPRIVATE: github.com/enterprise-contract/go-containerregistry
+          GOPRIVATE: github.com/conforma/go-containerregistry
 
       - uses: actions/create-github-app-token@af35edadc00be37caa72ed9f3e6d5f7801bfdf09 # v1.11.7
         id: generate-token
@@ -64,10 +64,10 @@ jobs:
             go.mod
             go.sum
           branch: ci/update-go-containerregistry
-          commit-message: Bump enterprise-contract/go-containerregistry
+          commit-message: Bump conforma/go-containerregistry
           sign-commits: true
           signoff: true
-          title: Bump enterprise-contract/go-containerregistry
+          title: Bump conforma/go-containerregistry
           # We could use secrets.GITHUB_TOKEN here. That token is generated on-demand for any
           # workflow by GitHub. However, actions performed when using that token do not trigger
           # other events. So if we create a pull_request, it won't trigger all the CI checks. More:
