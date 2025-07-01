@@ -1,0 +1,221 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Rule Filtering Process in Conftest Evaluator
+
+This document explains the complex rule filtering process that occurs in the `Evaluate` function of the `conftestEvaluator`. The filtering happens after the `conftestRunner` executes all policy rules but before the final results are returned.
+
+## Overview
+
+The rule filtering process consists of several stages:
+
+1. **Initial Rule Execution** - All policy rules are executed by the conftest runner
+2. **Result Processing** - Each result type (warnings, failures, exceptions, skipped) is processed
+3. **Inclusion/Exclusion Filtering** - Results are filtered based on policy configuration
+4. **Severity-Based Filtering** - Results can be promoted or demoted between warning/failure categories
+5. **Effective Time Filtering** - Future-effective failures are demoted to warnings
+6. **Success Computation** - Success results are computed from unmatched rules
+7. **Missing Includes Handling** - Warnings are generated for unmatched include criteria
+8. **Dependency Trimming** - Results with unsatisfied dependencies are removed
+9. **Final Validation** - Ensures at least some rules were processed
+
+## Detailed Process
+
+### 1. Initial Rule Execution
+
+```go
+runResults, err := r.Run(ctx, target.Inputs)
+```
+
+The `conftestRunner` executes all policy rules and returns raw results containing:
+- **Warnings**: Rules that generated warning violations
+- **Failures**: Rules that generated failure violations  
+- **Exceptions**: Rules that were explicitly excepted
+- **Skipped**: Rules that were skipped
+- **Successes**: Count of successful rules (not detailed results)
+
+### 2. Result Processing by Type
+
+For each namespace result, the following processing occurs:
+
+#### Warning Processing
+
+```go
+for i := range result.Warnings {
+    warning := result.Warnings[i]
+    addRuleMetadata(ctx, &warning, rules)
+    
+    if !c.isResultIncluded(warning, target.Target, missingIncludes) {
+        // Filter out excluded warnings
+        continue
+    }
+    
+    if getSeverity(warning) == severityFailure {
+        // Promote to failure if severity indicates it should be a failure
+        failures = append(failures, warning)
+    } else {
+        warnings = append(warnings, warning)
+    }
+}
+```
+
+**Filtering Logic:**
+1. **Metadata Addition**: Rule metadata is added from policy annotations
+2. **Inclusion Check**: Warning is checked against include/exclude criteria
+3. **Severity Promotion**: Warnings with `severity: failure` are promoted to failures
+
+#### Failure Processing
+
+```go
+for i := range result.Failures {
+    failure := result.Failures[i]
+    addRuleMetadata(ctx, &failure, rules)
+    
+    if !c.isResultIncluded(failure, target.Target, missingIncludes) {
+        // Filter out excluded failures
+        continue
+    }
+    
+    if getSeverity(failure) == severityWarning || !isResultEffective(failure, effectiveTime) {
+        // Demote to warning if severity indicates or if not yet effective
+        warnings = append(warnings, failure)
+    } else {
+        failures = append(failures, failure)
+    }
+}
+```
+
+**Filtering Logic:**
+1. **Metadata Addition**: Rule metadata is added from policy annotations
+2. **Inclusion Check**: Failure is checked against include/exclude criteria
+3. **Severity Demotion**: Failures with `severity: warning` are demoted to warnings
+4. **Effective Time Check**: Failures with future `effective_on` dates are demoted to warnings
+
+#### Exception and Skipped Processing
+
+```go
+for i := range result.Exceptions {
+    exception := result.Exceptions[i]
+    addRuleMetadata(ctx, &exception, rules)
+    exceptions = append(exceptions, exception)
+}
+
+for i := range result.Skipped {
+    skip := result.Skipped[i]
+    addRuleMetadata(ctx, &skip, rules)
+    skipped = append(skipped, skip)
+}
+```
+
+**Processing:**
+- Exceptions and skipped results only have metadata added
+- No inclusion/exclusion filtering is applied to these result types
+
+### 3. Inclusion/Exclusion Filtering
+
+The `isResultIncluded` function determines whether a result should be included based on:
+
+#### Include/Exclude Criteria Structure
+
+```go
+type Criteria struct {
+    defaultItems []string      // Apply to all targets
+    digestItems  map[string][]string // Apply to specific image digests
+}
+```
+
+Results are scored based on specificity:
+- `@collection` patterns score 10 points
+- `*` (wildcard) scores 1 point  
+- Package names (`pkg`, `pkg.*`) score 10 points per namespace level
+- Specific rules (`pkg.rule`) score additional 100 points
+- Terms (`:term` suffix) score additional 100 points
+
+**Decision Logic:**
+```go
+includeScore := scoreMatches(ruleMatchers, c.include.get(target), missingIncludes)
+excludeScore := scoreMatches(ruleMatchers, c.exclude.get(target), map[string]bool{})
+return includeScore > excludeScore
+```
+
+A result is included if its include score is higher than its exclude score.
+
+#### Scoring Example
+
+Consider a rule with code `pipeline.required_tasks` and term `build`:
+
+**Possible matchers generated:**
+- `pipeline` (package) - scores 10
+- `pipeline.*` (package wildcard) - scores 10  
+- `pipeline.required_tasks` (specific rule) - scores 110 (10 + 100)
+- `pipeline:build` (package with term) - scores 110 (10 + 100)
+- `pipeline.*:build` (package wildcard with term) - scores 110 (10 + 100)
+- `pipeline.required_tasks:build` (specific rule with term) - scores 210 (10 + 100 + 100)
+- `*` (global wildcard) - scores 1
+- `@mandatory` (collection, if rule belongs to it) - scores 10
+
+**Evaluation scenarios:**
+1. **Include:** `["pipeline.*"]`, **Exclude:** `[]` → Include score: 10, Exclude score: 0 → **INCLUDED**
+2. **Include:** `["*"]`, **Exclude:** `["pipeline.required_tasks"]` → Include score: 1, Exclude score: 110 → **EXCLUDED**
+3. **Include:** `["pipeline.required_tasks:build"]`, **Exclude:** `["pipeline.*"]` → Include score: 210, Exclude score: 10 → **INCLUDED**
+
+### 4. Success Computation
+
+```go
+result.Successes = c.computeSuccesses(result, rules, target.Target, missingIncludes)
+```
+
+Success results are computed by:
+1. Identifying all rules that didn't appear in warnings, failures, exceptions, or skipped
+2. Checking if each unmatched rule should be included based on include/exclude criteria
+3. Creating success results for included rules
+
+### 5. Missing Includes Handling
+
+```go
+for missingInclude, isMissing := range missingIncludes {
+    if isMissing {
+        results = append(results, Outcome{
+            Warnings: []Result{{
+                Message: fmt.Sprintf("Include criterion '%s' doesn't match any policy rule", missingInclude),
+            }},
+        })
+    }
+}
+```
+
+Any include criteria that didn't match any rules generate warning results.
+
+### 6. Dependency Trimming
+
+```go
+trim(&results)
+```
+
+The `trim` function removes results that depend on rules that have been reported as failures, warnings, or skipped:
+
+1. **Dependency Collection**: Identifies all rules marked as failed/warned/skipped
+2. **Dependent Removal**: Removes any results that declare dependencies on those rules via `depends_on` metadata
+3. **Exclusion Notes**: Adds notes to remaining failures suggesting how to exclude them
+
+### 7. Final Validation
+
+```go
+if totalRules == 0 {
+    return nil, fmt.Errorf("no successes, warnings, or failures, check input")
+}
+```
+
+The process ensures that at least some rules were processed. If no rules were evaluated, it indicates an input error.
+
+## Key Considerations
+
+1. **Order Matters**: Warnings can be promoted to failures, and failures can be demoted to warnings
+2. **Inclusion Trumps Source**: A rule's original category (warning vs failure) can be overridden by include/exclude logic
+3. **Time-Based Logic**: Rules with future effective dates are treated as warnings until they become effective
+4. **Dependency Chains**: Failed dependencies can cascade to remove dependent rule results
+5. **Missing Includes**: Unmatched include patterns generate their own warning results
+
+This filtering system provides fine-grained control over which policy violations are reported and how they're categorized, allowing for gradual policy rollouts and context-specific rule management. 
