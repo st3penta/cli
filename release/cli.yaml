@@ -114,7 +114,7 @@ spec:
     taskRef:
       params:
       - name: bundle
-        value: quay.io/enterprise-contract/ec-task-bundle:snapshot
+        value: quay.io/conforma/tekton-task:latest
       - name: kind
         value: task
       - name: name
@@ -139,7 +139,7 @@ spec:
     taskRef:
       params:
       - name: bundle
-        value: quay.io/enterprise-contract/ec-task-bundle:snapshot
+        value: quay.io/conforma/tekton-task:latest
       - name: kind
         value: task
       - name: name

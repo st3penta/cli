@@ -179,7 +179,7 @@ spec:
           memory: 256Mi
         limits:
           memory: 256Mi
-      image: quay.io/conforma/cli:snapshot
+      image: quay.io/conforma/cli:latest
       command: [ec]
       args:
         - sigstore
@@ -211,12 +211,12 @@ spec:
           value: $(params.SINGLE_COMPONENT_CUSTOM_RESOURCE_NS)
         - name: SNAPSHOT_PATH
           value: $(params.HOMEDIR)/snapshot.json
-      image: quay.io/conforma/cli:snapshot
+      image: quay.io/conforma/cli:latest
       onError: continue # progress even if the step fails so we can see the debug logs
       command: [reduce-snapshot.sh]
 
     - name: validate
-      image: quay.io/conforma/cli:snapshot
+      image: quay.io/conforma/cli:latest
       onError: continue # progress even if the step fails so we can see the debug logs
       command: [ec]
       args:
@@ -284,7 +284,7 @@ spec:
           memory: 256Mi
         limits:
           memory: 256Mi
-      image: quay.io/conforma/cli:snapshot
+      image: quay.io/conforma/cli:latest
       onError: continue  # progress even if the step fails so we can see the debug logs
       command: [sh, -c]
       args:
@@ -303,7 +303,7 @@ spec:
           memory: 256Mi
         limits:
           memory: 256Mi
-      image: quay.io/conforma/cli:snapshot
+      image: quay.io/conforma/cli:latest
       onError: continue  # progress even if the step fails so we can see the debug logs
       command: [jq]
       args:
@@ -317,7 +317,7 @@ spec:
           memory: 256Mi
         limits:
           memory: 256Mi
-      image: quay.io/conforma/cli:snapshot
+      image: quay.io/conforma/cli:latest
       command: [printf]
       args:
         - "----- DEBUG OUTPUT -----\n"
@@ -329,7 +329,7 @@ spec:
           memory: 256Mi
         limits:
           memory: 256Mi
-      image: quay.io/conforma/cli:snapshot
+      image: quay.io/conforma/cli:latest
       command: [ec]
       args:
         - version
@@ -341,7 +341,7 @@ spec:
           memory: 256Mi
         limits:
           memory: 256Mi
-      image: quay.io/conforma/cli:snapshot
+      image: quay.io/conforma/cli:latest
       command: [jq]
       args:
         - '{policy: .policy, key: .key, "effective-time": .["effective-time"]}'
@@ -354,7 +354,7 @@ spec:
           memory: 256Mi
         limits:
           memory: 256Mi
-      image: quay.io/conforma/cli:snapshot
+      image: quay.io/conforma/cli:latest
       command: [jq]
       args:
         - "--argjson"

@@ -22,8 +22,12 @@ metadata:
   name: tenant-release
   namespace: rhtap-contract-tenant
 secrets:
-  - name: ec-cli-main  # push quay.io/enterprise-contract/cli
-  - name: ec-tekton-task-main  # push quay.io/enterprise-contract/tekton-task
+  # Push credential for quay.io/conforma/cli
+  # and quay.io/enterprise-contract/cli
+  - name: ec-cli-main
+  # Push credential for quay.io/conforma/tekton-task
+  # and quay.io/enterprise-contract/tekton-task
+  - name: ec-tekton-task-main
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
