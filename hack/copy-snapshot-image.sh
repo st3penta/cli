@@ -32,7 +32,7 @@ IMAGE_REF="$(echo "${SNAPSHOT_SPEC}" | jq -r '.components[0].containerImage')"
 
 TAGS=(
     'latest'
-    "${GIT_SHA}"
+    "kf-${GIT_SHA}"
 )
 for tag in "${TAGS[@]}"; do
     echo "Pushing image with tag ${tag}"
