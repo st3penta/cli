@@ -31,7 +31,7 @@ echo 'Resolving task bundle...'
 
 # Task definition built and pushed from main branch in the cli
 # repo by the Conforma Konflux build pipeline
-TASK_BUNDLE_REPO=quay.io/enterprise-contract/tekton-task
+TASK_BUNDLE_REPO=quay.io/conforma/tekton-task
 TASK_BUNDLE_TAG="${2:-latest}"
 
 # The same but built and pushed by a GitHub Workflow. Now deprecated.
