@@ -33,10 +33,12 @@ echo 'Resolving task bundle...'
 # repo by the Conforma Konflux build pipeline
 TASK_BUNDLE_REPO=quay.io/conforma/tekton-task
 TASK_BUNDLE_TAG="${2:-latest}"
+TAG_PREFIX="kf-"
 
 # The same but built and pushed by a GitHub Workflow. Now deprecated.
-#TASK_BUNDLE_REPO=quay.io/enterprise-contract/ec-task-bundle
+#TASK_BUNDLE_REPO=quay.io/conforma/tekton-task
 #TASK_BUNDLE_TAG="${2:-snapshot}"
+#TAG_PREFIX="gh-"
 
 MANIFEST=$(mktemp --tmpdir)
 function cleanup() {
@@ -47,7 +49,9 @@ skopeo inspect "docker://${TASK_BUNDLE_REPO}:${TASK_BUNDLE_TAG}" --raw > "${MANI
 TASK_BUNDLE_DIGEST="$(skopeo manifest-digest "${MANIFEST}")"
 REVISION="$(jq -r '.annotations["org.opencontainers.image.revision"]' "${MANIFEST}")"
 if [[ -n "${REVISION}" && "${REVISION}" != null ]]; then
-    TASK_BUNDLE_TAG="${REVISION}"
+    # We push "kf-{{sha}}" tags for Konflux built task bundles and "gh-{{sha}}"
+    # tags for GitHub built task bundles. That's why the $TAG_PREFIX is needded.
+    TASK_BUNDLE_TAG="${TAG_PREFIX}${REVISION}"
 fi
 # Sanity check
 diff \
