@@ -284,24 +284,34 @@ $(subst image_,push_image_,$(ALL_SUPPORTED_IMG_OS_ARCH)): image_$$(TARGETOS)_$$(
 dist-image: $(ALL_SUPPORTED_IMG_OS_ARCH) ## Build images for all supported platforms/architectures
 
 .PHONY: dist-image-push
-# Generates a list of image references in the form of
-# "$(IMAGE_REPO):$(IMAGE_TAG)-{platform}-{arch}" generated from a list of "image_{platform}_{arch}"
-ALL_IMAGE_REFS=$(subst image-,$(IMAGE_REPO):$(IMAGE_TAG)-,$(subst _,-,$(ALL_SUPPORTED_IMG_OS_ARCH)))
-# Depends on "push_image_{platform}_{arch}" targets
-dist-image-push: dist-image  $(subst image_,push_image_,$(ALL_SUPPORTED_IMG_OS_ARCH)) ## Push images and image manifest for all supported platforms
-# Push all built images from the "image_{platform}_{arch}" target
-	@for img in $(ALL_IMAGE_REFS); do podman push $(PODMAN_OPTS) $$img; done
-# If the manifest with the same tag exists we need to remove it first, otherwise
-# podman manifest create fails
-	@2>/dev/null 1>/dev/null podman manifest rm $(IMAGE_REPO):$(IMAGE_TAG) || true
+ALL_IMAGE_REFS:=$(subst image-,$(IMAGE_REPO):$(IMAGE_TAG)-,$(subst _,-,$(ALL_SUPPORTED_IMG_OS_ARCH)))
+
+dist-image-push: dist-image $(subst image_,push_image_,$(ALL_SUPPORTED_IMG_OS_ARCH)) ## Push images and multi-arch manifest
+	@# Push each single-arch image
+	@for img in $(ALL_IMAGE_REFS); do \
+	  podman push $(PODMAN_OPTS) $$img; \
+	done
+
+	@# Recreate the manifest
+	@podman manifest rm $(IMAGE_REPO):$(IMAGE_TAG) 2>/dev/null || true
 	@podman manifest create $(IMAGE_REPO):$(IMAGE_TAG)
-# We set the TARGETOS and TARGETARCH from the image reference, given the
-# convention of having the image reference be tagged with "{tag}-{platform}-{arch}"
-	@for img in $(ALL_IMAGE_REFS); do TARGETOS=$$(echo $$img | sed -e 's/.*:[^-]\+-\([^-]\+\).*/\1/'); TARGETARCH=$${img/*-}; podman manifest add $(IMAGE_REPO):$(IMAGE_TAG) $(PODMAN_OPTS) $$img --os $${TARGETOS} --arch $${TARGETARCH}; done
+
+	@# Add each image with the correct os/arch
+	@for img in $(ALL_IMAGE_REFS); do \
+	  TAG=$${img##*:}; \
+	  TARGETOS=$$(echo "$$TAG" | rev | cut -d- -f2 | rev); \
+	  TARGETARCH=$$(echo "$$TAG" | rev | cut -d- -f1 | rev); \
+	  podman manifest add $(IMAGE_REPO):$(IMAGE_TAG) $(PODMAN_OPTS) "$$img" \
+	    --os "$$TARGETOS" --arch "$$TARGETARCH"; \
+	done
+
+	@# Push the manifest
 	@podman manifest push $(IMAGE_REPO):$(IMAGE_TAG) $(IMAGE_REPO):$(IMAGE_TAG)
+
 ifdef ADD_IMAGE_TAG
-	@for tag in $(ADD_IMAGE_TAG); do
-	  @podman manifest push $(IMAGE_REPO):$(IMAGE_TAG) $(IMAGE_REPO):$${tag}
+	@# Also push any additional tags (like “snapshot”)
+	@for tag in $(ADD_IMAGE_TAG); do \
+	  podman manifest push $(IMAGE_REPO):$(IMAGE_TAG) $(IMAGE_REPO):$$tag; \
 	done
 endif
 
