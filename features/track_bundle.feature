@@ -22,8 +22,7 @@ Feature: track bundles
     ---
     trusted_tasks:
       oci://${REGISTRY}/acceptance/bundle:tag:
-        - effective_on: "${TODAY_PLUS_30_DAYS}"
-          ref: sha256:0af8c4f92f4b252b3ef0cbd712e7352196bc33a96c58b6e1d891b26e171deae8
+        - ref: sha256:0af8c4f92f4b252b3ef0cbd712e7352196bc33a96c58b6e1d891b26e171deae8
 
     """
 
@@ -40,11 +39,9 @@ Feature: track bundles
     ---
     trusted_tasks:
       oci://${REGISTRY}/acceptance/bundle:1.0:
-        - effective_on: "${TODAY_PLUS_30_DAYS}"
-          ref: sha256:0af8c4f92f4b252b3ef0cbd712e7352196bc33a96c58b6e1d891b26e171deae8
+        - ref: sha256:0af8c4f92f4b252b3ef0cbd712e7352196bc33a96c58b6e1d891b26e171deae8
       oci://${REGISTRY}/acceptance/bundle:1.1:
-        - effective_on: "${TODAY_PLUS_30_DAYS}"
-          ref: sha256:7af058b8a7adb24b74875411d625afbf90af6b4ed41b740606032edf1c4a0d1d
+        - ref: sha256:7af058b8a7adb24b74875411d625afbf90af6b4ed41b740606032edf1c4a0d1d
 
     """
 
@@ -57,8 +54,7 @@ Feature: track bundles
     ---
     trusted_tasks:
       oci://${REGISTRY}/acceptance/bundle:tag:
-        - effective_on: "${TODAY_PLUS_30_DAYS}"
-          ref: sha256:0af8c4f92f4b252b3ef0cbd712e7352196bc33a96c58b6e1d891b26e171deae8
+        - ref: sha256:0af8c4f92f4b252b3ef0cbd712e7352196bc33a96c58b6e1d891b26e171deae8
 
     """
 
@@ -70,8 +66,7 @@ Feature: track bundles
     ---
     trusted_tasks:
       oci://${REGISTRY}/acceptance/bundle:tag:
-        - effective_on: 2006-01-02T15:04:05Z
-          ref: sha256:${REGISTRY_acceptance/bundle:tag_DIGEST}
+        - ref: sha256:${REGISTRY_acceptance/bundle:tag_DIGEST}
     """
       And a tekton bundle image named "acceptance/bundle:tag" containing
       | Task     | task1-updated     |
@@ -112,8 +107,7 @@ Feature: track bundles
     ---
     trusted_tasks:
       git+https://forge.io/organization/repository.git//task/0.1/task.yaml:
-        - effective_on: 2006-01-02T15:04:05Z
-          ref: f0cacc1a
+        - ref: f0cacc1a
     """
     When ec command is run with "track tekton-task --input ${TMPDIR}/bundles.yaml --git git+https://forge.io/organization/repository.git//task/0.1/task.yaml@f0cacc1af00d"
     Then the exit status should be 0
@@ -125,8 +119,7 @@ Feature: track bundles
     ---
     trusted_tasks:
       git+https://forge.io/organization/repository.git//task/0.1/task.yaml:
-        - effective_on: 2006-01-02T15:04:05Z
-          ref: f0cacc1a
+        - ref: f0cacc1a
     """
     When ec command is run with "track tekton-task --prune --input ${TMPDIR}/bundles.yaml --git git+https://forge.io/organization/repository.git//task/0.1/task.yaml@f0cacc1a"
     Then the exit status should be 0
@@ -145,8 +138,7 @@ Feature: track bundles
     ---
     trusted_tasks:
       git+https://${GITHOST}/git/tasks.git//task.yaml:
-        - effective_on: 2006-01-02T15:04:05Z
-          ref: f0cacc1a
+        - ref: f0cacc1a
     """
     Given a git repository named "tasks" with
       | task.yaml | examples/task.yaml |

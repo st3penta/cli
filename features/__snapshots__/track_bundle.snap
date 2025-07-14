@@ -3,8 +3,7 @@
 /-/-/-/
 trusted_tasks:
   oci://${REGISTRY}/acceptance/bundle:tag:
-    - effective_on: "${TIMESTAMP}"
-      ref: sha256:${REGISTRY_acceptance/bundle:tag_DIGEST}
+    - ref: sha256:${REGISTRY_acceptance/bundle:tag_DIGEST}
 
 ---
 
@@ -16,10 +15,8 @@ trusted_tasks:
 /-/-/-/
 trusted_tasks:
   oci://${REGISTRY}/acceptance/bundle:tag:
-    - effective_on: "${TIMESTAMP}"
-      ref: sha256:${REGISTRY_acceptance/bundle:tag_DIGEST}
-    - effective_on: "2006-01-02T15:04:05Z"
-      expires_on: "${TIMESTAMP}"
+    - ref: sha256:${REGISTRY_acceptance/bundle:tag_DIGEST}
+    - expires_on: "${TIMESTAMP}"
       ref: sha256:0af8c4f92f4b252b3ef0cbd712e7352196bc33a96c58b6e1d891b26e171deae8
 
 ---
@@ -32,8 +29,7 @@ trusted_tasks:
 /-/-/-/
 trusted_tasks:
   oci://${REGISTRY}/acceptance/bundle:tag:
-    - effective_on: "${TIMESTAMP}"
-      ref: sha256:${REGISTRY_acceptance/bundle:tag_DIGEST}
+    - ref: sha256:${REGISTRY_acceptance/bundle:tag_DIGEST}
 
 ---
 
@@ -55,8 +51,7 @@ trusted_tasks:
 /-/-/-/
 trusted_tasks:
   git+https://github.com/konflux-ci/build-definitions.git//task/buildah/0.1/buildah.yaml:
-    - effective_on: "${TIMESTAMP}"
-      ref: 3672a457e3e89c0591369f609eba727b8e84108f
+    - ref: 3672a457e3e89c0591369f609eba727b8e84108f
 
 ---
 
@@ -68,11 +63,9 @@ trusted_tasks:
 /-/-/-/
 trusted_tasks:
   git+https://github.com/konflux-ci/build-definitions.git//task/buildah/0.1/buildah.yaml:
-    - effective_on: "${TIMESTAMP}"
-      ref: 3672a457e3e89c0591369f609eba727b8e84108f
+    - ref: 3672a457e3e89c0591369f609eba727b8e84108f
   oci://${REGISTRY}/acceptance/bundle:tag:
-    - effective_on: "${TIMESTAMP}"
-      ref: sha256:${REGISTRY_acceptance/bundle:tag_DIGEST}
+    - ref: sha256:${REGISTRY_acceptance/bundle:tag_DIGEST}
 
 ---
 
@@ -84,8 +77,7 @@ trusted_tasks:
 /-/-/-/
 trusted_tasks:
   git+https://forge.io/organization/repository.git//task/0.1/task.yaml:
-    - effective_on: "${TIMESTAMP}"
-      ref: f0cacc1af00d
+    - ref: f0cacc1af00d
 
 ---
 
@@ -97,11 +89,9 @@ trusted_tasks:
 /-/-/-/
 trusted_tasks:
   git+https://github.com/konflux-ci/build-definitions.git//task/buildah/0.1/buildah.yaml:
-    - effective_on: "${TIMESTAMP}"
-      ref: 3672a457e3e89c0591369f609eba727b8e84108f
+    - ref: 3672a457e3e89c0591369f609eba727b8e84108f
   oci://${REGISTRY}/acceptance/bundle:tag:
-    - effective_on: "${TIMESTAMP}"
-      ref: sha256:${REGISTRY_acceptance/bundle:tag_DIGEST}
+    - ref: sha256:${REGISTRY_acceptance/bundle:tag_DIGEST}
 
 ---
 
@@ -113,10 +103,8 @@ trusted_tasks:
 /-/-/-/
 trusted_tasks:
   git+https://forge.io/organization/repository.git//task/0.1/task.yaml:
-    - effective_on: "${TIMESTAMP}"
-      ref: f0cacc1af00d
-    - effective_on: "2006-01-02T15:04:05Z"
-      expires_on: "${TIMESTAMP}"
+    - ref: f0cacc1af00d
+    - expires_on: "${TIMESTAMP}"
       ref: f0cacc1a
 
 ---
@@ -129,8 +117,7 @@ trusted_tasks:
 /-/-/-/
 trusted_tasks:
   git+https://forge.io/organization/repository.git//task/0.1/task.yaml:
-    - effective_on: "2006-01-02T15:04:05Z"
-      ref: f0cacc1a
+    - ref: f0cacc1a
 
 ---
 
@@ -150,8 +137,7 @@ Error: expected "git+https://${GITHOST}/git/tasks.git//task.yaml" to contain the
 /-/-/-/
 trusted_tasks:
   git+https://${GITHOST}/git/tasks.git//task.yaml:
-    - effective_on: "${TIMESTAMP}"
-      ref: ${LATEST_COMMIT}
+    - ref: ${LATEST_COMMIT}
 
 ---
 
