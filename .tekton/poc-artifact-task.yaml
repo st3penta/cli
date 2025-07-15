@@ -1,0 +1,39 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: poc-artifact-task
+  annotations:
+    tekton.dev/displayName: PoC Artifact Generator Task
+    tekton.dev/pipelines.minVersion: "0.19"
+  labels:
+    app.kubernetes.io/version: "0.1"
+spec:
+  description: >-
+    This task takes IMAGE_URL and IMAGE_DIGEST as input parameters and outputs them as results.
+    They should trigger the provenance generation in Tekton Chains.
+  params:
+  - name: IMAGE_URL
+    description: The image URL to output
+    type: string
+  - name: IMAGE_DIGEST
+    description: The image digest to output
+    type: string
+  results:
+  - name: IMAGE_URL
+    description: The image URL output
+  - name: IMAGE_DIGEST
+    description: The image digest output
+  steps:
+  - name: set-outputs
+    image: registry.access.redhat.com/ubi8/ubi-minimal:latest
+    script: |
+      #!/bin/bash
+      set -e
+      
+      echo "Setting IMAGE_URL output..."
+      echo -n "$(params.IMAGE_URL)" > $(results.IMAGE_URL.path)
+      
+      echo "Setting IMAGE_DIGEST output..."
+      echo -n "$(params.IMAGE_DIGEST)" > $(results.IMAGE_DIGEST.path)
+      
+      echo "Task completed successfully!" 

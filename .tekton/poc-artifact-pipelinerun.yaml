@@ -1,0 +1,34 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: poc-artifact-pipeline
+spec:
+  description: |
+    This pipeline is used to test the provenance generation in Tekton Chains for Integration Tests.
+    It takes IMAGE_URL and IMAGE_DIGEST as input parameters and outputs them as results.
+    They should trigger the provenance generation in Tekton Chains.
+  params:
+  - description: The image URL to output
+    name: IMAGE_URL
+    type: string
+  - description: The image digest to output
+    name: IMAGE_DIGEST
+    type: string
+  results:
+  - description: ""
+    name: IMAGE_URL
+    value: $(tasks.poc-artifact-task.results.IMAGE_URL)
+  - description: ""
+    name: IMAGE_DIGEST
+    value: $(tasks.poc-artifact-task.results.IMAGE_DIGEST)
+  tasks:
+  - name: poc-artifact-task
+    taskRef:
+      resolver: git
+      params:
+        - name: url
+          value: https://github.com/st3penta/cli
+        - name: revision
+          value: it-experiments
+        - name: pathInRepo
+          value: .tekton/poc-artifact-task.yaml

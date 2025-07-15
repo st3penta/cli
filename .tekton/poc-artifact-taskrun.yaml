@@ -1,0 +1,19 @@
+apiVersion: tekton.dev/v1
+kind: TaskRun
+metadata:
+  name: poc-artifact-taskrun
+  annotations:
+    tekton.dev/displayName: PoC Artifact Task Run
+  labels:
+    app.kubernetes.io/version: "0.1"
+spec:
+  taskRef:
+    resolver: git
+    params:
+      - name: url
+        value: https://github.com/st3penta/cli
+      - name: revision
+        value: it-experiments
+      - name: pathInRepo
+        value: .tekton/poc-artifact-task.yaml
+  timeout: 5m 
