@@ -63,7 +63,27 @@ func NewRootCmd() *cobra.Command {
 		Long: hd.Doc(`
 			` + version.CliName() + ` CLI
 
-			Set of commands to help validate resources with the provided policies.
+			Secure your software supply chain by validating that your artifacts meet security and 
+			compliance requirements. Conforma helps you verify the authenticity and integrity of 
+			container images, build processes, and deployment pipelines.
+
+			Whether you're ensuring images are properly signed, validating build attestations comply 
+			with your organization's policies, or checking that Tekton tasks follow security best 
+			practices, Conforma provides the tools you need to establish trust in your software 
+			delivery process.
+
+			Key capabilities:
+			• Verify signatures and attestations on container images
+			• Validate SLSA provenance to ensure secure build processes  
+			• Enforce compliance policies across your development workflow
+			• Generate detailed reports for audit and compliance purposes
+			• Support for custom validation rules to meet your specific requirements
+
+			Use Conforma to implement "trust but verify" practices in your CI/CD pipeline, 
+			ensuring that only secure, compliant artifacts make it to production.
+
+			Have feedback or want to contribute? Visit https://conforma.dev/contribute/ to join our 
+			community, report issues, or help improve Conforma.
 		`),
 
 		SilenceUsage: true,
