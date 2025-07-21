@@ -569,10 +569,7 @@ func validatePolicyConfig(policyConfig string) error {
 func PreProcessPolicy(ctx context.Context, policyOptions Options) (Policy, *cache.PolicyCache, error) {
 	var policyCache *cache.PolicyCache
 	pinnedPolicyUrls := map[string][]string{}
-	policyCache, err := cache.NewPolicyCache(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
+	policyCache = cache.NewPolicyCache(ctx)
 
 	p, err := NewPolicy(ctx, policyOptions)
 	if err != nil {

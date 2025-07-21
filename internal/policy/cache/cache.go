@@ -19,8 +19,6 @@ package cache
 import (
 	"context"
 	"sync"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // policyCacheKey is the key for PolicyCache values in Context.
@@ -72,25 +70,15 @@ func (c *PolicyCache) Set(key string, value string, err error) {
 }
 
 // NewPolicyCache creates and returns a new PolicyCache instance.
-func NewPolicyCache(ctx context.Context) (*PolicyCache, error) {
+func NewPolicyCache(ctx context.Context) *PolicyCache {
 	cache, ok := ctx.Value(policyCacheKey).(*PolicyCache)
 	if ok && cache != nil {
-		return cache, nil
+		return cache
 	}
 
-	c, err := CreatePolicyCache()
-	if err != nil {
-		log.Debug("Failed to create PolicyCache")
-		return nil, err
-	}
-
-	return c, nil
-}
-
-func CreatePolicyCache() (*PolicyCache, error) {
 	return &PolicyCache{
 		Data: sync.Map{},
-	}, nil
+	}
 }
 
 // PolicyCacheFromContext retrieves the PolicyCache from the context.
