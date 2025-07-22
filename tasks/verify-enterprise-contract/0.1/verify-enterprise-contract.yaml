@@ -310,18 +310,6 @@ spec:
         - "."
         - "$(results.TEST_OUTPUT.path)"
 
-    - name: info
-      computeResources:
-        requests:
-          cpu: 100m
-          memory: 256Mi
-        limits:
-          memory: 256Mi
-      image: quay.io/conforma/cli:latest
-      command: [printf]
-      args:
-        - "----- DEBUG OUTPUT -----\n"
-
     - name: version
       computeResources:
         requests:

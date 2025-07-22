@@ -317,12 +317,6 @@ spec:
         - "."
         - "$(results.TEST_OUTPUT.path)"
 
-    - name: info
-      image: quay.io/conforma/cli:latest
-      command: [printf]
-      args:
-        - "----- DEBUG OUTPUT -----\n"
-
     - name: version
       image: quay.io/conforma/cli:latest
       command: [ec]
