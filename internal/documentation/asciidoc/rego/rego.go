@@ -25,7 +25,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/open-policy-agent/opa/ast"
+	"github.com/open-policy-agent/opa/v1/ast"
 
 	_ "github.com/conforma/cli/internal/rego"
 )
