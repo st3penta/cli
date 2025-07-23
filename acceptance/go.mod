@@ -1,6 +1,6 @@
 module github.com/conforma/cli/acceptance
 
-go 1.23.6
+go 1.24.4
 
 require (
 	cuelang.org/go v0.11.1
