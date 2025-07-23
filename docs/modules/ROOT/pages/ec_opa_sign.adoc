@@ -98,7 +98,7 @@ ec opa sign <path> [<path> [...]] [flags]
 -o, --output-file-path:: set the location for the .signatures.json file (Default: .)
 --signing-alg:: name of the signing algorithm (Default: RS256)
 --signing-key:: set the secret (HMAC) or path of the PEM file containing the private key (RSA and ECDSA)
---signing-plugin:: name of the plugin to use for signing/verification (see https://www.openpolicyagent.org/docs/latest/management-bundles/#signature-plugin
+--signing-plugin:: name of the plugin to use for signing/verification (see https://www.openpolicyagent.org/docs/latest/management-bundles/#signature-plugin)
 
 == Options inherited from parent commands
 

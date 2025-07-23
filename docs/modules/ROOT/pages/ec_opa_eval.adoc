@@ -5,9 +5,13 @@ Evaluate a Rego query
 == Synopsis
 
 Evaluate a Rego query and print the result.
+[source,shell]
+----
+ec opa eval <query> [flags]
+----
 
-Examples
---------
+== Examples
+
 
 To evaluate a simple query:
 
@@ -107,10 +111,6 @@ Note that the metaschemas http://json-schema.org/draft-04/schema, http://json-sc
 and http://json-schema.org/draft-07/schema, are always available, even without network
 access.
 
-[source,shell]
-----
-ec opa eval <query> [flags]
-----
 == Options
 
 -b, --bundle:: set bundle file(s) or directory path(s). This flag can be repeated.
@@ -132,6 +132,7 @@ ec opa eval <query> [flags]
 -i, --input:: set input file path
 --instrument:: enable query instrumentation metrics (implies --metrics) (Default: false)
 --metrics:: report query performance metrics (Default: false)
+--nondeterminstic-builtins:: evaluate nondeterministic builtins (if all arguments are known) during partial eval (Default: false)
 -O, --optimize:: set optimization level (Default: 0)
 --optimize-store-for-read-speed:: optimize default in-memory store for read speed. Has possible negative impact on memory footprint and write speed. See https://www.openpolicyagent.org/docs/latest/policy-performance/#storage-optimization for more details. (Default: false)
 --package:: set query package
@@ -150,7 +151,7 @@ ec opa eval <query> [flags]
 -t, --target:: set the runtime to exercise (Default: rego)
 --timeout:: set eval timeout (default unlimited) (Default: 0s)
 -u, --unknowns:: set paths to treat as unknown during partial evaluation (Default: [input])
---v0-compatible:: opt-in to OPA features and behaviors prior to the OPA v1.0 release. Takes precedence over --v1-compatible (Default: false)
+--v0-compatible:: opt-in to OPA features and behaviors prior to the OPA v1.0 release (Default: false)
 --v1-compatible:: opt-in to OPA features and behaviors that are enabled by default in OPA v1.0 (Default: false)
 --var-values:: show local variable values in pretty trace output (Default: false)
 

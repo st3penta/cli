@@ -9,13 +9,16 @@ Print dependencies of provided query.
 Dependencies are categorized as either base documents, which is any data loaded
 from the outside world, or virtual documents, i.e values that are computed from rules.
 
-Example
--------
+[source,shell]
+----
+ec opa deps <query> [flags]
+----
+
+== Examples
+
 Given a policy like this:
 
 	package policy
-
-	import rego.v1
 
 	allow if is_admin
 
@@ -36,10 +39,6 @@ From the output we're able to determine that the allow rule depends on
 the input.user.roles base document, as well as the virtual document (rule)
 data.policy.is_admin.
 
-[source,shell]
-----
-ec opa deps <query> [flags]
-----
 == Options
 
 -b, --bundle:: set bundle file(s) or directory path(s). This flag can be repeated.
