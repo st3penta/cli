@@ -3233,7 +3233,7 @@ Error: success criteria not met
 ---
 
 [Unsupported policies:stderr - 1]
-Error: error validating image ${REGISTRY}/acceptance/image of component Unnamed: the rule "deny = true { true }" returns an unsupported value, at main.rego:5
+Error: error validating image ${REGISTRY}/acceptance/image of component Unnamed: the rule "deny = true if { true }" returns an unsupported value, at main.rego:5
 
 ---
 

@@ -1958,6 +1958,7 @@ func TestUnconformingRule(t *testing.T) {
 
 	_, err = evaluator.Evaluate(ctx, EvaluationTarget{Inputs: []string{path.Join(dir, "inputs")}})
 	require.Error(t, err)
+	assert.EqualError(t, err, `the rule "deny = true if { true }" returns an unsupported value, at no_msg.rego:5`)
 }
 
 // TestAnnotatedAndNonAnnotatedRules tests the separation of annotated and non-annotated rules
