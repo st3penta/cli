@@ -32,15 +32,17 @@ import (
 )
 
 func inspectSingle(path, module string) ([]*ast.AnnotationsRef, error) {
-	mod, err := ast.ParseModuleWithOpts(path, module, ast.ParserOptions{
-		ProcessAnnotation: true,
-		JSONOptions: &json.Options{
-			MarshalOptions: json.MarshalOptions{
-				IncludeLocation: json.NodeToggle{
-					AnnotationsRef: true,
-				},
+	// Set global JSON options to include location data for annotations
+	json.SetOptions(json.Options{
+		MarshalOptions: json.MarshalOptions{
+			IncludeLocation: json.NodeToggle{
+				AnnotationsRef: true,
 			},
 		},
+	})
+
+	mod, err := ast.ParseModuleWithOpts(path, module, ast.ParserOptions{
+		ProcessAnnotation: true,
 	})
 	if err != nil {
 		return nil, err
