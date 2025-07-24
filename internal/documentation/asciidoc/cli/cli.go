@@ -129,25 +129,24 @@ func options(flags *pflag.FlagSet) []option {
 	var result []option
 
 	flags.VisitAll(func(flag *pflag.Flag) {
-		if !(len(flag.ShorthandDeprecated) > 0) && len(flag.Shorthand) > 0 {
-			opt := option{
-				flag.Name,
-				flag.Shorthand,
-				flagDefValueMaybe(flag),
-				flag.Usage,
-			}
-			result = append(result, opt)
-		} else {
-			opt := option{
-				Name:         flag.Name,
-				DefaultValue: flagDefValueMaybe(flag),
-				Usage:        flag.Usage,
-			}
-			result = append(result, opt)
+		opt := option{
+			flag.Name,
+			flagShortHandMaybe(flag),
+			flagDefValueMaybe(flag),
+			flag.Usage,
 		}
+		result = append(result, opt)
 	})
 
 	return result
+}
+
+func flagShortHandMaybe(flag *pflag.Flag) string {
+	if flag.ShorthandDeprecated != "" {
+		// Don't show deprecated flag shorthand in the docs
+		return ""
+	}
+	return flag.Shorthand
 }
 
 func flagDefValueMaybe(flag *pflag.Flag) string {
