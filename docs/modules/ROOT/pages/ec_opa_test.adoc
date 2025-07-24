@@ -91,7 +91,7 @@ ec opa test <path> [path [...]] [flags]
 -h, --help:: help for test (Default: false)
 --ignore:: set file and directory names to ignore during loading (e.g., '.*' excludes hidden files) (Default: [])
 -m, --max-errors:: set the number of errors to allow before compilation fails early (Default: 10)
--p, --parallel:: the number of tests that can run in parallel, defaulting to the number of CPUs (explicitly set with 0). Benchmarks are always run sequentially. (Default: 16)
+-p, --parallel:: the number of tests that can run in parallel, defaulting to the number of CPUs (explicitly set with 0). Benchmarks are always run sequentially.
 -r, --run:: run only test cases matching the regular expression
 -s, --schema:: set schema file path or directory path
 -t, --target:: set the runtime to exercise (Default: rego)

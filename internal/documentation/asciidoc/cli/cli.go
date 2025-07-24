@@ -133,14 +133,14 @@ func options(flags *pflag.FlagSet) []option {
 			opt := option{
 				flag.Name,
 				flag.Shorthand,
-				flag.DefValue,
+				flagDefValueMaybe(flag),
 				flag.Usage,
 			}
 			result = append(result, opt)
 		} else {
 			opt := option{
 				Name:         flag.Name,
-				DefaultValue: flag.DefValue,
+				DefaultValue: flagDefValueMaybe(flag),
 				Usage:        flag.Usage,
 			}
 			result = append(result, opt)
@@ -148,4 +148,15 @@ func options(flags *pflag.FlagSet) []option {
 	})
 
 	return result
+}
+
+func flagDefValueMaybe(flag *pflag.Flag) string {
+	// For `ec opa test` the default value for the --parallel flag is `runtime.NumCPU()`.
+	// We don't want to show that in the docs since it causes problems in the CI and it
+	// also it makes no sense in static documentation.
+	if flag.Name == "parallel" && strings.Contains(flag.Usage, "defaulting to the number of CPUs") {
+		// Don't show the default value in the docs
+		return ""
+	}
+	return flag.DefValue
 }
