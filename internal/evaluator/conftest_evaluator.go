@@ -167,17 +167,18 @@ type testRunner interface {
 }
 
 const (
-	effectiveOnFormat   = "2006-01-02T15:04:05Z"
-	effectiveOnTimeout  = -90 * 24 * time.Hour // keep effective_on metadata up to 90 days
-	metadataCode        = "code"
-	metadataCollections = "collections"
-	metadataDependsOn   = "depends_on"
-	metadataDescription = "description"
-	metadataSeverity    = "severity"
-	metadataEffectiveOn = "effective_on"
-	metadataSolution    = "solution"
-	metadataTerm        = "term"
-	metadataTitle       = "title"
+	effectiveOnFormat         = "2006-01-02T15:04:05Z"
+	effectiveOnTimeout        = -90 * 24 * time.Hour // keep effective_on metadata up to 90 days
+	metadataCode              = "code"
+	metadataCollections       = "collections"
+	metadataDependsOn         = "depends_on"
+	metadataDescription       = "description"
+	metadataPipelineIntention = "pipeline_intention"
+	metadataSeverity          = "severity"
+	metadataEffectiveOn       = "effective_on"
+	metadataSolution          = "solution"
+	metadataTerm              = "term"
+	metadataTitle             = "title"
 )
 
 const (
@@ -205,6 +206,7 @@ type conftestEvaluator struct {
 	exclude       *Criteria
 	fs            afero.Fs
 	namespace     []string
+	source        ecc.Source
 }
 
 type conftestRunner struct {
@@ -285,7 +287,7 @@ func (r conftestRunner) Run(ctx context.Context, fileList []string) (result []Ou
 // NewConftestEvaluator returns initialized conftestEvaluator implementing
 // Evaluator interface
 func NewConftestEvaluator(ctx context.Context, policySources []source.PolicySource, p ConfigProvider, source ecc.Source) (Evaluator, error) {
-	return NewConftestEvaluatorWithNamespace(ctx, policySources, p, source, nil)
+	return NewConftestEvaluatorWithNamespace(ctx, policySources, p, source, []string{})
 }
 
 // set the policy namespace
@@ -302,9 +304,11 @@ func NewConftestEvaluatorWithNamespace(ctx context.Context, policySources []sour
 		policy:        p,
 		fs:            fs,
 		namespace:     namespace,
+		source:        source,
 	}
 
 	c.include, c.exclude = computeIncludeExclude(source, p)
+
 	dir, err := utils.CreateWorkDir(fs)
 	if err != nil {
 		log.Debug("Failed to create work dir!")
@@ -340,6 +344,9 @@ func (c conftestEvaluator) CapabilitiesPath() string {
 }
 
 type policyRules map[string]rule.Info
+
+// Add a new type to track non-annotated rules separately
+type nonAnnotatedRules map[string]bool
 
 func (r *policyRules) collect(a *ast.AnnotationsRef) error {
 	if a.Annotations == nil {
@@ -377,6 +384,8 @@ func (c conftestEvaluator) Evaluate(ctx context.Context, target EvaluationTarget
 	// exist with the same code in two separate sources the collected rule
 	// information is not deterministic
 	rules := policyRules{}
+	// Track non-annotated rules separately for filtering purposes only
+	nonAnnotatedRules := nonAnnotatedRules{}
 	// Download all sources
 	for _, s := range c.policySources {
 		dir, err := s.GetPolicy(ctx, c.workDir, false)
@@ -414,32 +423,85 @@ func (c conftestEvaluator) Evaluate(ctx context.Context, target EvaluationTarget
 			}
 		}
 
+		// Collect ALL rules for filtering purposes - both with and without annotations
+		// This ensures that rules without metadata (like fail_with_data.rego) are properly included
 		for _, a := range annotations {
-			if a.Annotations == nil {
-				continue
-			}
-			if err := rules.collect(a); err != nil {
-				return nil, err
+			if a.Annotations != nil {
+				// Rules with annotations - collect full metadata
+				if err := rules.collect(a); err != nil {
+					return nil, err
+				}
+			} else {
+				// Rules without annotations - track for filtering only, not for success computation
+				ruleRef := a.GetRule()
+				if ruleRef != nil {
+					// Extract package name from the rule path
+					packageName := ""
+					if len(a.Path) > 1 {
+						// Path format is typically ["data", "package", "rule"]
+						// We want the package part (index 1)
+						if len(a.Path) >= 2 {
+							packageName = strings.ReplaceAll(a.Path[1].String(), `"`, "")
+						}
+					}
+
+					// Extract short name from the rule head
+					shortName := ruleRef.Head.Name.String()
+
+					// Generate code for filtering purposes
+					code := fmt.Sprintf("%s.%s", packageName, shortName)
+
+					// Track for filtering but don't add to rules map for success computation
+					nonAnnotatedRules[code] = true
+				}
 			}
 		}
 	}
+
+	// Filter namespaces using the new pluggable filtering system
+	filterFactory := NewIncludeFilterFactory()
+	filters := filterFactory.CreateFilters(c.source)
+	// Combine annotated and non-annotated rules for filtering
+	allRules := make(policyRules)
+	for code, rule := range rules {
+		allRules[code] = rule
+	}
+	// Add non-annotated rules as minimal rule.Info for filtering
+	for code := range nonAnnotatedRules {
+		parts := strings.Split(code, ".")
+		if len(parts) >= 2 {
+			packageName := parts[len(parts)-2]
+			shortName := parts[len(parts)-1]
+			allRules[code] = rule.Info{
+				Code:      code,
+				Package:   packageName,
+				ShortName: shortName,
+			}
+		}
+	}
+	filteredNamespaces := filterNamespaces(allRules, filters...)
 
 	var r testRunner
 	var ok bool
 	if r, ok = ctx.Value(runnerKey).(testRunner); r == nil || !ok {
 
-		// should there be a namespace defined or not
-		allNamespaces := true
-		if len(c.namespace) > 0 {
-			allNamespaces = false
+		// Determine which namespaces to use
+		namespacesToUse := c.namespace
+
+		// If we have filtered namespaces from the filtering system, use those
+		if len(filteredNamespaces) > 0 {
+			namespacesToUse = filteredNamespaces
 		}
+
+		// log the namespaces to use
+		log.Debugf("Namespaces to use: %v", namespacesToUse)
 
 		r = &conftestRunner{
 			runner.TestRunner{
 				Data:          []string{c.dataDir},
 				Policy:        []string{c.policyDir},
-				Namespace:     c.namespace,
-				AllNamespaces: allNamespaces,
+				Namespace:     namespacesToUse,
+				AllNamespaces: false, // Always false to prevent bypassing filtering
 				NoFail:        true,
 				Output:        c.outputFormat,
 				Capabilities:  c.CapabilitiesPath(),
@@ -504,6 +566,7 @@ func (c conftestEvaluator) Evaluate(ctx context.Context, target EvaluationTarget
 
 		for i := range result.Failures {
 			failure := result.Failures[i]
+			// log the failure
 			addRuleMetadata(ctx, &failure, rules)
 
 			if !c.isResultIncluded(failure, target.Target, missingIncludes) {

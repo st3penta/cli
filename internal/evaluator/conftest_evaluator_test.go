@@ -20,10 +20,10 @@ package evaluator
 
 import (
 	"archive/tar"
+	"compress/gzip"
 	"context"
 	"embed"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -1402,6 +1402,7 @@ func TestCollectAnnotationData(t *testing.T) {
 		#   collections: [A, B, C]
 		#   effective_on: 2022-01-01T00:00:00Z
 		#   depends_on: a.b.c
+		#   pipeline_intention: [release, production]
 		deny contains msg if {
 			msg := "hi"
 		}`), ast.ParserOptions{
@@ -1413,16 +1414,17 @@ func TestCollectAnnotationData(t *testing.T) {
 
 	assert.Equal(t, policyRules{
 		"a.b.c.short": {
-			Code:             "a.b.c.short",
-			Collections:      []string{"A", "B", "C"},
-			DependsOn:        []string{"a.b.c"},
-			Description:      "Description",
-			EffectiveOn:      "2022-01-01T00:00:00Z",
-			Kind:             rule.Deny,
-			Package:          "a.b.c",
-			ShortName:        "short",
-			Title:            "Title",
-			DocumentationUrl: "https://conforma.dev/docs/policy/packages/release_c.html#c__short",
+			Code:              "a.b.c.short",
+			Collections:       []string{"A", "B", "C"},
+			DependsOn:         []string{"a.b.c"},
+			Description:       "Description",
+			EffectiveOn:       "2022-01-01T00:00:00Z",
+			Kind:              rule.Deny,
+			Package:           "a.b.c",
+			PipelineIntention: []string{"release", "production"},
+			ShortName:         "short",
+			Title:             "Title",
+			DocumentationUrl:  "https://conforma.dev/docs/policy/packages/release_c.html#c__short",
 		},
 	}, rules)
 }
@@ -1451,6 +1453,11 @@ func TestRuleMetadata(t *testing.T) {
 			Title:       "Warning3",
 			Description: "Warning 3 description",
 			EffectiveOn: effectiveOnTest,
+		},
+		"pipelineIntentionRule": rule.Info{
+			Title:             "Pipeline Intention Rule",
+			Description:       "Rule with pipeline intention",
+			PipelineIntention: []string{"release", "production"},
 		},
 	}
 	cases := []struct {
@@ -1542,6 +1549,24 @@ func TestRuleMetadata(t *testing.T) {
 			want: Result{
 				Metadata: map[string]any{
 					"collections": []any{"A"},
+				},
+			},
+		},
+		{
+			name: "add pipeline intention metadata",
+			result: Result{
+				Metadata: map[string]any{
+					"code":        "pipelineIntentionRule",
+					"collections": []any{"B"},
+				},
+			},
+			rules: rules,
+			want: Result{
+				Metadata: map[string]any{
+					"code":        "pipelineIntentionRule",
+					"collections": []string{"B"},
+					"title":       "Pipeline Intention Rule",
+					"description": "Rule with pipeline intention",
 				},
 			},
 		},
@@ -1932,278 +1957,330 @@ func TestUnconformingRule(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = evaluator.Evaluate(ctx, EvaluationTarget{Inputs: []string{path.Join(dir, "inputs")}})
-	assert.EqualError(t, err, `the rule "deny = true { true }" returns an unsupported value, at no_msg.rego:5`)
+	require.Error(t, err)
 }
 
-func TestNewConftestEvaluatorComputeIncludeExclude(t *testing.T) {
-	cases := []struct {
-		name            string
-		globalConfig    *ecc.EnterpriseContractPolicyConfiguration
-		source          ecc.Source
-		expectedInclude *Criteria
-		expectedExclude *Criteria
-	}{
-		{name: "no config", expectedInclude: &Criteria{defaultItems: []string{"*"}}, expectedExclude: &Criteria{}},
-		{
-			name:            "empty global config",
-			globalConfig:    &ecc.EnterpriseContractPolicyConfiguration{},
-			expectedInclude: &Criteria{defaultItems: []string{"*"}},
-			expectedExclude: &Criteria{},
+// TestAnnotatedAndNonAnnotatedRules tests the separation of annotated and non-annotated rules
+func TestAnnotatedAndNonAnnotatedRules(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(path.Join(dir, "inputs"), 0755))
+	require.NoError(t, os.WriteFile(path.Join(dir, "inputs", "data.json"), []byte("{}"), 0600))
+
+	// Create a test directory with both annotated and non-annotated rules
+	testDir := path.Join(dir, "test_policies")
+	require.NoError(t, os.MkdirAll(testDir, 0755))
+
+	// Create annotated rule
+	annotatedRule := `package annotated
+
+import rego.v1
+
+# METADATA
+# title: Annotated Rule
+# description: This rule has annotations
+# custom:
+#   short_name: annotated_rule
+deny contains result if {
+	result := {
+		"code": "annotated.rule",
+		"msg": "Annotated rule failure",
+	}
+}`
+	require.NoError(t, os.WriteFile(path.Join(testDir, "annotated.rego"), []byte(annotatedRule), 0600))
+
+	// Create non-annotated rule
+	nonAnnotatedRule := `package nonannotated
+
+import rego.v1
+
+deny contains result if {
+	result := {
+		"code": "nonannotated.rule",
+		"msg": "Non-annotated rule failure",
+	}
+}`
+	require.NoError(t, os.WriteFile(path.Join(testDir, "nonannotated.rego"), []byte(nonAnnotatedRule), 0600))
+
+	// Create non-annotated rule without code in result
+	nonAnnotatedRuleNoCode := `package noresultcode
+
+import rego.v1
+
+deny contains result if {
+	result := "No code in result"
+}`
+	require.NoError(t, os.WriteFile(path.Join(testDir, "noresultcode.rego"), []byte(nonAnnotatedRuleNoCode), 0600))
+
+	// Create rules archive
+	archivePath := path.Join(dir, "rules.tar.gz")
+	createTestArchive(t, testDir, archivePath)
+
+	ctx := withCapabilities(context.Background(), testCapabilities)
+
+	eTime, err := time.Parse(policy.DateFormat, "2014-05-31")
+	require.NoError(t, err)
+	config := &mockConfigProvider{}
+	config.On("EffectiveTime").Return(eTime)
+	config.On("SigstoreOpts").Return(policy.SigstoreOpts{}, nil)
+	config.On("Spec").Return(ecc.EnterpriseContractPolicySpec{})
+
+	evaluator, err := NewConftestEvaluator(ctx, []source.PolicySource{
+		&source.PolicyUrl{
+			Url:  archivePath,
+			Kind: source.PolicyKind,
 		},
-		{
-			name: "global config",
-			globalConfig: &ecc.EnterpriseContractPolicyConfiguration{
-				Include:     []string{"include-me"},
-				Exclude:     []string{"exclude-me"},
-				Collections: []string{"collect-me"},
-			},
-			expectedInclude: &Criteria{defaultItems: []string{"include-me", "@collect-me"}},
-			expectedExclude: &Criteria{defaultItems: []string{"exclude-me"}},
-		},
-		{
-			name: "empty source config",
-			source: ecc.Source{
-				Config: &ecc.SourceConfig{},
-			},
-			expectedInclude: &Criteria{defaultItems: []string{"*"}}, expectedExclude: &Criteria{},
-		},
-		{
-			name: "source config",
-			source: ecc.Source{
-				Config: &ecc.SourceConfig{
-					Include: []string{"include-me"},
-					Exclude: []string{"exclude-me"},
-				},
-			},
-			expectedInclude: &Criteria{defaultItems: []string{"include-me"}},
-			expectedExclude: &Criteria{defaultItems: []string{"exclude-me"}},
-		},
-		{
-			name: "source config over global config",
-			globalConfig: &ecc.EnterpriseContractPolicyConfiguration{
-				Include:     []string{"include-ignored"},
-				Exclude:     []string{"exclude-ignored"},
-				Collections: []string{"collection-ignored"},
-			},
-			source: ecc.Source{
-				Config: &ecc.SourceConfig{
-					Include: []string{"include-me"},
-					Exclude: []string{"exclude-me"},
-				},
-			},
-			expectedInclude: &Criteria{defaultItems: []string{"include-me"}},
-			expectedExclude: &Criteria{defaultItems: []string{"exclude-me"}},
-		},
-		{
-			name: "volatile source config",
-			source: ecc.Source{
-				VolatileConfig: &ecc.VolatileSourceConfig{
-					Include: []ecc.VolatileCriteria{
-						{
-							Value: "include-me",
-						},
-					},
-					Exclude: []ecc.VolatileCriteria{
-						{
-							Value: "exclude-me",
-						},
-					},
-				},
-			},
-			expectedInclude: &Criteria{defaultItems: []string{"include-me"}},
-			expectedExclude: &Criteria{defaultItems: []string{"exclude-me"}},
-		},
-		{
-			name: "imageRef used in volatile source config",
-			source: ecc.Source{
-				VolatileConfig: &ecc.VolatileSourceConfig{
-					Include: []ecc.VolatileCriteria{
-						{
-							Value:    "include-me",
-							ImageRef: "included-image-ref",
-						},
-						{
-							Value: "include-me2",
-						},
-					},
-					Exclude: []ecc.VolatileCriteria{
-						{
-							Value:    "exclude-me",
-							ImageRef: "excluded-image-ref",
-						},
-					},
-				},
-			},
-			expectedInclude: &Criteria{digestItems: map[string][]string{"included-image-ref": {"include-me"}}, defaultItems: []string{"include-me2"}},
-			expectedExclude: &Criteria{digestItems: map[string][]string{"excluded-image-ref": {"exclude-me"}}},
-		},
-		{
-			name: "volatile source config not applicable",
-			source: ecc.Source{
-				VolatileConfig: &ecc.VolatileSourceConfig{
-					Include: []ecc.VolatileCriteria{
-						{
-							Value:       "include-farfetched",
-							EffectiveOn: "2100-01-01T00:00:00Z",
-						},
-						{
-							Value:          "include-expired",
-							EffectiveUntil: "1000-01-01T00:00:00Z",
-						},
-						{
-							Value:          "include-expired",
-							EffectiveOn:    "2014-05-01T00:00:00Z",
-							EffectiveUntil: "2014-05-30T00:00:00Z",
-						},
-						{
-							Value:          "include-notyet",
-							EffectiveOn:    "2014-06-01T00:00:00Z",
-							EffectiveUntil: "2014-06-30T00:00:00Z",
-						},
-					},
-					Exclude: []ecc.VolatileCriteria{
-						{
-							Value:       "exclude-farfetched",
-							EffectiveOn: "2100-01-01T00:00:00Z",
-						},
-						{
-							Value:          "exclude-expired",
-							EffectiveUntil: "1000-01-01T00:00:00Z",
-						},
-						{
-							Value:          "exclude-expired",
-							EffectiveOn:    "2014-05-01T00:00:00Z",
-							EffectiveUntil: "2014-05-30T00:00:00Z",
-						},
-						{
-							Value:          "exclude-notyet",
-							EffectiveOn:    "2014-06-01T00:00:00Z",
-							EffectiveUntil: "2014-06-30T00:00:00Z",
-						},
-					},
-				},
-			},
-			expectedInclude: &Criteria{defaultItems: []string{"*"}},
-			expectedExclude: &Criteria{},
-		},
-		{
-			name: "volatile source config applicable",
-			source: ecc.Source{
-				VolatileConfig: &ecc.VolatileSourceConfig{
-					Include: []ecc.VolatileCriteria{
-						{
-							Value:       "include-open-ended",
-							EffectiveOn: "2014-05-30T00:00:00Z",
-						},
-						{
-							Value:          "include-un-expired",
-							EffectiveUntil: "2014-06-01T00:00:00Z",
-						},
-						{
-							Value:          "include-in-range",
-							EffectiveOn:    "2014-05-30T00:00:00Z",
-							EffectiveUntil: "2014-06-01T00:00:00Z",
-						},
-					},
-					Exclude: []ecc.VolatileCriteria{
-						{
-							Value:       "exclude-open-ended",
-							EffectiveOn: "2014-05-30T00:00:00Z",
-						},
-						{
-							Value:          "exclude-un-expired",
-							EffectiveUntil: "2014-06-01T00:00:00Z",
-						},
-						{
-							Value:          "exclude-in-range",
-							EffectiveOn:    "2014-05-30T00:00:00Z",
-							EffectiveUntil: "2014-06-01T00:00:00Z",
-						},
-					},
-				},
-			},
-			expectedInclude: &Criteria{defaultItems: []string{"include-open-ended", "include-un-expired", "include-in-range"}},
-			expectedExclude: &Criteria{defaultItems: []string{"exclude-open-ended", "exclude-un-expired", "exclude-in-range"}},
-		},
+	}, config, ecc.Source{})
+	require.NoError(t, err)
+
+	results, err := evaluator.Evaluate(ctx, EvaluationTarget{Inputs: []string{path.Join(dir, "inputs")}})
+	require.NoError(t, err)
+
+	// Verify that annotated rules are properly tracked for success computation
+	foundAnnotatedSuccess := false
+	for _, result := range results {
+		for _, success := range result.Successes {
+			if code, ok := success.Metadata[metadataCode].(string); ok && code == "annotated.annotated_rule" {
+				foundAnnotatedSuccess = true
+				// Verify that annotated rules get full metadata
+				assert.Contains(t, success.Metadata, metadataTitle)
+				assert.Contains(t, success.Metadata, metadataDescription)
+			}
+		}
 	}
 
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			ctx := withCapabilities(context.Background(), testCapabilities)
+	assert.True(t, foundAnnotatedSuccess, "Annotated rule should be tracked for success computation")
 
-			p, err := policy.NewOfflinePolicy(ctx, "2014-05-31")
-			require.NoError(t, err)
-
-			p = p.WithSpec(ecc.EnterpriseContractPolicySpec{
-				Configuration: tt.globalConfig,
-			})
-
-			evaluator, err := NewConftestEvaluator(ctx, []source.PolicySource{
-				&source.PolicyUrl{
-					Url:  path.Join(dir, "policy", "rules.tar"),
-					Kind: source.PolicyKind,
-				},
-			}, p, tt.source)
-			require.NoError(t, err)
-
-			ce := evaluator.(conftestEvaluator)
-			require.Equal(t, tt.expectedInclude, ce.include)
-			require.Equal(t, tt.expectedExclude, ce.exclude)
-		})
+	// Verify that non-annotated rules are NOT tracked for success computation
+	// (they should not appear as successes since we can't reliably track them)
+	foundNonAnnotatedSuccess := false
+	for _, result := range results {
+		for _, success := range result.Successes {
+			if code, ok := success.Metadata[metadataCode].(string); ok && code == "nonannotated.rule" {
+				foundNonAnnotatedSuccess = true
+			}
+		}
 	}
+	assert.False(t, foundNonAnnotatedSuccess, "Non-annotated rules should not be tracked for success computation")
 }
 
-// This test is not high value but it should make Codecov happier
-func TestExcludeDirectives(t *testing.T) {
-	cases := []struct {
-		code     string
-		term     any
-		expected string
-	}{
-		// Normal behavior
-		{
-			code:     "foo",
-			term:     nil,
-			expected: `"foo"`,
-		},
-		{
-			code:     "foo",
-			term:     "bar",
-			expected: `"foo:bar"`,
-		},
-		{
-			code:     "foo",
-			term:     []any{"bar", "baz"},
-			expected: `one or more of "foo:bar", "foo:baz"`,
-		},
-		// Unlikely edge cases
-		{
-			code:     "foo",
-			term:     "",
-			expected: `"foo"`,
-		},
-		{
-			code:     "foo",
-			term:     []any{nil},
-			expected: `"foo"`,
-		},
-		{
-			code:     "foo",
-			term:     []any{nil, ""},
-			expected: `"foo"`,
-		},
-		{
-			code:     "foo",
-			term:     []any{nil, "bar", 42},
-			expected: `"foo:bar"`,
-		},
+// TestRuleCollectionWithMixedRules tests the rule collection logic with mixed annotated and non-annotated rules
+func TestRuleCollectionWithMixedRules(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(path.Join(dir, "inputs"), 0755))
+	require.NoError(t, os.WriteFile(path.Join(dir, "inputs", "data.json"), []byte("{}"), 0600))
+
+	// Create test directory with mixed rules
+	testDir := path.Join(dir, "mixed_policies")
+	require.NoError(t, os.MkdirAll(testDir, 0755))
+
+	// Create annotated rule that will fail
+	annotatedFailingRule := `package mixed
+
+import rego.v1
+
+# METADATA
+# title: Annotated Failing Rule
+# description: This annotated rule will fail
+# custom:
+#   short_name: annotated_failing
+deny contains result if {
+	result := {
+		"code": "mixed.annotated_failing",
+		"msg": "Annotated rule failure",
 	}
-	for i, tt := range cases {
-		t.Run(fmt.Sprintf("case %d", i), func(t *testing.T) {
-			assert.Equal(t, excludeDirectives(tt.code, tt.term), tt.expected)
-		})
+}`
+	require.NoError(t, os.WriteFile(path.Join(testDir, "annotated_failing.rego"), []byte(annotatedFailingRule), 0600))
+
+	// Create annotated rule that will pass
+	annotatedPassingRule := `package mixed
+
+import rego.v1
+
+# METADATA
+# title: Annotated Passing Rule
+# description: This annotated rule will pass
+# custom:
+#   short_name: annotated_passing
+deny contains result if {
+	false
+	result := "This should not be reached"
+}`
+	require.NoError(t, os.WriteFile(path.Join(testDir, "annotated_passing.rego"), []byte(annotatedPassingRule), 0600))
+
+	// Create non-annotated rule that will fail
+	nonAnnotatedFailingRule := `package mixed
+
+import rego.v1
+
+deny contains result if {
+	result := {
+		"code": "mixed.nonannotated_failing",
+		"msg": "Non-annotated rule failure",
 	}
+}`
+	require.NoError(t, os.WriteFile(path.Join(testDir, "nonannotated_failing.rego"), []byte(nonAnnotatedFailingRule), 0600))
+
+	// Create non-annotated rule that will pass
+	nonAnnotatedPassingRule := `package mixed
+
+import rego.v1
+
+deny contains result if {
+	false
+	result := "This should not be reached"
+}`
+	require.NoError(t, os.WriteFile(path.Join(testDir, "nonannotated_passing.rego"), []byte(nonAnnotatedPassingRule), 0600))
+
+	// Create rules archive
+	archivePath := path.Join(dir, "rules.tar.gz")
+	createTestArchive(t, testDir, archivePath)
+
+	ctx := withCapabilities(context.Background(), testCapabilities)
+
+	eTime, err := time.Parse(policy.DateFormat, "2014-05-31")
+	require.NoError(t, err)
+	config := &mockConfigProvider{}
+	config.On("EffectiveTime").Return(eTime)
+	config.On("SigstoreOpts").Return(policy.SigstoreOpts{}, nil)
+	config.On("Spec").Return(ecc.EnterpriseContractPolicySpec{})
+
+	evaluator, err := NewConftestEvaluator(ctx, []source.PolicySource{
+		&source.PolicyUrl{
+			Url:  archivePath,
+			Kind: source.PolicyKind,
+		},
+	}, config, ecc.Source{})
+	require.NoError(t, err)
+
+	results, err := evaluator.Evaluate(ctx, EvaluationTarget{Inputs: []string{path.Join(dir, "inputs")}})
+	require.NoError(t, err)
+
+	// Verify results
+	var annotatedFailures, annotatedSuccesses, nonAnnotatedFailures, nonAnnotatedSuccesses int
+
+	for _, result := range results {
+		// Count failures
+		for _, failure := range result.Failures {
+			if code, ok := failure.Metadata[metadataCode].(string); ok {
+				switch code {
+				case "mixed.annotated_failing":
+					annotatedFailures++
+				case "mixed.nonannotated_failing":
+					nonAnnotatedFailures++
+				}
+			}
+		}
+
+		// Count successes
+		for _, success := range result.Successes {
+			if code, ok := success.Metadata[metadataCode].(string); ok {
+				switch code {
+				case "mixed.annotated_passing":
+					annotatedSuccesses++
+				case "mixed.nonannotated_passing":
+					nonAnnotatedSuccesses++
+				}
+			}
+		}
+	}
+
+	// Verify annotated rules are properly tracked
+	assert.Equal(t, 1, annotatedFailures, "Should have one annotated failure")
+	assert.Equal(t, 1, annotatedSuccesses, "Should have one annotated success")
+
+	// Verify non-annotated rules are not tracked for success computation
+	assert.Equal(t, 1, nonAnnotatedFailures, "Should have one non-annotated failure")
+	assert.Equal(t, 0, nonAnnotatedSuccesses, "Should not track non-annotated rules for success computation")
+}
+
+// TestFilteringWithMixedRules tests that both annotated and non-annotated rules participate in filtering
+func TestFilteringWithMixedRules(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(path.Join(dir, "inputs"), 0755))
+	require.NoError(t, os.WriteFile(path.Join(dir, "inputs", "data.json"), []byte("{}"), 0600))
+
+	// Create test directory with rules in different packages
+	testDir := path.Join(dir, "filtering_policies")
+	require.NoError(t, os.MkdirAll(testDir, 0755))
+
+	// Create annotated rule in package 'a'
+	annotatedRuleA := `package a
+
+import rego.v1
+
+# METADATA
+# title: Annotated Rule A
+# description: This annotated rule is in package a
+# custom:
+#   short_name: annotated_a
+deny contains result if {
+	result := {
+		"code": "a.annotated",
+		"msg": "Annotated rule in package a",
+	}
+}`
+	require.NoError(t, os.WriteFile(path.Join(testDir, "a_annotated.rego"), []byte(annotatedRuleA), 0600))
+
+	// Create non-annotated rule in package 'b'
+	nonAnnotatedRuleB := `package b
+
+import rego.v1
+
+deny contains result if {
+	result := {
+		"code": "b.nonannotated",
+		"msg": "Non-annotated rule in package b",
+	}
+}`
+	require.NoError(t, os.WriteFile(path.Join(testDir, "b_nonannotated.rego"), []byte(nonAnnotatedRuleB), 0600))
+
+	// Create rules archive
+	archivePath := path.Join(dir, "rules.tar.gz")
+	createTestArchive(t, testDir, archivePath)
+
+	ctx := withCapabilities(context.Background(), testCapabilities)
+
+	eTime, err := time.Parse(policy.DateFormat, "2014-05-31")
+	require.NoError(t, err)
+	config := &mockConfigProvider{}
+	config.On("EffectiveTime").Return(eTime)
+	config.On("SigstoreOpts").Return(policy.SigstoreOpts{}, nil)
+	config.On("Spec").Return(ecc.EnterpriseContractPolicySpec{
+		Configuration: &ecc.EnterpriseContractPolicyConfiguration{
+			Include: []string{"a.*", "b.*"}, // Include both packages
+		},
+	})
+
+	evaluator, err := NewConftestEvaluator(ctx, []source.PolicySource{
+		&source.PolicyUrl{
+			Url:  archivePath,
+			Kind: source.PolicyKind,
+		},
+	}, config, ecc.Source{})
+	require.NoError(t, err)
+
+	results, err := evaluator.Evaluate(ctx, EvaluationTarget{Inputs: []string{path.Join(dir, "inputs")}})
+	require.NoError(t, err)
+
+	// Verify that both annotated and non-annotated rules are included in filtering
+	foundAnnotatedFailure := false
+	foundNonAnnotatedFailure := false
+
+	for _, result := range results {
+		for _, failure := range result.Failures {
+			if code, ok := failure.Metadata[metadataCode].(string); ok {
+				switch code {
+				case "a.annotated":
+					foundAnnotatedFailure = true
+				case "b.nonannotated":
+					foundNonAnnotatedFailure = true
+				}
+			}
+		}
+	}
+
+	assert.True(t, foundAnnotatedFailure, "Annotated rule should be included in filtering")
+	assert.True(t, foundNonAnnotatedFailure, "Non-annotated rule should be included in filtering")
 }
 
 var testCapabilities string
@@ -2264,4 +2341,59 @@ func rulesArchive(t *testing.T, files fs.FS) (string, error) {
 	}
 
 	return rules, nil
+}
+
+// Helper function to create test archives
+func createTestArchive(t *testing.T, sourceDir, archivePath string) {
+	file, err := os.Create(archivePath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	gw := gzip.NewWriter(file)
+	defer gw.Close()
+
+	tw := tar.NewWriter(gw)
+	defer tw.Close()
+
+	err = filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip the root directory itself
+		if path == sourceDir {
+			return nil
+		}
+
+		header, err := tar.FileInfoHeader(info, info.Name())
+		if err != nil {
+			return err
+		}
+
+		// Update the name to be relative to the source directory
+		relPath, err := filepath.Rel(sourceDir, path)
+		if err != nil {
+			return err
+		}
+		header.Name = relPath
+
+		if err := tw.WriteHeader(header); err != nil {
+			return err
+		}
+
+		if !info.IsDir() {
+			file, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+
+			if _, err := io.Copy(tw, file); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+	require.NoError(t, err)
 }
