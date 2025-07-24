@@ -158,7 +158,7 @@ jobs:
 
   Acceptance-SL:
     runs-on: ubuntu-latest
-    needs: [Initialize, Test]
+    needs: [Initialize, Test-SL]
     env:
       BSID: ${{ needs.Initialize.outputs.bsid }}
       SEALIGHTS_LOG_LEVEL: none
