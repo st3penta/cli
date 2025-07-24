@@ -401,7 +401,7 @@ func createAndPushImageWithLayer(ctx context.Context, imageName string, files *g
 func createAndPushLayer(ctx context.Context, content string, imageName string) (context.Context, error) {
 	l := s.NewLayer([]byte(content), types.OCIUncompressedLayer)
 
-	ref, err := registry.ImageReferenceInStubRegistry(ctx, imageName)
+	ref, err := registry.ImageReferenceInStubRegistry(ctx, "%s", imageName)
 	if err != nil {
 		return ctx, err
 	}
@@ -489,7 +489,7 @@ func createAndPushPlainImage(ctx context.Context, imageName string, patch patchF
 		return ctx, "", err
 	}
 
-	ref, err := registry.ImageReferenceInStubRegistry(ctx, imageName)
+	ref, err := registry.ImageReferenceInStubRegistry(ctx, "%s", imageName)
 	if err != nil {
 		return ctx, "", err
 	}
@@ -535,7 +535,7 @@ func resolveRefDigest(url string) (string, error) {
 // createAndPushKeylessImage loads an existing image from disk, along its signature and attestation
 // into the docker registry.
 func createAndPushKeylessImage(ctx context.Context, imageName string) (context.Context, error) {
-	ref, err := registry.ImageReferenceInStubRegistry(ctx, imageName)
+	ref, err := registry.ImageReferenceInStubRegistry(ctx, "%s", imageName)
 	if err != nil {
 		return ctx, err
 	}
@@ -705,7 +705,7 @@ func createAndPushPolicyBundle(ctx context.Context, imageName string, files *god
 		}
 	}
 
-	ref, err := registry.ImageReferenceInStubRegistry(ctx, imageName)
+	ref, err := registry.ImageReferenceInStubRegistry(ctx, "%s", imageName)
 	if err != nil {
 		return ctx, err
 	}

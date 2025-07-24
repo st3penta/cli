@@ -78,7 +78,7 @@ func createTektonBundle(ctx context.Context, name string, data *godog.Table) (co
 		}
 	}
 
-	ref, err := registry.ImageReferenceInStubRegistry(ctx, name)
+	ref, err := registry.ImageReferenceInStubRegistry(ctx, "%s", name)
 	if err != nil {
 		return ctx, err
 	}
