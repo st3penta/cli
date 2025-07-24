@@ -169,6 +169,7 @@ type testRunner interface {
 const (
 	effectiveOnFormat         = "2006-01-02T15:04:05Z"
 	effectiveOnTimeout        = -90 * 24 * time.Hour // keep effective_on metadata up to 90 days
+	metadataQuery             = "query"
 	metadataCode              = "code"
 	metadataCollections       = "collections"
 	metadataDependsOn         = "depends_on"
@@ -641,6 +642,11 @@ func (c conftestEvaluator) Evaluate(ctx context.Context, target EvaluationTarget
 func toRules(results []output.Result) []Result {
 	var eResults []Result
 	for _, r := range results {
+		// Newer conftest adds this key to the metadata. A typical value might
+		// be "data.main.deny". Currently we don't use it so let's remove it
+		// rather than change a bunch of snapshot files and test assertions.
+		delete(r.Metadata, metadataQuery)
+
 		eResults = append(eResults, Result{
 			Message:  r.Message,
 			Metadata: r.Metadata,
