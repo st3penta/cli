@@ -147,6 +147,9 @@ jobs:
           egress-policy: audit
           disable-telemetry: true
 
+      - name: Show git sha and commit subject
+        run: git log --oneline -n1
+
       - name: Generate
         run: make generate
 
@@ -172,6 +175,9 @@ jobs:
           "${GITHUB_WORKSPACE}/hack/ubuntu-podman-update.sh"
       - name: Create a test session
         run: ./slcli test start-stage --bsid=$BSID --testStage "Acceptance Tests"
+
+      - name: Show git sha and commit subject
+        run: git log --oneline -n1
 
       - name: Acceptance test
         env:

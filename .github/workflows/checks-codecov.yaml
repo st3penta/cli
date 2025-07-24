@@ -63,6 +63,9 @@ jobs:
       - name: Check go versions
         uses: conforma/github-workflows/golang-version-check@main
 
+      - name: Show git sha and commit subject
+        run: git log --oneline -n1
+
       - name: Generate
         run: make generate
 
@@ -131,6 +134,9 @@ jobs:
       - name: Update podman
         run: |
           "${GITHUB_WORKSPACE}/hack/ubuntu-podman-update.sh"
+
+      - name: Show git sha and commit subject
+        run: git log --oneline -n1
 
       - name: Acceptance test
         run: make acceptance
