@@ -25,22 +25,24 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/open-policy-agent/opa/ast"
-	"github.com/open-policy-agent/opa/ast/json"
+	"github.com/open-policy-agent/opa/v1/ast"
+	"github.com/open-policy-agent/opa/v1/ast/json"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 )
 
 func inspectSingle(path, module string) ([]*ast.AnnotationsRef, error) {
-	mod, err := ast.ParseModuleWithOpts(path, module, ast.ParserOptions{
-		ProcessAnnotation: true,
-		JSONOptions: &json.Options{
-			MarshalOptions: json.MarshalOptions{
-				IncludeLocation: json.NodeToggle{
-					AnnotationsRef: true,
-				},
+	// Set global JSON options to include location data for annotations
+	json.SetOptions(json.Options{
+		MarshalOptions: json.MarshalOptions{
+			IncludeLocation: json.NodeToggle{
+				AnnotationsRef: true,
 			},
 		},
+	})
+
+	mod, err := ast.ParseModuleWithOpts(path, module, ast.ParserOptions{
+		ProcessAnnotation: true,
 	})
 	if err != nil {
 		return nil, err

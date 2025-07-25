@@ -129,23 +129,33 @@ func options(flags *pflag.FlagSet) []option {
 	var result []option
 
 	flags.VisitAll(func(flag *pflag.Flag) {
-		if !(len(flag.ShorthandDeprecated) > 0) && len(flag.Shorthand) > 0 {
-			opt := option{
-				flag.Name,
-				flag.Shorthand,
-				flag.DefValue,
-				flag.Usage,
-			}
-			result = append(result, opt)
-		} else {
-			opt := option{
-				Name:         flag.Name,
-				DefaultValue: flag.DefValue,
-				Usage:        flag.Usage,
-			}
-			result = append(result, opt)
+		opt := option{
+			flag.Name,
+			flagShortHandMaybe(flag),
+			flagDefValueMaybe(flag),
+			flag.Usage,
 		}
+		result = append(result, opt)
 	})
 
 	return result
+}
+
+func flagShortHandMaybe(flag *pflag.Flag) string {
+	if flag.ShorthandDeprecated != "" {
+		// Don't show deprecated flag shorthand in the docs
+		return ""
+	}
+	return flag.Shorthand
+}
+
+func flagDefValueMaybe(flag *pflag.Flag) string {
+	// For `ec opa test` the default value for the --parallel flag is `runtime.NumCPU()`.
+	// We don't want to show that in the docs since it causes problems in the CI and it
+	// also it makes no sense in static documentation.
+	if flag.Name == "parallel" && strings.Contains(flag.Usage, "defaulting to the number of CPUs") {
+		// Don't show the default value in the docs
+		return ""
+	}
+	return flag.DefValue
 }

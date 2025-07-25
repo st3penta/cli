@@ -69,6 +69,10 @@ jobs:
       - name: Generate
         run: make generate
 
+      # Possibly useful for debugging if the next step produces an error
+      - name: Show diff after `make generate`
+        run: git diff --stat --patch
+
       - name: Check for uncommitted changes
         run: |
           if ! git diff --exit-code -s; then

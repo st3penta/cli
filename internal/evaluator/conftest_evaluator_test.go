@@ -37,7 +37,7 @@ import (
 	"github.com/MakeNowJust/heredoc"
 	ecc "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
 	"github.com/gkampitakis/go-snaps/snaps"
-	"github.com/open-policy-agent/opa/ast"
+	"github.com/open-policy-agent/opa/v1/ast"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -1958,6 +1958,7 @@ func TestUnconformingRule(t *testing.T) {
 
 	_, err = evaluator.Evaluate(ctx, EvaluationTarget{Inputs: []string{path.Join(dir, "inputs")}})
 	require.Error(t, err)
+	assert.EqualError(t, err, `the rule "deny = true if { true }" returns an unsupported value, at no_msg.rego:5`)
 }
 
 // TestAnnotatedAndNonAnnotatedRules tests the separation of annotated and non-annotated rules
