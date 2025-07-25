@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/spf13/afero"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/conforma/cli/cmd/root"
@@ -267,6 +268,33 @@ func Test_TrackBundleCommand(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestBundleCommandHelp tests that the command help reflects the new expires_on behavior
+func TestBundleCommandHelp(t *testing.T) {
+	trackBundleCmd := trackBundleCmd(nil, nil, nil)
+
+	// Verify the long description mentions expires_on
+	assert.Contains(t, trackBundleCmd.Long, "expires_on",
+		"Command help should mention expires_on")
+
+	// Verify it explains the new behavior
+	assert.Contains(t, trackBundleCmd.Long, "expiration date is added",
+		"Command help should explain that expiration dates are added")
+
+	// Verify pruning explanation is updated
+	assert.Contains(t, trackBundleCmd.Long, "expired entries are removed",
+		"Command help should explain pruning removes expired entries")
+
+	// Verify the in-effect-days flag is documented
+	foundFlag := false
+	trackBundleCmd.Flags().VisitAll(func(flag *pflag.Flag) {
+		if flag.Name == "in-effect-days" {
+			foundFlag = true
+			assert.Equal(t, "30", flag.DefValue, "Default value should be 30")
+		}
+	})
+	assert.True(t, foundFlag, "in-effect-days flag should exist")
 }
 
 func TestPreRunE(t *testing.T) {

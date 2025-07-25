@@ -71,10 +71,9 @@ var sampleHashThree = v1.Hash{
 }
 
 var (
-	expectedInEffectDays    = 30
-	expectedEffectiveOnTime = time.Now().Add(time.Duration(expectedInEffectDays) * oneDay).UTC().Round(oneDay)
-	expectedEffectiveOn     = expectedEffectiveOnTime.Format(time.RFC3339)
-	expectedExpiresOn       = expectedEffectiveOn
+	expectedInEffectDays = 30
+	// setExpiration now uses the inEffectDays value for expiration duration, rounded to day boundary
+	expectedExpiresOn = time.Now().Add(time.Duration(expectedInEffectDays) * oneDay).UTC().Round(oneDay).Format(time.RFC3339)
 )
 
 var (
@@ -106,11 +105,9 @@ func TestTrack(t *testing.T) {
 				---
 				trusted_tasks:
 				  oci://registry.com/repo:one:
-				    - effective_on: "` + expectedEffectiveOn + `"
-				      ref: ` + sampleHashOne.String() + `
+				    - ref: ` + sampleHashOne.String() + `
 				  oci://registry.com/repo:two:
-				    - effective_on: "` + expectedEffectiveOn + `"
-				      ref: ` + sampleHashTwo.String() + `
+				    - ref: ` + sampleHashTwo.String() + `
 			`),
 		},
 		{
@@ -123,11 +120,9 @@ func TestTrack(t *testing.T) {
 				---
 				trusted_tasks:
 				  oci://registry.com/one:1.0:
-				    - effective_on: "` + expectedEffectiveOn + `"
-				      ref: ` + sampleHashOne.String() + `
+				    - ref: ` + sampleHashOne.String() + `
 				  oci://registry.com/two:2.0:
-				    - effective_on: "` + expectedEffectiveOn + `"
-				      ref: ` + sampleHashTwo.String() + `
+				    - ref: ` + sampleHashTwo.String() + `
 			`),
 		},
 		{
@@ -139,18 +134,15 @@ func TestTrack(t *testing.T) {
 				`---
 				trusted_tasks:
 				  oci://registry.com/repo:one:
-				    - effective_on: "` + expectedEffectiveOn + `"
-				      ref: ` + sampleHashOne.String() + `
+				    - ref: ` + sampleHashOne.String() + `
 			`)),
 			output: hd.Doc(
 				`---
 				trusted_tasks:
 				  oci://registry.com/repo:one:
-				    - effective_on: "` + expectedEffectiveOn + `"
-				      ref: ` + sampleHashOne.String() + `
+				    - ref: ` + sampleHashOne.String() + `
 				  oci://registry.com/repo:two:
-				    - effective_on: "` + expectedEffectiveOn + `"
-				      ref: ` + sampleHashTwo.String() + `
+				    - ref: ` + sampleHashTwo.String() + `
 			`),
 		},
 		{
@@ -162,18 +154,15 @@ func TestTrack(t *testing.T) {
 				---
 				trusted_tasks:
 				  oci://registry.com/one:1.0:
-				    - effective_on: "` + expectedEffectiveOn + `"
-				      ref: ` + sampleHashOne.String() + `
+				    - ref: ` + sampleHashOne.String() + `
 			`)),
 			output: hd.Doc(`
 				---
 				trusted_tasks:
 				  oci://registry.com/one:1.0:
-				    - effective_on: "` + expectedEffectiveOn + `"
-				      ref: ` + sampleHashOne.String() + `
+				    - ref: ` + sampleHashOne.String() + `
 				  oci://registry.com/two:2.0:
-				    - effective_on: "` + expectedEffectiveOn + `"
-				      ref: ` + sampleHashTwo.String() + `
+				    - ref: ` + sampleHashTwo.String() + `
 			`),
 		},
 		{
@@ -188,8 +177,7 @@ func TestTrack(t *testing.T) {
 				---
 				trusted_tasks:
 				  oci://registry.com/two:2.0:
-				    - effective_on: "` + expectedEffectiveOn + `"
-				      ref: ` + sampleHashTwo.String() + `
+				    - ref: ` + sampleHashTwo.String() + `
 			`),
 		},
 		{
@@ -201,8 +189,7 @@ func TestTrack(t *testing.T) {
 				---
 				trusted_tasks:
 				  oci://registry.com/mixed:1.0:
-				    - effective_on: "` + expectedEffectiveOn + `"
-				      ref: ` + sampleHashOne.String() + `
+				    - ref: ` + sampleHashOne.String() + `
 			`),
 		},
 		{
@@ -214,15 +201,13 @@ func TestTrack(t *testing.T) {
 				---
 				trusted_tasks:
 				  oci://registry.com/one:1.0:
-				    - effective_on: "` + tomorrow + `"
-				      ref: ` + sampleHashOne.String() + `
+				    - ref: ` + sampleHashOne.String() + `
 			`)),
 			output: hd.Doc(`
 				---
 				trusted_tasks:
 				  oci://registry.com/one:1.0:
-				    - effective_on: "` + tomorrow + `"
-				      ref: ` + sampleHashOne.String() + `
+				    - ref: ` + sampleHashOne.String() + `
 			`),
 		},
 		{
@@ -235,20 +220,16 @@ func TestTrack(t *testing.T) {
 				---
 				trusted_tasks:
 				  oci://registry.com/mixed:1.0:
-				    - effective_on: "` + yesterday + `"
+				    - expires_on: "` + yesterday + `"
 				      ref: ` + sampleHashThree.String() + `
-				    - effective_on: "` + yesterday + `"
+				    - expires_on: "` + yesterday + `"
 				      ref: ` + sampleHashTwo.String() + `
 			`)),
 			output: hd.Doc(`
 				---
 				trusted_tasks:
 				  oci://registry.com/mixed:1.0:
-				    - effective_on: "` + expectedEffectiveOn + `"
-				      ref: ` + sampleHashOne.String() + `
-				    - effective_on: "` + yesterday + `"
-				      expires_on: "` + expectedExpiresOn + `"
-				      ref: ` + sampleHashThree.String() + `
+				    - ref: ` + sampleHashOne.String() + `
 			`),
 		},
 		{
@@ -261,28 +242,25 @@ func TestTrack(t *testing.T) {
 				---
 				trusted_tasks:
 				  oci://registry.com/mixed:0.2:
-				    - effective_on: "` + inTwoDays + `"
+				    - expires_on: "` + inTwoDays + `"
 				      ref: ` + sampleHashTwo.String() + `
-				    - effective_on: "` + inOneDay + `"
+				    - expires_on: "` + inOneDay + `"
 				      ref: ` + sampleHashTwo.String() + `
 				  oci://registry.com/mixed:0.3:
-				    - effective_on: "` + inTwoDays + `"
+				    - expires_on: "` + inTwoDays + `"
 				      ref: ` + sampleHashThree.String() + `
-				    - effective_on: "` + inOneDay + `"
+				    - expires_on: "` + inOneDay + `"
 				      ref: ` + sampleHashThree.String() + `
 			`)),
 			output: hd.Doc(`
 				---
 				trusted_tasks:
 				  oci://registry.com/mixed:0.2:
-				    - effective_on: "` + inOneDay + `"
-				      ref: ` + sampleHashTwo.String() + `
+				    - ref: ` + sampleHashTwo.String() + `
 				  oci://registry.com/mixed:0.3:
-				    - effective_on: "` + inOneDay + `"
-				      ref: ` + sampleHashThree.String() + `
+				    - ref: ` + sampleHashThree.String() + `
 				  oci://registry.com/mixed:1.0:
-				    - effective_on: "` + expectedEffectiveOn + `"
-				      ref: ` + sampleHashOne.String() + `
+				    - ref: ` + sampleHashOne.String() + `
 			`),
 		},
 		{
@@ -295,32 +273,29 @@ func TestTrack(t *testing.T) {
 				---
 				trusted_tasks:
 				  oci://registry.com/mixed:1.0:
-				    - effective_on: "` + inFourDays + `"
+				    - expires_on: "` + inFourDays + `"
 				      ref: ` + sampleHashThree.String() + `
-				    - effective_on: "` + inThreeDays + `"
+				    - expires_on: "` + inThreeDays + `"
 				      ref: ` + sampleHashTwo.String() + `
-				    - effective_on: "` + inTwoDays + `"
+				    - expires_on: "` + inTwoDays + `"
 				      ref: ` + sampleHashThree.String() + `
-				    - effective_on: "` + inOneDay + `"
+				    - expires_on: "` + inOneDay + `"
 				      ref: ` + sampleHashTwo.String() + `
 			`)),
+			// All non-consecutive duplicates are kept, plus new record at front
+			// Existing expiry dates are preserved since they already have ExpiresOn set
 			output: hd.Doc(`
 				---
 				trusted_tasks:
 				  oci://registry.com/mixed:1.0:
-				    - effective_on: "` + expectedEffectiveOn + `"
-				      ref: ` + sampleHashOne.String() + `
-				    - effective_on: "` + inFourDays + `"
-				      expires_on: "` + expectedExpiresOn + `"
+				    - ref: ` + sampleHashOne.String() + `
+				    - expires_on: "` + inFourDays + `"
 				      ref: ` + sampleHashThree.String() + `
-				    - effective_on: "` + inThreeDays + `"
-				      expires_on: "` + inFourDays + `"
+				    - expires_on: "` + inThreeDays + `"
 				      ref: ` + sampleHashTwo.String() + `
-				    - effective_on: "` + inTwoDays + `"
-				      expires_on: "` + inThreeDays + `"
+				    - expires_on: "` + inTwoDays + `"
 				      ref: ` + sampleHashThree.String() + `
-				    - effective_on: "` + inOneDay + `"
-				      expires_on: "` + inTwoDays + `"
+				    - expires_on: "` + inOneDay + `"
 				      ref: ` + sampleHashTwo.String() + `
 			`),
 		},
@@ -331,17 +306,14 @@ func TestTrack(t *testing.T) {
 				---
 				trusted_tasks:
 				  oci://registry.com/one:1.0:
-				    - effective_on: "` + tomorrow + `"
-				      ref: ` + sampleHashOne.String() + `
+				    - ref: ` + sampleHashOne.String() + `
 			`)),
 			output: hd.Doc(`
 			---
 			trusted_tasks:
 			  oci://registry.com/one:1.0:
-			    - effective_on: "` + expectedEffectiveOn + `"
-			      ref: ` + sampleHashOneUpdated.String() + `
-			    - effective_on: "` + tomorrow + `"
-			      expires_on: "` + expectedExpiresOn + `"
+			    - ref: ` + sampleHashOneUpdated.String() + `
+			    - expires_on: "` + expectedExpiresOn + `"
 			      ref: ` + sampleHashOne.String() + `
 			`),
 		},
@@ -355,15 +327,97 @@ func TestTrack(t *testing.T) {
 				---
 				trusted_tasks:
 				  oci://registry.com/mixed:1.0:
-				    - effective_on: "` + expectedEffectiveOn + `"
-				      ref: ` + sampleHashOne.String() + `
+				    - ref: ` + sampleHashOne.String() + `
 			`)),
 			output: hd.Doc(`
 				---
 				trusted_tasks:
 				  oci://registry.com/mixed:1.0:
-				    - effective_on: "` + expectedEffectiveOn + `"
-				      ref: ` + sampleHashOne.String() + `
+				    - ref: ` + sampleHashOne.String() + `
+			`),
+		},
+		{
+			name: "setExpiration only updates records with nil ExpiresOn",
+			urls: []string{
+				"registry.com/mixed:1.0@" + sampleHashOne.String(),
+			},
+			input: []byte(hd.Doc(`
+				---
+				trusted_tasks:
+				  oci://registry.com/mixed:1.0:
+				    - ref: ` + sampleHashTwo.String() + `
+				    - expires_on: "` + inThreeDays + `"
+				      ref: ` + sampleHashThree.String() + `
+			`)),
+			// New record becomes most recent (no expiry), existing record with expiry keeps it,
+			// previously most recent record (no expiry) gets new expiry
+			output: hd.Doc(`
+				---
+				trusted_tasks:
+				  oci://registry.com/mixed:1.0:
+				    - ref: ` + sampleHashOne.String() + `
+				    - expires_on: "` + expectedExpiresOn + `"
+				      ref: ` + sampleHashTwo.String() + `
+				    - expires_on: "` + inThreeDays + `"
+				      ref: ` + sampleHashThree.String() + `
+			`),
+		},
+		{
+			name: "mixed nil and existing expiry dates",
+			urls: []string{
+				"registry.com/mixed:1.0@" + sampleHashOne.String(),
+			},
+			input: []byte(hd.Doc(`
+				---
+				trusted_tasks:
+				  oci://registry.com/mixed:1.0:
+				    - ref: ` + sampleHashTwo.String() + `
+				    - ref: ` + sampleHashThree.String() + `
+				    - expires_on: "` + inTwoDays + `"
+				      ref: sha256:existing1
+				    - expires_on: "` + inThreeDays + `"
+				      ref: sha256:existing2
+			`)),
+			// Most recent stays nil, records without expiry get new expiry, existing expiry preserved
+			output: hd.Doc(`
+				---
+				trusted_tasks:
+				  oci://registry.com/mixed:1.0:
+				    - ref: ` + sampleHashOne.String() + `
+				    - expires_on: "` + expectedExpiresOn + `"
+				      ref: ` + sampleHashTwo.String() + `
+				    - expires_on: "` + expectedExpiresOn + `"
+				      ref: ` + sampleHashThree.String() + `
+				    - expires_on: "` + inTwoDays + `"
+				      ref: sha256:existing1
+				    - expires_on: "` + inThreeDays + `"
+				      ref: sha256:existing2
+			`),
+		},
+		{
+			name: "all records already have expiry dates",
+			urls: []string{
+				"registry.com/mixed:1.0@" + sampleHashOne.String(),
+			},
+			input: []byte(hd.Doc(`
+				---
+				trusted_tasks:
+				  oci://registry.com/mixed:1.0:
+				    - expires_on: "` + inOneDay + `"
+				      ref: ` + sampleHashTwo.String() + `
+				    - expires_on: "` + inTwoDays + `"
+				      ref: ` + sampleHashThree.String() + `
+			`)),
+			// New record becomes most recent (no expiry), all existing expiry dates preserved
+			output: hd.Doc(`
+				---
+				trusted_tasks:
+				  oci://registry.com/mixed:1.0:
+				    - ref: ` + sampleHashOne.String() + `
+				    - expires_on: "` + inOneDay + `"
+				      ref: ` + sampleHashTwo.String() + `
+				    - expires_on: "` + inTwoDays + `"
+				      ref: ` + sampleHashThree.String() + `
 			`),
 		},
 	}
@@ -549,18 +603,16 @@ func TestTrackGitReferences(t *testing.T) {
 	require.NoError(t, tracker.trackGitReferences(context.Background(), []string{
 		"git+https://git.io/organization/repository//task1.yaml@rev1",
 		"git+ssh://got.io/organization/repository//dir/task2.yaml@rev2",
-	}, false, expectedEffectiveOnTime))
+	}, false))
 
 	expected := map[string][]taskRecord{
 		"git+https://git.io/organization/repository//task1.yaml": {{
-			Ref:         "rev1",
-			Repository:  "git+https://git.io/organization/repository//task1.yaml",
-			EffectiveOn: expectedEffectiveOnTime,
+			Ref:        "rev1",
+			Repository: "git+https://git.io/organization/repository//task1.yaml",
 		}},
 		"git+ssh://got.io/organization/repository//dir/task2.yaml": {{
-			Ref:         "rev2",
-			Repository:  "git+ssh://got.io/organization/repository//dir/task2.yaml",
-			EffectiveOn: expectedEffectiveOnTime,
+			Ref:        "rev2",
+			Repository: "git+ssh://got.io/organization/repository//dir/task2.yaml",
 		}},
 	}
 
@@ -593,18 +645,16 @@ func TestTrackGitReferencesWithoutCommitId(t *testing.T) {
 	require.NoError(t, tracker.trackGitReferences(ctx, []string{
 		"git+test://git.io/repository/.git//tasks/task1/0.1/task.yaml",
 		"git+test://git.io/repository/.git//tasks/task2/0.2/task.yaml",
-	}, true, expectedEffectiveOnTime))
+	}, true))
 
 	expected := map[string][]taskRecord{
 		"git+test://git.io/repository/.git//tasks/task1/0.1/task.yaml": {{
-			Ref:         "0916963bac30ea708c0ded4dd9d160fc148fd46f",
-			Repository:  "git+test://git.io/repository/.git//tasks/task1/0.1/task.yaml",
-			EffectiveOn: expectedEffectiveOnTime,
+			Ref:        "0916963bac30ea708c0ded4dd9d160fc148fd46f",
+			Repository: "git+test://git.io/repository/.git//tasks/task1/0.1/task.yaml",
 		}},
 		"git+test://git.io/repository/.git//tasks/task2/0.2/task.yaml": {{
-			Ref:         "acf3f1907b51c0e15809a61536bba71809daec68",
-			Repository:  "git+test://git.io/repository/.git//tasks/task2/0.2/task.yaml",
-			EffectiveOn: expectedEffectiveOnTime,
+			Ref:        "acf3f1907b51c0e15809a61536bba71809daec68",
+			Repository: "git+test://git.io/repository/.git//tasks/task2/0.2/task.yaml",
 		}},
 	}
 
@@ -622,9 +672,8 @@ func TestTrackGitReferencesWithoutFreshen(t *testing.T) {
 	tracker := &Tracker{
 		TrustedTasks: map[string][]taskRecord{
 			"git+test://git.io/repository/.git//tasks/task1/0.1/task.yaml": {{
-				Ref:         "f0cacc1a",
-				Repository:  "git+test://git.io/repository/.git//tasks/task1/0.1/task.yaml",
-				EffectiveOn: expectedEffectiveOnTime,
+				Ref:        "f0cacc1a",
+				Repository: "git+test://git.io/repository/.git//tasks/task1/0.1/task.yaml",
 			}},
 		},
 	}
@@ -647,22 +696,19 @@ func TestTrackGitReferencesWithoutFreshen(t *testing.T) {
 
 	require.NoError(t, tracker.trackGitReferences(ctx, []string{
 		"git+test://git.io/repository/.git//tasks/task2/0.2/task.yaml",
-	}, true, expectedEffectiveOnTime))
+	}, true))
 
 	expected := map[string][]taskRecord{
 		"git+test://git.io/repository/.git//tasks/task1/0.1/task.yaml": {{
-			Ref:         "0916963bac30ea708c0ded4dd9d160fc148fd46f",
-			Repository:  "git+test://git.io/repository/.git//tasks/task1/0.1/task.yaml",
-			EffectiveOn: expectedEffectiveOnTime,
+			Ref:        "0916963bac30ea708c0ded4dd9d160fc148fd46f",
+			Repository: "git+test://git.io/repository/.git//tasks/task1/0.1/task.yaml",
 		}, {
-			Ref:         "f0cacc1a",
-			Repository:  "git+test://git.io/repository/.git//tasks/task1/0.1/task.yaml",
-			EffectiveOn: expectedEffectiveOnTime,
+			Ref:        "f0cacc1a",
+			Repository: "git+test://git.io/repository/.git//tasks/task1/0.1/task.yaml",
 		}},
 		"git+test://git.io/repository/.git//tasks/task2/0.2/task.yaml": {{
-			Ref:         "acf3f1907b51c0e15809a61536bba71809daec68",
-			Repository:  "git+test://git.io/repository/.git//tasks/task2/0.2/task.yaml",
-			EffectiveOn: expectedEffectiveOnTime,
+			Ref:        "acf3f1907b51c0e15809a61536bba71809daec68",
+			Repository: "git+test://git.io/repository/.git//tasks/task2/0.2/task.yaml",
 		}},
 	}
 
@@ -682,22 +728,117 @@ func TestInEffectDays(t *testing.T) {
 	client := fakeClient{objects: testObjects, images: testImages}
 	ctx = WithClient(ctx, client)
 
+	// Test that inEffectDays parameter is now used for expires_on calculation
 	inEffectDays := 666
-	expectedEffectiveOn := time.Now().Add(time.Duration(inEffectDays) * oneDay).UTC().Round(oneDay).Format(time.RFC3339)
 
 	urls := []string{
 		"registry.com/mixed:1.0@" + sampleHashOne.String(),
 	}
 
+	// Expected: inEffectDays is used for expiration, new records have no expiration
 	expected := hd.Doc(`
 		---
 		trusted_tasks:
 		  oci://registry.com/mixed:1.0:
-		    - effective_on: "` + expectedEffectiveOn + `"
-		      ref: ` + sampleHashOne.String() + `
+		    - ref: ` + sampleHashOne.String() + `
 	`)
 
 	output, err := Track(ctx, urls, nil, true, false, inEffectDays)
 	require.NoError(t, err)
 	require.Equal(t, expected, string(output))
+}
+
+func TestSetExpiration(t *testing.T) {
+	tests := []struct {
+		name           string
+		inEffectDays   int
+		inputRecords   []taskRecord
+		expectedOutput []taskRecord
+	}{
+		{
+			name:         "most recent record gets no expiry, nil records get expiry",
+			inEffectDays: 7,
+			inputRecords: []taskRecord{
+				{Ref: "newest", ExpiresOn: nil},
+				{Ref: "older", ExpiresOn: nil},
+			},
+			expectedOutput: []taskRecord{
+				{Ref: "newest", ExpiresOn: nil}, // Most recent - no expiry
+				{Ref: "older", ExpiresOn: &[]time.Time{time.Now().UTC().Round(oneDay).Add(7 * oneDay)}[0]}, // Gets expiry
+			},
+		},
+		{
+			name:         "preserve existing expiry dates",
+			inEffectDays: 7,
+			inputRecords: []taskRecord{
+				{Ref: "newest", ExpiresOn: nil},
+				{Ref: "older", ExpiresOn: &[]time.Time{time.Now().UTC().Add(10 * oneDay)}[0]}, // Existing expiry
+			},
+			expectedOutput: []taskRecord{
+				{Ref: "newest", ExpiresOn: nil},                                               // Most recent - no expiry
+				{Ref: "older", ExpiresOn: &[]time.Time{time.Now().UTC().Add(10 * oneDay)}[0]}, // Keeps existing expiry
+			},
+		},
+		{
+			name:         "mixed nil and existing expiry records",
+			inEffectDays: 5,
+			inputRecords: []taskRecord{
+				{Ref: "newest", ExpiresOn: nil},
+				{Ref: "nilRecord", ExpiresOn: nil},
+				{Ref: "existingRecord", ExpiresOn: &[]time.Time{time.Now().UTC().Add(15 * oneDay)}[0]},
+				{Ref: "anotherNil", ExpiresOn: nil},
+			},
+			expectedOutput: []taskRecord{
+				{Ref: "newest", ExpiresOn: nil}, // Most recent - no expiry
+				{Ref: "nilRecord", ExpiresOn: &[]time.Time{time.Now().UTC().Round(oneDay).Add(5 * oneDay)}[0]},  // Gets new expiry
+				{Ref: "existingRecord", ExpiresOn: &[]time.Time{time.Now().UTC().Add(15 * oneDay)}[0]},          // Keeps existing
+				{Ref: "anotherNil", ExpiresOn: &[]time.Time{time.Now().UTC().Round(oneDay).Add(5 * oneDay)}[0]}, // Gets new expiry
+			},
+		},
+		{
+			name:         "all records already have expiry",
+			inEffectDays: 3,
+			inputRecords: []taskRecord{
+				{Ref: "newest", ExpiresOn: nil},
+				{Ref: "existing1", ExpiresOn: &[]time.Time{time.Now().UTC().Add(8 * oneDay)}[0]},
+				{Ref: "existing2", ExpiresOn: &[]time.Time{time.Now().UTC().Add(12 * oneDay)}[0]},
+			},
+			expectedOutput: []taskRecord{
+				{Ref: "newest", ExpiresOn: nil}, // Most recent - no expiry
+				{Ref: "existing1", ExpiresOn: &[]time.Time{time.Now().UTC().Add(8 * oneDay)}[0]},  // Keeps existing
+				{Ref: "existing2", ExpiresOn: &[]time.Time{time.Now().UTC().Add(12 * oneDay)}[0]}, // Keeps existing
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tracker := &Tracker{
+				TrustedTasks: map[string][]taskRecord{
+					"test-group": tt.inputRecords,
+				},
+			}
+
+			tracker.setExpiration(tt.inEffectDays)
+
+			actualRecords := tracker.TrustedTasks["test-group"]
+			require.Len(t, actualRecords, len(tt.expectedOutput))
+
+			for i, expectedRecord := range tt.expectedOutput {
+				actualRecord := actualRecords[i]
+				assert.Equal(t, expectedRecord.Ref, actualRecord.Ref)
+
+				if expectedRecord.ExpiresOn == nil {
+					assert.Nil(t, actualRecord.ExpiresOn, "Record %d should have nil ExpiresOn", i)
+				} else {
+					require.NotNil(t, actualRecord.ExpiresOn, "Record %d should have non-nil ExpiresOn", i)
+					// Allow some tolerance for time comparison (within 1 second)
+					timeDiff := actualRecord.ExpiresOn.Sub(*expectedRecord.ExpiresOn)
+					assert.True(t, timeDiff >= -time.Second && timeDiff <= time.Second,
+						"Record %d expiry time should be close to expected. Expected: %v, Actual: %v, Diff: %v",
+						i, *expectedRecord.ExpiresOn, *actualRecord.ExpiresOn, timeDiff)
+				}
+			}
+		})
+	}
 }
