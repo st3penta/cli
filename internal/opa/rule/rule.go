@@ -222,7 +222,7 @@ func documentationUrl(a *ast.AnnotationsRef) string {
 
 	// This makes assumptions about the way we publish policy docs for
 	// policies defined in https://github.com/conforma/policy/
-	// to https://conforma.dev/docs/policy/index.html . We should figure
+	// to https://conforma.dev/docs/policy/ . We should figure
 	// out a way for the documentationUrl to be configurable, perhaps by using
 	// some additional package annotations. To make matters even worse, we're now
 	// hard coding "release_policy" in the URL, which is guaranteed wrong for
