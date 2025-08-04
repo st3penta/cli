@@ -503,12 +503,19 @@ func (c conftestEvaluator) Evaluate(ctx context.Context, target EvaluationTarget
 			namespacesToUse = filteredNamespaces
 		}
 
-		// log the namespaces to use
 		log.Debugf("Namespaces to use: %v", namespacesToUse)
+
+		// Prepare the list of data dirs
+		dataDirs, err := c.prepareDataDirs(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		log.Debugf("Data dirs: %v", dataDirs)
 
 		r = &conftestRunner{
 			runner.TestRunner{
-				Data:          []string{c.dataDir},
+				Data:          dataDirs,
 				Policy:        []string{c.policyDir},
 				Namespace:     namespacesToUse,
 				AllNamespaces: false, // Always false to prevent bypassing filtering
@@ -637,6 +644,52 @@ func (c conftestEvaluator) Evaluate(ctx context.Context, target EvaluationTarget
 	}
 
 	return results, nil
+}
+
+// prepareDataDirs inspects the top level data dir and returns a list of the directories
+// that appear to have data files in them. That list will be passed to the conftest runner.
+func (c conftestEvaluator) prepareDataDirs(ctx context.Context) ([]string, error) {
+	// The reason we do this is to avoid having the names of the subdirs under c.dataDir
+	// converted to keys in the data structure. We want the top level keys in the data files
+	// to be at the top level of the data structure visible to the rego rules.
+
+	dirsWithDataFiles := make(map[string]bool)
+	err := afero.Walk(c.fs, c.dataDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip the root data directory itself
+		if path == c.dataDir {
+			return nil
+		}
+
+		// Only process files, not directories
+		if !info.IsDir() {
+			ext := filepath.Ext(info.Name())
+			// Check if this is a data file (.json, .yaml, .yml)
+			// Todo: Should probably recognize other supported types of data
+			if ext == ".json" || ext == ".yaml" || ext == ".yml" {
+				// Mark the directory containing this file as having data
+				dir := filepath.Dir(path)
+				dirsWithDataFiles[dir] = true
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert the map keys to a slice
+	dataDirs := []string{}
+	for dir := range dirsWithDataFiles {
+		dataDirs = append(dataDirs, dir)
+	}
+
+	return dataDirs, nil
 }
 
 func toRules(results []output.Result) []Result {
@@ -815,7 +868,22 @@ func createConfigJSON(ctx context.Context, dataDir string, p ConfigProvider) err
 	if p == nil {
 		return nil
 	}
-	configFilePath := filepath.Join(dataDir, "config.json")
+
+	fs := utils.FS(ctx)
+
+	// Place it in its own subdirectory instead of at the top level
+	configDataDir := filepath.Join(dataDir, "config")
+	exists, err := afero.DirExists(fs, configDataDir)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		log.Debugf("Config data dir '%s' does not exist, will create.", dataDir)
+		if err := fs.MkdirAll(configDataDir, 0755); err != nil {
+			return err
+		}
+	}
+	configFilePath := filepath.Join(configDataDir, "config.json")
 
 	config := map[string]interface{}{
 		"config": map[string]interface{}{},
@@ -847,9 +915,8 @@ func createConfigJSON(ctx context.Context, dataDir string, p ConfigProvider) err
 		return err
 	}
 
-	fs := utils.FS(ctx)
-	// Check to see if the data.json file exists
-	exists, err := afero.Exists(fs, configFilePath)
+	// Check to see if the config/config.json file exists
+	exists, err = afero.Exists(fs, configFilePath)
 	if err != nil {
 		return err
 	}
@@ -859,7 +926,7 @@ func createConfigJSON(ctx context.Context, dataDir string, p ConfigProvider) err
 			return err
 		}
 	}
-	// write our jsonData content to the data.json file in the data directory under the workDir
+	// write our jsonData content to the config/config.json file in the data dir
 	log.Debugf("Writing config data to %s: %#v", configFilePath, string(configJSON))
 	if err := afero.WriteFile(fs, configFilePath, configJSON, 0444); err != nil {
 		return err

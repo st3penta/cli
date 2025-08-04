@@ -2344,6 +2344,85 @@ func rulesArchive(t *testing.T, files fs.FS) (string, error) {
 	return rules, nil
 }
 
+func TestPrepareDataDirs(t *testing.T) {
+	tests := []struct {
+		name         string
+		filePaths    []string // ordered list of file paths to create
+		expectedDirs []string // expected directories in same order
+	}{
+		{
+			name: "files in subdirectories",
+			filePaths: []string{
+				"foo/data.json",
+				"another/path/info.yaml",
+				"third/deep/path/config.yml",
+				"some/path/no-data.txt",
+			},
+			expectedDirs: []string{
+				"foo",
+				"another/path",
+				"third/deep/path",
+			},
+		},
+		{
+			name: "realistic konflux example",
+			filePaths: []string{
+				"data/a67f0d7cc/rule_data.yml",
+				"data/a67f0d7cc/required_tasks.yml",
+				"data/a67f0d7cc/known_rpm_repositories.yml",
+				"data/e8a615778/data/data/trusted_tekton_tasks.yml",
+				"data/config/config.json",
+			},
+			expectedDirs: []string{
+				"data/a67f0d7cc",
+				"data/e8a615778/data/data",
+				"data/config",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a temporary filesystem
+			fs := afero.NewMemMapFs()
+			ctx := utils.WithFS(context.Background(), fs)
+
+			// Create the base data directory
+			dataDir := "/test/data"
+			require.NoError(t, fs.MkdirAll(dataDir, 0755))
+
+			// Create the test files with minimal content
+			for _, filePath := range tt.filePaths {
+				fullPath := filepath.Join(dataDir, filePath)
+				require.NoError(t, fs.MkdirAll(filepath.Dir(fullPath), 0755))
+				require.NoError(t, afero.WriteFile(fs, fullPath, []byte("test"), 0644))
+			}
+
+			// Create evaluator instance
+			evaluator := conftestEvaluator{
+				dataDir: dataDir,
+				fs:      fs,
+			}
+
+			// Call prepareDataDirs
+			actualDirs, err := evaluator.prepareDataDirs(ctx)
+			require.NoError(t, err)
+
+			// Convert expected relative paths to absolute paths
+			expectedAbsolute := make([]string, len(tt.expectedDirs))
+			for i, dir := range tt.expectedDirs {
+				if dir == "." {
+					expectedAbsolute[i] = dataDir
+				} else {
+					expectedAbsolute[i] = filepath.Join(dataDir, dir)
+				}
+			}
+
+			assert.ElementsMatch(t, expectedAbsolute, actualDirs)
+		})
+	}
+}
+
 // Helper function to create test archives
 func createTestArchive(t *testing.T, sourceDir, archivePath string) {
 	file, err := os.Create(archivePath)
