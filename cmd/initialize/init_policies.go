@@ -68,7 +68,7 @@ func initPoliciesCmd() *cobra.Command {
 				#   solution: Easy
 				#   collections:
 				#   - A
-				deny[result] {
+				deny contains result if {
 					false
 					result := "Never denies"
 				}
