@@ -24,6 +24,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -997,4 +998,179 @@ func createTestPolicy(t *testing.T, ctx context.Context) policy.Policy {
 	})
 	assert.NoError(t, err)
 	return p
+}
+
+func Test_DocumentationLink_OnlySuccesses(t *testing.T) {
+	// Test case: Only successes - should NOT show documentation link
+	r := Report{
+		ShowSuccesses: true,
+		Components: []Component{
+			{
+				Successes: []evaluator.Result{
+					{
+						Metadata: map[string]interface{}{
+							"code": "success.policy",
+						},
+						Message: "Policy passed successfully",
+					},
+				},
+				SuccessCount: 1,
+			},
+		},
+	}
+
+	output, err := generateTextReport(&r)
+	require.NoError(t, err)
+
+	outputStr := string(output)
+	hasDocLink := strings.Contains(outputStr, "https://conforma.dev/docs/policy/")
+
+	assert.False(t, hasDocLink, "Documentation link should NOT appear when there are only successes")
+}
+
+func Test_DocumentationLink_OnlyWarnings(t *testing.T) {
+	// Test case: Only warnings - should show documentation link
+	r := Report{
+		Components: []Component{
+			{
+				Warnings: []evaluator.Result{
+					{
+						Metadata: map[string]interface{}{
+							"code": "warning.policy",
+						},
+						Message: "Policy warning message",
+					},
+				},
+			},
+		},
+	}
+
+	output, err := generateTextReport(&r)
+	require.NoError(t, err)
+
+	outputStr := string(output)
+	hasDocLink := strings.Contains(outputStr, "https://conforma.dev/docs/policy/")
+
+	assert.True(t, hasDocLink, "Documentation link should appear when there are warnings")
+	assert.Contains(t, outputStr, "For more information about policy issues", "Should contain the documentation link message")
+}
+
+func Test_DocumentationLink_OnlyFailures(t *testing.T) {
+	// Test case: Only failures - should show documentation link
+	r := Report{
+		Components: []Component{
+			{
+				Violations: []evaluator.Result{
+					{
+						Metadata: map[string]interface{}{
+							"code": "failure.policy",
+						},
+						Message: "Policy violation message",
+					},
+				},
+			},
+		},
+	}
+
+	output, err := generateTextReport(&r)
+	require.NoError(t, err)
+
+	outputStr := string(output)
+	hasDocLink := strings.Contains(outputStr, "https://conforma.dev/docs/policy/")
+
+	assert.True(t, hasDocLink, "Documentation link should appear when there are failures")
+	assert.Contains(t, outputStr, "For more information about policy issues", "Should contain the documentation link message")
+}
+
+func Test_DocumentationLink_WarningsAndFailures(t *testing.T) {
+	// Test case: Both warnings and failures - should show documentation link
+	r := Report{
+		Components: []Component{
+			{
+				Violations: []evaluator.Result{
+					{
+						Metadata: map[string]interface{}{
+							"code": "failure.policy",
+						},
+						Message: "Policy violation message",
+					},
+				},
+				Warnings: []evaluator.Result{
+					{
+						Metadata: map[string]interface{}{
+							"code": "warning.policy",
+						},
+						Message: "Policy warning message",
+					},
+				},
+			},
+		},
+	}
+
+	output, err := generateTextReport(&r)
+	require.NoError(t, err)
+
+	outputStr := string(output)
+	hasDocLink := strings.Contains(outputStr, "https://conforma.dev/docs/policy/")
+
+	assert.True(t, hasDocLink, "Documentation link should appear when there are both warnings and failures")
+	assert.Contains(t, outputStr, "For more information about policy issues", "Should contain the documentation link message")
+}
+
+func Test_DocumentationLink_MultipleComponents(t *testing.T) {
+	// Test case: Multiple components with mixed results - should show documentation link
+	r := Report{
+		ShowSuccesses: true,
+		Components: []Component{
+			{
+				// Component 1: Only successes
+				Successes: []evaluator.Result{
+					{
+						Metadata: map[string]interface{}{"code": "success1.policy"},
+						Message:  "Success in component 1",
+					},
+				},
+				SuccessCount: 1,
+			},
+			{
+				// Component 2: Has warnings (should trigger the link)
+				Warnings: []evaluator.Result{
+					{
+						Metadata: map[string]interface{}{"code": "warning1.policy"},
+						Message:  "Warning in component 2",
+					},
+				},
+				Successes: []evaluator.Result{
+					{
+						Metadata: map[string]interface{}{"code": "success2.policy"},
+						Message:  "Success in component 2",
+					},
+				},
+				SuccessCount: 1,
+			},
+		},
+	}
+
+	output, err := generateTextReport(&r)
+	require.NoError(t, err)
+
+	outputStr := string(output)
+	hasDocLink := strings.Contains(outputStr, "https://conforma.dev/docs/policy/")
+
+	assert.True(t, hasDocLink, "Documentation link should appear when any component has warnings or failures")
+}
+
+func Test_DocumentationLink_EmptyReport(t *testing.T) {
+	// Test case: Empty report - should NOT show documentation link
+	r := Report{
+		Components: []Component{},
+	}
+
+	output, err := generateTextReport(&r)
+	require.NoError(t, err)
+
+	outputStr := string(output)
+	hasDocLink := strings.Contains(outputStr, "https://conforma.dev/docs/policy/")
+
+	assert.False(t, hasDocLink, "Documentation link should NOT appear for empty reports")
 }

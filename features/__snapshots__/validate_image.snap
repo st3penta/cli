@@ -1991,6 +1991,7 @@ Results:
   Title: Allow rule
   Description: This rule will never fail
 
+For more information about policy issues, see the policy documentation: https://conforma.dev/docs/policy/
 
 ---
 [future failure is a deny when using effective-date flag:stdout - 1]
@@ -4834,6 +4835,7 @@ Results:
   ImageRef: ${REGISTRY}/acceptance/image@sha256:${REGISTRY_acceptance/image:latest_DIGEST}
   Reason: Fails always
 
+For more information about policy issues, see the policy documentation: https://conforma.dev/docs/policy/
 
 ---
 

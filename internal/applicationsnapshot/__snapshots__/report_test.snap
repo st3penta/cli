@@ -155,5 +155,6 @@ Results:
 ✓ [Success] success-2
   ImageRef: registry.io/repository/component-4:tag
 
+For more information about policy issues, see the policy documentation: https://conforma.dev/docs/policy/
 
 ---
