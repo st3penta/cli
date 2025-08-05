@@ -199,8 +199,7 @@ func uniqueDestination(rootDir string, subdir string, sourceUrl string) string {
 	return path.Join(rootDir, subdir, uniqueDir(sourceUrl))
 }
 
-// uniqueDir generates a reasonably unique string using an SHA224 sum with a
-// timestamp appended to the input for some extra randomness
+// uniqueDir generates a reasonably unique string using an SHA224 sum
 func uniqueDir(input string) string {
 	return fmt.Sprintf("%x", sha256.Sum224([]byte(input)))[:9]
 }
