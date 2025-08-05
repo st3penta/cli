@@ -878,7 +878,9 @@ func (c *conftestEvaluator) createDataDirectory(ctx context.Context) error {
 	}
 	if !exists {
 		log.Debugf("Data dir '%s' does not exist, will create.", dataDir)
-		_ = fs.MkdirAll(dataDir, 0755)
+		if err := fs.MkdirAll(dataDir, 0755); err != nil {
+			return err
+		}
 	}
 
 	if err := createConfigJSON(ctx, dataDir, c.policy); err != nil {
