@@ -116,6 +116,10 @@ func (r *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 		// If we get a 429, 408, or 503, retry with exponential backoff
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusRequestTimeout || resp.StatusCode == http.StatusServiceUnavailable {
+			// Close the response body to avoid resource leaks during retries
+			if resp.Body != nil {
+				resp.Body.Close()
+			}
 			lastResp = resp
 			lastErr = nil
 
