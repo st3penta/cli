@@ -29,7 +29,8 @@ rules: # error | warning | off
   no-resourceversion: error
   no-duplicate-env: error
   no-undefined-volume: error
-  no-latest-image: warning
+  # We use quay.io/conforma/cli:latest so turn this one off
+  no-latest-image: off
   prefer-beta: warning
   prefer-kebab-case: warning
   no-unused-param: warning
