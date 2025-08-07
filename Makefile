@@ -184,7 +184,7 @@ ci: test lint-fix acceptance ## Run the usual required CI tasks
 
 LICENSE_IGNORE=\
 -ignore 'dist/cli-reference/*.yaml' \
--ignore 'acceptance/examples/*.yaml' \
+-ignore 'acceptance/examples/**/*.yaml' \
 -ignore 'configs/*/*.yaml' \
 -ignore 'node_modules/**' \
 -ignore 'hack/**/charts/**' \

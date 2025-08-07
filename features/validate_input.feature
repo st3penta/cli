@@ -66,3 +66,46 @@ Feature: validate input
     When ec command is run with "validate input --file input.yaml --policy git::https://${GITHOST}/git/multiple-sources-config.git"
     Then the exit status should be 1
     Then the output should match the snapshot
+
+  # In this example the same top level key is defined in
+  # two different data sources, but its value a map.
+  # In this situation a merge happens and we get second
+  # level keys from both sources.
+  Scenario: multiple data source top level key map merging
+    Given a file named "policy.yaml" containing
+      """
+      sources:
+        - data:
+            - "file::acceptance/examples/data-merges/data-1"
+            - "file::acceptance/examples/data-merges/data-2"
+          policy:
+            - "file::acceptance/examples/data-merges/policy"
+      """
+    Given a file named "input.json" containing
+      """
+      {}
+      """
+    When ec command is run with "validate input --file input.json --policy policy.yaml -o yaml"
+    Then the exit status should be 0
+    Then the output should match the snapshot
+
+  # In this example the same top level key is defined in
+  # two different data sources, but its value is not a map.
+  # In this situation ec throws a "merge error" error.
+  Scenario: multiple data source top level key clash
+    Given a file named "policy.yaml" containing
+      """
+      sources:
+        - data:
+            - "file::acceptance/examples/data-merges/data-3"
+            - "file::acceptance/examples/data-merges/data-4"
+          policy:
+            - "file::acceptance/examples/data-merges/policy"
+      """
+    Given a file named "input.json" containing
+      """
+      {}
+      """
+    When ec command is run with "validate input --file input.json --policy policy.yaml -o yaml"
+    Then the exit status should be 1
+    Then the output should match the snapshot

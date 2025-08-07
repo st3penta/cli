@@ -764,7 +764,7 @@ func matchFileSnapshot(ctx context.Context, file string) error {
 	return snaps.MatchSnapshot(ctx, file, string(content), status.vars)
 }
 
-func createTrackBundleFile(ctx context.Context, name string, content *godog.DocString) (context.Context, error) {
+func createGenericFile(ctx context.Context, name string, content *godog.DocString) (context.Context, error) {
 	ctx, _, vars, err := variables(ctx)
 	if err != nil {
 		return ctx, err
@@ -783,6 +783,10 @@ func createTrackBundleFile(ctx context.Context, name string, content *godog.DocS
 	return ctx, os.WriteFile(file, []byte(data), 0o600)
 }
 
+func createTrackBundleFile(ctx context.Context, name string, content *godog.DocString) (context.Context, error) {
+	return createGenericFile(ctx, name, content)
+}
+
 // AddStepsTo adds Gherkin steps to the godog ScenarioContext
 func AddStepsTo(sc *godog.ScenarioContext) {
 	sc.Step(`^ec command is run with "(.+)"$`, ecCommandIsRunWith)
@@ -793,6 +797,7 @@ func AddStepsTo(sc *godog.ScenarioContext) {
 	sc.Step(`^the environment variable is set "([^"]*)"$`, theEnvironmentVarilableIsSet)
 	sc.Step(`^the output should match the snapshot$`, matchSnapshot)
 	sc.Step(`^the "([^"]*)" file should match the snapshot$`, matchFileSnapshot)
+	sc.Step(`^a file named "([^"]*)" containing$`, createGenericFile)
 	sc.Step(`^a track bundle file named "([^"]*)" containing$`, createTrackBundleFile)
 	sc.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		logExecution(ctx)

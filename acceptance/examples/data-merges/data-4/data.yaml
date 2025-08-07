@@ -1,0 +1,8 @@
+---
+# Used in secenario "multiple data source top level key
+# clash" in features/validate_input.features
+# (We don't test this explicitly, but it would behave
+# the same if it was a scalar value instead of a list.)
+some_top_level_key:
+  - george
+  - ringo
