@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // -------------------------------------------------------------------------------
-// This file is almost to identical to the conftest version of this command.
+// This file is "almost" identical to the conftest version of this command.
 // Use `make conftest-test-cmd-diff` to show a comparison.
 // Note also that the way that flags are handled here is not consistent with how
 // it's done elsewhere. This intentional in order to be consistent with Conftest.
@@ -23,6 +23,7 @@
 package test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -31,6 +32,8 @@ import (
 	"github.com/open-policy-agent/conftest/output"
 	"github.com/open-policy-agent/conftest/parser"
 	"github.com/open-policy-agent/conftest/runner"
+	"github.com/open-policy-agent/opa/v1/ast"
+	"github.com/open-policy-agent/opa/v1/storage"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -49,9 +52,7 @@ inputs.
 Policies are written in the Rego language. For more
 information on how to write Rego policies, see the documentation:
 https://www.openpolicyagent.org/docs/latest/policy-language/
-`
 
-const testExample = `
 The policy location defaults to the policy directory in the local folder.
 The location can be overridden with the '--policy' flag, e.g.:
 
@@ -74,14 +75,13 @@ The test command supports the '--output' flag to specify the type, e.g.:
 	$ EC_EXPERIMENTAL=1 ec test -o table -p examples/kubernetes/policy examples/kubernetes/deployment.yaml
 
 Which will return the following output:
-
-	+---------+----------------------------------+--------------------------------+
-	| RESULT  |               FILE               |            MESSAGE             |
-	+---------+----------------------------------+--------------------------------+
-	| success | examples/kubernetes/service.yaml |                                |
-	| warning | examples/kubernetes/service.yaml | Found service hello-kubernetes |
-	|         |                                  | but services are not allowed   |
-	+---------+----------------------------------+--------------------------------+
++---------+----------------------------------+--------------------------------+
+| RESULT  |               FILE               |            MESSAGE             |
++---------+----------------------------------+--------------------------------+
+| success | examples/kubernetes/service.yaml |                                |
+| warning | examples/kubernetes/service.yaml | Found service hello-kubernetes |
+|         |                                  | but services are not allowed   |
++---------+----------------------------------+--------------------------------+
 
 By default, it will use the regular stdout output. For a full list of available output types, see the of the '--output' flag.
 
@@ -93,21 +93,35 @@ It expects one or more urls to fetch the latest policies from, e.g.:
 See the pull command for more details on supported protocols for fetching policies.
 
 When debugging policies it can be useful to use a more verbose policy evaluation output. By using the '--trace' flag
-the output will include a detailed trace of how the policy was evaluated, e.g.
+the output will include a detailed trace of how the policy was evaluated. The trace output will be written to stderr,
+while the regular output will be written to stdout. This allows you to use the '--trace' flag together with any output
+format, including table, JSON, etc.
 
+	# Trace output
 	$ EC_EXPERIMENTAL=1 ec test --trace <input-file>
+
+	# Trace output with any non-standard output format
+	$ EC_EXPERIMENTAL=1 ec test --trace --output=table <input-file>
+
+	# Redirect trace output to a file while viewing formatted output
+	$ EC_EXPERIMENTAL=1 ec test --trace --output=json <input-file> 2>trace.log
 `
+
+// TestRun stores the compiler and store for a test run.
+type TestRun struct {
+	Compiler *ast.Compiler
+	Store    storage.Store
+}
 
 const OutputAppstudio = "appstudio"
 
-// newTestCommand creates a new test command.
-func newTestCommand() *cobra.Command {
+// NewTestCommand creates a new test command.
+func NewTestCommand(ctx context.Context) *cobra.Command {
 	cmd := cobra.Command{
-		Use:     "test <path> [path [...]]",
-		Short:   "Test your configuration files using Open Policy Agent",
-		Long:    testDesc,
-		Example: testExample,
-		PreRunE: func(cmd *cobra.Command, args []string) error {
+		Use:   "test <path> [path [...]]",
+		Short: "Test your configuration files using Open Policy Agent",
+		Long:  testDesc,
+		PreRunE: func(cmd *cobra.Command, _ []string) error {
 			flagNames := []string{
 				"all-namespaces",
 				"combine",
@@ -118,16 +132,19 @@ func newTestCommand() *cobra.Command {
 				"no-color",
 				"no-fail",
 				"suppress-exceptions",
-				"file",
+				"output",
 				"parser",
 				"policy",
 				"proto-file-dirs",
 				"capabilities",
+				"rego-version",
 				"trace",
 				"strict",
+				"show-builtin-errors",
 				"update",
 				"junit-hide-message",
 				"quiet",
+				"tls",
 			}
 			for _, name := range flagNames {
 				if err := viper.BindPFlag(name, cmd.Flags().Lookup(name)); err != nil {
@@ -139,8 +156,6 @@ func newTestCommand() *cobra.Command {
 		},
 
 		RunE: func(cmd *cobra.Command, fileList []string) error {
-			ctx := cmd.Context()
-
 			if len(fileList) < 1 {
 				cmd.Usage() //nolint
 				return fmt.Errorf("missing required arguments")
@@ -151,83 +166,62 @@ func newTestCommand() *cobra.Command {
 				return fmt.Errorf("unmarshal parameters: %w", err)
 			}
 
-			outputFormats, err := cmd.Flags().GetStringSlice("output")
-			if err != nil {
-				return fmt.Errorf("reading flag: %w", err)
-			}
-			if len(outputFormats) == 0 {
-				outputFormats = []string{output.OutputStandard}
+			results, resultsErr := runner.Run(ctx, fileList)
+
+			exitCode := results.ExitCode()
+			if runner.FailOnWarn {
+				exitCode = results.ExitCodeFailOnWarn()
 			}
 
-			results, resultsErr := runner.Run(ctx, fileList)
-			var exitCode int
-			if runner.FailOnWarn {
-				exitCode = output.ExitCodeFailOnWarn(results)
-			} else {
-				exitCode = output.ExitCode(results)
+			// Do this so we can write the appstudio format to a file
+			// with the `--output appstudio=file.json` style flag
+			format := runner.Output
+			parts := strings.SplitN(format, "=", 2)
+			outputFilePath := ""
+			if len(parts) > 0 {
+				format = parts[0]
+				if len(parts) == 2 {
+					outputFilePath = parts[1]
+				}
 			}
 
 			if !runner.Quiet || exitCode != 0 {
-				for _, outputAndFormat := range outputFormats {
-					parts := strings.SplitN(outputAndFormat, "=", 2)
-
-					format := output.OutputStandard
-					outputFilePath := ""
-					if len(parts) > 0 {
-						format = parts[0]
-						if len(parts) == 2 {
-							outputFilePath = parts[1]
-						}
+				if format == OutputAppstudio {
+					// The appstudio format is unknown to Conftest so we handle it ourselves
+					if resultsErr != nil {
+						return appstudioErrorHandler(runner.NoFail, "running test", resultsErr)
 					}
 
-					if format == OutputAppstudio {
-						// The appstudio format is unknown to Conftest so we handle it ourselves
+					report := appstudioReport(results, runner.Namespace)
+					reportOutput, err := json.Marshal(report)
+					if err != nil {
+						return appstudioErrorHandler(runner.NoFail, "output results", err)
+					}
 
-						if resultsErr != nil {
-							return appstudioErrorHandler(runner.NoFail, "running test", resultsErr)
-						}
-
-						report := appstudioReport(results, runner.Namespace)
-						reportOutput, err := json.Marshal(report)
+					if outputFilePath != "" {
+						// Output to a file
+						err := os.WriteFile(outputFilePath, reportOutput, 0600)
 						if err != nil {
-							return appstudioErrorHandler(runner.NoFail, "output results", err)
+							return fmt.Errorf("creating output file: %w", err)
 						}
-
-						if outputFilePath != "" {
-							err := os.WriteFile(outputFilePath, reportOutput, 0600)
-							if err != nil {
-								return fmt.Errorf("creating output file: %w", err)
-							}
-						} else {
-							fmt.Fprintln(cmd.OutOrStdout(), string(reportOutput))
-						}
-
 					} else {
-						// Conftest handles the output
+						// Output to stdout
+						fmt.Fprintln(cmd.OutOrStdout(), string(reportOutput))
+					}
+				} else {
+					if resultsErr != nil {
+						return fmt.Errorf("running test: %w", resultsErr)
+					}
 
-						if resultsErr != nil {
-							return fmt.Errorf("running test: %w", resultsErr)
-						}
-
-						var outputFile *os.File
-						if outputFilePath != "" {
-							outputFile, err = os.Create(outputFilePath)
-							if err != nil {
-								return fmt.Errorf("creating output file %s: %w", outputFilePath, err)
-							}
-							defer outputFile.Close()
-						}
-
-						outputter := output.Get(format, output.Options{
-							NoColor:            runner.NoColor,
-							SuppressExceptions: runner.SuppressExceptions,
-							Tracing:            runner.Trace,
-							JUnitHideMessage:   viper.GetBool("junit-hide-message"),
-							File:               outputFile,
-						})
-						if err := outputter.Output(results); err != nil {
-							return fmt.Errorf("output results: %w", err)
-						}
+					// Conftest handles the output
+					outputter := output.Get(runner.Output, output.Options{
+						NoColor:            runner.NoColor,
+						SuppressExceptions: runner.SuppressExceptions,
+						Tracing:            runner.Trace,
+						JUnitHideMessage:   viper.GetBool("junit-hide-message"),
+					})
+					if err := outputter.Output(results); err != nil {
+						return fmt.Errorf("output results: %w", err)
 					}
 				}
 
@@ -252,28 +246,24 @@ func newTestCommand() *cobra.Command {
 
 	cmd.Flags().Bool("trace", false, "Enable more verbose trace output for Rego queries")
 	cmd.Flags().Bool("strict", false, "Enable strict mode for Rego policies")
+	cmd.Flags().Bool("show-builtin-errors", false, "Collect and return all encountered built-in errors")
 	cmd.Flags().Bool("combine", false, "Combine all config files to be evaluated together")
 
 	cmd.Flags().String("ignore", "", "A regex pattern which can be used for ignoring paths")
 	cmd.Flags().String("parser", "", fmt.Sprintf("Parser to use to parse the configurations. Valid parsers: %s", parser.Parsers()))
 	cmd.Flags().String("capabilities", "", "Path to JSON file that can restrict opa functionality against a given policy. Default: all operations allowed")
+	cmd.Flags().String("rego-version", "v1", "Which version of Rego syntax to use. Options: v0, v1")
 
-	cmd.Flags().String("file", "", "File path to write output to")
+	cmd.Flags().StringP("output", "o", output.OutputStandard, fmt.Sprintf("Output format for conftest results - valid options are: %s", output.Outputs()))
 	cmd.Flags().Bool("junit-hide-message", false, "Do not include the violation message in the JUnit test name")
 
 	cmd.Flags().StringSliceP("policy", "p", []string{"policy"}, "Path to the Rego policy files directory")
 	cmd.Flags().StringSliceP("update", "u", []string{}, "A list of URLs can be provided to the update flag, which will download before the tests run")
 	cmd.Flags().StringSliceP("namespace", "n", []string{"main"}, "Test policies in a specific namespace")
 	cmd.Flags().StringSliceP("data", "d", []string{}, "A list of paths from which data for the rego policies will be recursively loaded")
-	cmd.Flags().StringSliceP("output", "o", []string{}, fmt.Sprintf("Output format for conftest results - valid options are: %s. You can optionally specify a file for the output, e.g. -o json=out.json", append(output.Outputs(), OutputAppstudio)))
 
 	cmd.Flags().StringSlice("proto-file-dirs", []string{}, "A list of directories containing Protocol Buffer definitions")
+	cmd.Flags().Bool("tls", true, "Use TLS to access the registry")
 
 	return &cmd
-}
-
-var TestCmd *cobra.Command
-
-func init() {
-	TestCmd = newTestCommand()
 }

@@ -65,6 +65,6 @@ func AddCommandsTo(cmd *cobra.Command) {
 	cmd.AddCommand(opa.OPACmd)
 	cmd.AddCommand(sigstore.SigstoreCmd)
 	if utils.Experimental() {
-		cmd.AddCommand(test.TestCmd)
+		cmd.AddCommand(test.NewTestCommand(context.Background()))
 	}
 }

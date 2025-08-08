@@ -37,7 +37,8 @@ var (
 )
 
 func init() {
-	cmd.RootCmd.AddCommand(test.TestCmd)
+	c := cmd.RootCmd
+	c.AddCommand(test.NewTestCommand(c.Context()))
 }
 
 func main() {
