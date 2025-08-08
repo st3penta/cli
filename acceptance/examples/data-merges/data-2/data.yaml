@@ -1,0 +1,6 @@
+---
+# Used in secenario "multiple data source top level key
+# map merging" in features/validate_input.features
+some_top_level_key:
+  george: "lead"
+  ringo: "drums"
