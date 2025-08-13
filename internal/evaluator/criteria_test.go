@@ -20,9 +20,13 @@ package evaluator
 
 import (
 	"testing"
+	"time"
 
+	ecc "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/conforma/cli/internal/policy"
 )
 
 func TestLen(t *testing.T) {
@@ -253,6 +257,148 @@ func TestGet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.expected, c.get(tt.key))
+		})
+	}
+}
+
+// MockConfigProvider implements ConfigProvider interface for testing
+type MockConfigProvider struct {
+	effectiveTime time.Time
+}
+
+func (m *MockConfigProvider) EffectiveTime() time.Time {
+	return m.effectiveTime
+}
+
+func (m *MockConfigProvider) SigstoreOpts() (policy.SigstoreOpts, error) {
+	return policy.SigstoreOpts{}, nil
+}
+
+func (m *MockConfigProvider) Spec() ecc.EnterpriseContractPolicySpec {
+	return ecc.EnterpriseContractPolicySpec{}
+}
+
+func TestCollectVolatileConfigItems(t *testing.T) {
+	// Create a fixed time for testing
+	fixedTime := time.Date(2025, 8, 18, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name             string
+		items            *Criteria
+		volatileCriteria []ecc.VolatileCriteria
+		configProvider   ConfigProvider
+		expectedItems    *Criteria
+		expectedSuccess  bool
+	}{
+		{
+			name: "Successful scenario - criteria within time range",
+			items: &Criteria{
+				digestItems:  make(map[string][]string),
+				defaultItems: []string{"existing-item"},
+			},
+			volatileCriteria: []ecc.VolatileCriteria{
+				{
+					Value:          "volatile-item-1",
+					EffectiveOn:    "2025-08-01T00:00:00Z",
+					EffectiveUntil: "2025-08-31T23:59:59Z",
+					ImageRef:       "quay.io/test/image:latest",
+				},
+				{
+					Value:          "volatile-item-2",
+					EffectiveOn:    "2025-08-10T00:00:00Z",
+					EffectiveUntil: "2025-08-20T23:59:59Z",
+					ImageDigest:    "sha256:abc123",
+				},
+			},
+			configProvider: &MockConfigProvider{effectiveTime: fixedTime},
+			expectedItems: &Criteria{
+				digestItems: map[string][]string{
+					"quay.io/test/image:latest": {"volatile-item-1"},
+					"sha256:abc123":             {"volatile-item-2"},
+				},
+				defaultItems: []string{"existing-item"},
+			},
+			expectedSuccess: true,
+		},
+		{
+			name: "Failed scenario - criteria outside time range",
+			items: &Criteria{
+				digestItems:  make(map[string][]string),
+				defaultItems: []string{"existing-item"},
+			},
+			volatileCriteria: []ecc.VolatileCriteria{
+				{
+					Value:          "expired-item",
+					EffectiveOn:    "2025-07-01T00:00:00Z",
+					EffectiveUntil: "2025-07-31T23:59:59Z",
+					ImageUrl:       "quay.io/test/expired",
+				},
+				{
+					Value:          "future-item",
+					EffectiveOn:    "2025-09-01T00:00:00Z",
+					EffectiveUntil: "2025-09-30T23:59:59Z",
+					ImageRef:       "quay.io/test/future",
+				},
+			},
+			configProvider: &MockConfigProvider{effectiveTime: fixedTime},
+			expectedItems: &Criteria{
+				digestItems:  make(map[string][]string),
+				defaultItems: []string{"existing-item"},
+			},
+			expectedSuccess: true, // Function doesn't fail, just doesn't add items
+		},
+		{
+			name: "Warning scenario - invalid time formats",
+			items: &Criteria{
+				digestItems:  make(map[string][]string),
+				defaultItems: []string{"existing-item"},
+			},
+			volatileCriteria: []ecc.VolatileCriteria{
+				{
+					Value:          "partial-invalid-item",
+					EffectiveOn:    "2025-08-01T00:00:00Z", // Valid format
+					EffectiveUntil: "not-a-date",           // Invalid format
+					ImageDigest:    "sha256:def456",
+				},
+			},
+			configProvider: &MockConfigProvider{effectiveTime: fixedTime},
+			expectedItems: &Criteria{
+				digestItems: map[string][]string{
+					"sha256:def456": {"partial-invalid-item"},
+				},
+				defaultItems: []string{"existing-item"},
+			},
+			expectedSuccess: true, // Function handles invalid times gracefully
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a copy of the initial items to avoid modifying the test data
+			initialItems := &Criteria{
+				digestItems:  make(map[string][]string),
+				defaultItems: make([]string, len(tt.items.defaultItems)),
+			}
+			copy(initialItems.defaultItems, tt.items.defaultItems)
+			for k, v := range tt.items.digestItems {
+				initialItems.digestItems[k] = make([]string, len(v))
+				copy(initialItems.digestItems[k], v)
+			}
+
+			// Call the function
+			result := collectVolatileConfigItems(initialItems, tt.volatileCriteria, tt.configProvider)
+
+			// Verify the result
+			if tt.expectedSuccess {
+				require.Equal(t, tt.expectedItems.defaultItems, result.defaultItems, "defaultItems mismatch")
+				require.Equal(t, len(tt.expectedItems.digestItems), len(result.digestItems), "digestItems count mismatch")
+
+				for expectedKey, expectedValues := range tt.expectedItems.digestItems {
+					actualValues, exists := result.digestItems[expectedKey]
+					require.True(t, exists, "Expected key %s not found in result", expectedKey)
+					require.Equal(t, expectedValues, actualValues, "Values mismatch for key %s", expectedKey)
+				}
+			}
 		})
 	}
 }
