@@ -516,6 +516,16 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 								log.Errorf("[VSA] Upload failed for snapshot: %v", uploadErr)
 							}
 						}
+					} else {
+						// No upload backends configured - inform user about next steps
+						totalFiles := len(vsaResult.ComponentEnvelopes)
+						if vsaResult.SnapshotEnvelope != "" {
+							totalFiles++
+						}
+
+						if totalFiles > 0 {
+							log.Errorf("[VSA] VSA files generated but not uploaded (no --vsa-upload backends specified)")
+						}
 					}
 				}
 			}
