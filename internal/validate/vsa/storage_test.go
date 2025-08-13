@@ -130,15 +130,6 @@ func TestCreateStorageBackend(t *testing.T) {
 			expectType:  "*vsa.LocalBackend",
 		},
 		{
-			name: "file backend (alias for local)",
-			config: &StorageConfig{
-				Backend: "file",
-				BaseURL: "/tmp/vsa",
-			},
-			expectError: false,
-			expectType:  "*vsa.LocalBackend",
-		},
-		{
 			name: "unsupported backend",
 			config: &StorageConfig{
 				Backend: "s3",

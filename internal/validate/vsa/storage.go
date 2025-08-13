@@ -41,7 +41,7 @@ type SignerAwareUploader interface {
 
 // StorageConfig represents parsed storage configuration
 type StorageConfig struct {
-	Backend    string            // rekor, local, etc.
+	Backend    string            // rekor, local (maybe others in future)
 	BaseURL    string            // Primary URL
 	Parameters map[string]string // Additional parameters
 }
@@ -83,7 +83,7 @@ func ParseStorageFlag(storageFlag string) (*StorageConfig, error) {
 	}
 
 	// Validate that backend is supported
-	supportedBackends := []string{"rekor", "local", "file"}
+	supportedBackends := []string{"rekor", "local"}
 	isSupported := false
 	for _, supported := range supportedBackends {
 		if strings.ToLower(config.Backend) == supported {
@@ -133,7 +133,7 @@ func CreateStorageBackend(config *StorageConfig) (StorageBackend, error) {
 	switch strings.ToLower(config.Backend) {
 	case "rekor":
 		return NewRekorBackend(config)
-	case "local", "file":
+	case "local":
 		return NewLocalBackend(config)
 	default:
 		return nil, fmt.Errorf("unsupported storage backend: %s. Supported backends: rekor, local", config.Backend)
