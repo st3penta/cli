@@ -117,6 +117,19 @@ func PublicKeysFrom(ctx context.Context) map[string]string {
 	return ret
 }
 
+// PrivateKeysFrom returns a map of all private keys encoded in PEM format
+// keyed by the name of the key
+func PrivateKeysFrom(ctx context.Context) map[string]string {
+	keys := allKeysFrom(ctx)
+
+	ret := make(map[string]string, len(keys))
+	for name, key := range keys {
+		ret[name] = string(key.PrivateBytes)
+	}
+
+	return ret
+}
+
 // AddStepsTo adds Gherkin steps to the godog ScenarioContext
 func AddStepsTo(sc *godog.ScenarioContext) {
 	sc.Step(`^a key pair named "([^"]*)"$`, GenerateKeyPairNamed)

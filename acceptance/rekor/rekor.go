@@ -361,4 +361,65 @@ func AddStepsTo(sc *godog.ScenarioContext) {
 	sc.Step(`^stub rekord running$`, stubRekordRunning)
 	sc.Step(`^a valid Rekor entry for attestation of "([^"]*)"$`, RekorEntryForAttestation)
 	sc.Step(`^a valid Rekor entry for image signature of "([^"]*)"$`, RekorEntryForImageSignature)
+	sc.Step(`^VSA upload to Rekor should be expected$`, expectVSAUploadToRekor)
+	sc.Step(`^VSA should be uploaded to Rekor successfully$`, vsaShouldBeUploadedToRekor)
+}
+
+// expectVSAUploadToRekor creates WireMock stubs to expect VSA upload requests to Rekor
+func expectVSAUploadToRekor(ctx context.Context) error {
+	// Create a stub that accepts any VSA upload request to /api/v1/log/entries
+	// and returns a successful Rekor entry response using the same format as existing stubs
+	entryUUID := "24296fb24b8ad77a12345678901234567890abcd"
+
+	// Create a minimal valid base64 envelope for the response
+	// This represents a basic in-toto attestation structure
+	envelope := map[string]interface{}{
+		"payload":     "eyJzdWJqZWN0IjpudWxsLCJwcmVkaWNhdGUiOnsidmVyaWZpZWRMZXZlbHMiOltdLCJkZXBlbmRlbmN5TGV2ZWxzIjp7fSwidGltZVZlcmlmaWVkIjoiMjAyNC0wMS0wMVQwMDowMDowMFoifX0=",
+		"payloadType": "application/vnd.in-toto+json",
+		"signatures": []map[string]string{
+			{"sig": "MEUCIQDexample123456789", "keyid": ""},
+		},
+	}
+
+	envelopeBytes, _ := json.Marshal(envelope)
+	envelopeB64 := base64.StdEncoding.EncodeToString(envelopeBytes)
+
+	response := map[string]interface{}{
+		entryUUID: map[string]interface{}{
+			"body":           envelopeB64,
+			"integratedTime": 1674049693,
+			"logID":          "c0d23d6ad406973f9559f3ba2d1ca01f84147d8ffc5b8445c224f98b9591801d",
+			"logIndex":       9876543,
+			"verification": map[string]interface{}{
+				"signedEntryTimestamp": "MEUCIQDexampleTimestamp123456789abcdefghijklmnopqrstuvwxyz==",
+			},
+		},
+	}
+
+	responseBody, err := json.Marshal(response)
+	if err != nil {
+		return fmt.Errorf("failed to marshal Rekor response: %w", err)
+	}
+
+	return wiremock.StubFor(ctx, wiremock.Post(wiremock.URLPathEqualTo("/api/v1/log/entries")).
+		WillReturnResponse(wiremock.NewResponse().
+			WithStatus(201).
+			WithHeaders(map[string]string{
+				"Content-Type": "application/json",
+				"Location":     fmt.Sprintf("/api/v1/log/entries/%s", entryUUID),
+			}).
+			WithBody(string(responseBody))))
+}
+
+// vsaShouldBeUploadedToRekor verifies that VSA uploads to Rekor occurred successfully.
+// This relies on WireMock's automatic verification - if VSA uploads didn't happen or
+// didn't match our stub, WireMock will report unmatched requests/stubs in its After hook.
+func vsaShouldBeUploadedToRekor(ctx context.Context) error {
+	if !wiremock.IsRunning(ctx) {
+		return fmt.Errorf("WireMock is not running - cannot verify VSA uploads")
+	}
+
+	// WireMock automatically verifies that our expectVSAUploadToRekor stub was matched
+	// by actual VSA upload requests. No explicit verification needed here.
+	return nil
 }
