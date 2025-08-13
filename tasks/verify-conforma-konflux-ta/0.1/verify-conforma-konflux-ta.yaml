@@ -128,9 +128,8 @@ spec:
     - name: WORKERS
       type: string
       description: >
-        Number of parallel workers to use for policy evaluation. This parameter is currently not used. All
-        policy evaluations are run with 35 workers.
-      default: "35"
+        Number of parallel workers to use for policy evaluation.
+      default: "4"
 
     - name: SINGLE_COMPONENT
       description: Reduce the Snapshot to only the component whose build caused the Snapshot to be created
@@ -275,8 +274,7 @@ spec:
         - "$(params.REKOR_HOST)"
         - "--ignore-rekor=$(params.IGNORE_REKOR)"
         - "--workers"
-        # NOTE: This value is temporarily hardcoded instead of using the WORKERS parameter.
-        - "35"
+        - "$(params.WORKERS)"
         # NOTE: The syntax below is required to negate boolean parameters
         - "--info=$(params.INFO)"
         # Fresh versions of ec support "--timeout=0" to indicate no timeout, but this would break
@@ -322,9 +320,9 @@ spec:
       computeResources:
         requests:
           cpu: 250m
-          memory: 8Gi
+          memory: 2Gi
         limits:
-          memory: 8Gi
+          memory: 2Gi
       volumeMounts:
         - name: trusted-ca
           mountPath: /etc/pki/tls/certs/ca-custom-bundle.crt
