@@ -55,6 +55,24 @@ import (
 	"github.com/conforma/cli/internal/validate/vsa"
 )
 
+const (
+	// testImageDigest is a test image digest used across multiple test cases
+	testImageDigest = "registry/image@sha256:ad333bfa53d18c684821c85bfa8693e771c336f0ba1a286b3a6ec37dd95a232e"
+)
+
+// Unencrypted test key for testing (proper SIGSTORE format)
+const testECKey = `-----BEGIN ENCRYPTED SIGSTORE PRIVATE KEY-----
+eyJrZGYiOnsibmFtZSI6InNjcnlwdCIsInBhcmFtcyI6eyJOIjo2NTUzNiwiciI6
+OCwicCI6MX0sInNhbHQiOiJKK0NwVkQ3RnE5OVhNNjdScFFweG1QUlBIWFZxMVpS
+a0RuN0hva1V4aDl3PSJ9LCJjaXBoZXIiOnsibmFtZSI6Im5hY2wvc2VjcmV0Ym94
+Iiwibm9uY2UiOiJhVHdJeEdrOHMvaUdHUGJqRW9wUkJackM4K0xHVmFEOSJ9LCJj
+aXBoZXJ0ZXh0IjoiRyt1eFU4K0tvMnpCdklRajhWc0d2bnZ2MDFHaVladU9zR3pY
+OW1kTGNGZGRlYUNEcnFkc2UrQk4wR0lROERmNWtQV2JuQWxXMnhqcTNCL1piZzNH
+VmJYSEhwK0o5NGxKc1RFQ0U4U1hpTkxaOGVJSGFwQkVrTDc1Mk5xMCtZMkRSbjVy
+azNoSXRYaHBLYWxueEY5S0lqNFR1YkRiRHo1MGlWd1I2MkdSWlJPaFRYa0dEOXNr
+RGNWMnRvTWdxSVlNQ2N6bzVMRU4weEhEM3c9PSJ9
+-----END ENCRYPTED SIGSTORE PRIVATE KEY-----`
+
 // simpleFakeSigner implements signature.SignerVerifier for integration tests
 type simpleFakeSigner struct{}
 
@@ -654,7 +672,7 @@ func Test_ValidateImageCommandExtraData(t *testing.T) {
 	commonMockClient(&client)
 
 	// Add missing ResolveDigest expectation for VSA processing
-	digest, _ := name.NewDigest("registry/image@sha256:ad333bfa53d18c684821c85bfa8693e771c336f0ba1a286b3a6ec37dd95a232e")
+	digest, _ := name.NewDigest(testImageDigest)
 	client.On("ResolveDigest", mock.Anything).Return(digest.String(), nil)
 
 	ctx = oci.WithClient(ctx, &client)
@@ -1192,7 +1210,7 @@ func Test_FailureImageAccessibilityNonStrict(t *testing.T) {
 	commonMockClient(&client)
 
 	// Add missing ResolveDigest expectation for VSA processing
-	digest, _ := name.NewDigest("registry/image@sha256:ad333bfa53d18c684821c85bfa8693e771c336f0ba1a286b3a6ec37dd95a232e")
+	digest, _ := name.NewDigest(testImageDigest)
 	client.On("ResolveDigest", mock.Anything).Return(digest.String(), nil)
 
 	ctx := utils.WithFS(context.Background(), afero.NewMemMapFs())
@@ -1421,24 +1439,14 @@ func TestValidateImageCommand_VSAUpload_Success(t *testing.T) {
 	ctx := utils.WithFS(context.Background(), fs)
 
 	// Create a test VSA signing key (real ECDSA P-256 key for testing)
-	err := afero.WriteFile(fs, "/tmp/vsa-key.pem", []byte(`-----BEGIN ENCRYPTED SIGSTORE PRIVATE KEY-----
-eyJrZGYiOnsibmFtZSI6InNjcnlwdCIsInBhcmFtcyI6eyJOIjo2NTUzNiwiciI6
-OCwicCI6MX0sInNhbHQiOiJKK0NwVkQ3RnE5OVhNNjdScFFweG1QUlBIWFZxMVpS
-a0RuN0hva1V4aDl3PSJ9LCJjaXBoZXIiOnsibmFtZSI6Im5hY2wvc2VjcmV0Ym94
-Iiwibm9uY2UiOiJhVHdJeEdrOHMvaUdHUGJqRW9wUkJackM4K0xHVmFEOSJ9LCJj
-aXBoZXJ0ZXh0IjoiRyt1eFU4K0tvMnpCdklRajhWc0d2bnZ2MDFHaVladU9zR3pY
-OW1kTGNGZGRlYUNEcnFkc2UrQk4wR0lROERmNWtQV2JuQWxXMnhqcTNCL1piZzNH
-VmJYSEhwK0o5NGxKc1RFQ0U4U1hpTkxaOGVJSGFwQkVrTDc1Mk5xMCtZMkRSbjVy
-azNoSXRYaHBLYWxueEY5S0lqNFR1YkRiRHo1MGlWd1I2MkdSWlJPaFRYa0dEOXNr
-RGNWMnRvTWdxSVlNQ2N6bzVMRU4weEhEM3c9PSJ9
------END ENCRYPTED SIGSTORE PRIVATE KEY-----`), 0600)
+	err := afero.WriteFile(fs, "/tmp/vsa-key.pem", []byte(testECKey), 0600)
 	require.NoError(t, err)
 
 	client := fake.FakeClient{}
 	commonMockClient(&client)
 
 	// Add missing ResolveDigest expectation for VSA processing
-	digest, _ := name.NewDigest("registry/image@sha256:ad333bfa53d18c684821c85bfa8693e771c336f0ba1a286b3a6ec37dd95a232e")
+	digest, _ := name.NewDigest(testImageDigest)
 	client.On("ResolveDigest", mock.Anything).Return(digest.String(), nil)
 
 	ctx = oci.WithClient(ctx, &client)
@@ -1491,24 +1499,14 @@ func TestValidateImageCommand_VSAUpload_NoStorageBackends(t *testing.T) {
 	ctx := utils.WithFS(context.Background(), fs)
 
 	// Create VSA signing key
-	err := afero.WriteFile(fs, "/tmp/vsa-key.pem", []byte(`-----BEGIN ENCRYPTED SIGSTORE PRIVATE KEY-----
-eyJrZGYiOnsibmFtZSI6InNjcnlwdCIsInBhcmFtcyI6eyJOIjo2NTUzNiwiciI6
-OCwicCI6MX0sInNhbHQiOiJKK0NwVkQ3RnE5OVhNNjdScFFweG1QUlBIWFZxMVpS
-a0RuN0hva1V4aDl3PSJ9LCJjaXBoZXIiOnsibmFtZSI6Im5hY2wvc2VjcmV0Ym94
-Iiwibm9uY2UiOiJhVHdJeEdrOHMvaUdHUGJqRW9wUkJackM4K0xHVmFEOSJ9LCJj
-aXBoZXJ0ZXh0IjoiRyt1eFU4K0tvMnpCdklRajhWc0d2bnZ2MDFHaVladU9zR3pY
-OW1kTGNGZGRlYUNEcnFkc2UrQk4wR0lROERmNWtQV2JuQWxXMnhqcTNCL1piZzNH
-VmJYSEhwK0o5NGxKc1RFQ0U4U1hpTkxaOGVJSGFwQkVrTDc1Mk5xMCtZMkRSbjVy
-azNoSXRYaHBLYWxueEY5S0lqNFR1YkRiRHo1MGlWd1I2MkdSWlJPaFRYa0dEOXNr
-RGNWMnRvTWdxSVlNQ2N6bzVMRU4weEhEM3c9PSJ9
------END ENCRYPTED SIGSTORE PRIVATE KEY-----`), 0600)
+	err := afero.WriteFile(fs, "/tmp/vsa-key.pem", []byte(testECKey), 0600)
 	require.NoError(t, err)
 
 	client := fake.FakeClient{}
 	commonMockClient(&client)
 
 	// Add missing ResolveDigest expectation for VSA processing
-	digest, _ := name.NewDigest("registry/image@sha256:ad333bfa53d18c684821c85bfa8693e771c336f0ba1a286b3a6ec37dd95a232e")
+	digest, _ := name.NewDigest(testImageDigest)
 	client.On("ResolveDigest", mock.Anything).Return(digest.String(), nil)
 
 	ctx = oci.WithClient(ctx, &client)
