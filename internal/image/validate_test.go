@@ -345,3 +345,65 @@ func TestEvaluatorLifecycle(t *testing.T) {
 
 	require.NoError(t, err)
 }
+
+func TestValidateImageWithVSACheck(t *testing.T) {
+	tests := []struct {
+		name           string
+		vsaExpiration  time.Duration
+		rekorURL       string
+		expectVSACheck bool
+		expectSkip     bool
+	}{
+		{
+			name:           "VSA checking disabled - zero expiration",
+			vsaExpiration:  0,
+			rekorURL:       "https://rekor.sigstore.dev",
+			expectVSACheck: false,
+			expectSkip:     false,
+		},
+		{
+			name:           "VSA checking disabled - no rekor URL",
+			vsaExpiration:  24 * time.Hour,
+			rekorURL:       "",
+			expectVSACheck: false,
+			expectSkip:     false,
+		},
+		{
+			name:           "VSA checking enabled",
+			vsaExpiration:  24 * time.Hour,
+			rekorURL:       "https://rekor.sigstore.dev",
+			expectVSACheck: true,
+			expectSkip:     false, // Placeholder implementation returns "not found"
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := afero.NewMemMapFs()
+			ctx := utils.WithFS(context.Background(), fs)
+
+			// Create a proper policy interface
+			p, err := policy.NewOfflinePolicy(ctx, policy.Now)
+			require.NoError(t, err)
+
+			// Create a test component
+			comp := app.SnapshotComponent{
+				ContainerImage: "registry.example.com/test:latest",
+			}
+
+			// Create a mock snapshot spec
+			snap := &app.SnapshotSpec{}
+
+			// Create empty evaluators slice
+			evaluators := []evaluator.Evaluator{}
+
+			// Call the function - it should work with basic setup
+			// The function handles VSA checking gracefully when image reference is a tag
+			_, err = ValidateImageWithVSACheck(ctx, comp, snap, p, evaluators, false, tt.vsaExpiration, tt.rekorURL)
+
+			// The function should succeed even with minimal setup
+			// VSA checking will be skipped due to tag reference (not digest-based)
+			assert.NoError(t, err)
+		})
+	}
+}

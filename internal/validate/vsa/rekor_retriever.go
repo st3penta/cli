@@ -109,7 +109,6 @@ func (r *RekorVSARetriever) searchForImageDigest(ctx context.Context, imageDiges
 		Hash: imageDigest,
 	}
 
-	log.Debugf("Calling client.SearchIndex")
 	entries, err := r.client.SearchIndex(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search Rekor index: %w", err)
