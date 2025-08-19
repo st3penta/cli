@@ -1,0 +1,257 @@
+
+[VSA generation with invalid storage backend configuration:stdout - 1]
+{
+  "success": true,
+  "components": [
+    {
+      "name": "Unnamed",
+      "containerImage": "${REGISTRY}/acceptance/vsa-invalid-image@sha256:${REGISTRY_acceptance/vsa-invalid-image:latest_DIGEST}",
+      "source": {},
+      "success": true,
+      "signatures": [
+        {
+          "keyid": "",
+          "sig": "${IMAGE_SIGNATURE_acceptance/vsa-invalid-image}"
+        }
+      ],
+      "attestations": [
+        {
+          "type": "https://in-toto.io/Statement/v0.1",
+          "predicateType": "https://slsa.dev/provenance/v0.2",
+          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
+          "signatures": [
+            {
+              "keyid": "",
+              "sig": "${ATTESTATION_SIGNATURE_acceptance/vsa-invalid-image}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "key": "${vsa-invalid_PUBLIC_KEY_JSON}",
+  "policy": {
+    "sources": [
+      {
+        "policy": [
+          "git::${GITHOST}/git/vsa-invalid-policy.git?ref=${LATEST_COMMIT}"
+        ]
+      }
+    ],
+    "rekorUrl": "${REKOR}",
+    "publicKey": "${vsa-invalid_PUBLIC_KEY}"
+  },
+  "ec-version": "${EC_VERSION}",
+  "effective-time": "${TIMESTAMP}"
+}
+---
+
+[VSA generation with invalid storage backend configuration:stderr - 1]
+time="${TIMESTAMP}" level=warning msg="invalid storage config 'invalid-backend@somewhere': unsupported backend 'invalid-backend'. Supported backends: rekor, local"
+time="${TIMESTAMP}" level=warning msg="invalid storage config 'invalid-backend@somewhere': unsupported backend 'invalid-backend'. Supported backends: rekor, local"
+
+---
+
+[VSA generation with local storage backend:stdout - 1]
+{
+  "success": true,
+  "components": [
+    {
+      "name": "Unnamed",
+      "containerImage": "${REGISTRY}/acceptance/vsa-test-image@sha256:${REGISTRY_acceptance/vsa-test-image:latest_DIGEST}",
+      "source": {},
+      "success": true,
+      "signatures": [
+        {
+          "keyid": "",
+          "sig": "${IMAGE_SIGNATURE_acceptance/vsa-test-image}"
+        }
+      ],
+      "attestations": [
+        {
+          "type": "https://in-toto.io/Statement/v0.1",
+          "predicateType": "https://slsa.dev/provenance/v0.2",
+          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
+          "signatures": [
+            {
+              "keyid": "",
+              "sig": "${ATTESTATION_SIGNATURE_acceptance/vsa-test-image}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "key": "${vsa-test_PUBLIC_KEY_JSON}",
+  "policy": {
+    "sources": [
+      {
+        "policy": [
+          "git::${GITHOST}/git/vsa-policy.git?ref=${LATEST_COMMIT}"
+        ]
+      }
+    ],
+    "rekorUrl": "${REKOR}",
+    "publicKey": "${vsa-test_PUBLIC_KEY}"
+  },
+  "ec-version": "${EC_VERSION}",
+  "effective-time": "${TIMESTAMP}"
+}
+---
+
+[VSA generation with local storage backend:stderr - 1]
+
+---
+
+[VSA generation with Rekor storage backend:stdout - 1]
+{
+  "success": true,
+  "components": [
+    {
+      "name": "Unnamed",
+      "containerImage": "${REGISTRY}/acceptance/vsa-rekor-image@sha256:${REGISTRY_acceptance/vsa-rekor-image:latest_DIGEST}",
+      "source": {},
+      "success": true,
+      "signatures": [
+        {
+          "keyid": "",
+          "sig": "${IMAGE_SIGNATURE_acceptance/vsa-rekor-image}"
+        }
+      ],
+      "attestations": [
+        {
+          "type": "https://in-toto.io/Statement/v0.1",
+          "predicateType": "https://slsa.dev/provenance/v0.2",
+          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
+          "signatures": [
+            {
+              "keyid": "",
+              "sig": "${ATTESTATION_SIGNATURE_acceptance/vsa-rekor-image}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "key": "${vsa-rekor_PUBLIC_KEY_JSON}",
+  "policy": {
+    "sources": [
+      {
+        "policy": [
+          "git::${GITHOST}/git/vsa-rekor-policy.git?ref=${LATEST_COMMIT}"
+        ]
+      }
+    ],
+    "rekorUrl": "${REKOR}",
+    "publicKey": "${vsa-rekor_PUBLIC_KEY}"
+  },
+  "ec-version": "${EC_VERSION}",
+  "effective-time": "${TIMESTAMP}"
+}
+---
+
+[VSA generation with Rekor storage backend:stderr - 1]
+
+---
+
+[VSA generation with multiple storage backends:stdout - 1]
+{
+  "success": true,
+  "components": [
+    {
+      "name": "Unnamed",
+      "containerImage": "${REGISTRY}/acceptance/vsa-multi-image@sha256:${REGISTRY_acceptance/vsa-multi-image:latest_DIGEST}",
+      "source": {},
+      "success": true,
+      "signatures": [
+        {
+          "keyid": "",
+          "sig": "${IMAGE_SIGNATURE_acceptance/vsa-multi-image}"
+        }
+      ],
+      "attestations": [
+        {
+          "type": "https://in-toto.io/Statement/v0.1",
+          "predicateType": "https://slsa.dev/provenance/v0.2",
+          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
+          "signatures": [
+            {
+              "keyid": "",
+              "sig": "${ATTESTATION_SIGNATURE_acceptance/vsa-multi-image}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "key": "${vsa-multi_PUBLIC_KEY_JSON}",
+  "policy": {
+    "sources": [
+      {
+        "policy": [
+          "git::${GITHOST}/git/vsa-multi-policy.git?ref=${LATEST_COMMIT}"
+        ]
+      }
+    ],
+    "rekorUrl": "${REKOR}",
+    "publicKey": "${vsa-multi_PUBLIC_KEY}"
+  },
+  "ec-version": "${EC_VERSION}",
+  "effective-time": "${TIMESTAMP}"
+}
+---
+
+[VSA generation with multiple storage backends:stderr - 1]
+
+---
+
+[VSA generation with multiple images:stdout - 1]
+{
+  "success": true,
+  "components": [
+    {
+      "name": "Unnamed",
+      "containerImage": "${REGISTRY}/acceptance/vsa-multiple-image-2@sha256:${REGISTRY_acceptance/vsa-multiple-image-2:latest_DIGEST}",
+      "source": {},
+      "success": true,
+      "signatures": [
+        {
+          "keyid": "",
+          "sig": "${IMAGE_SIGNATURE_acceptance/vsa-multiple-image-2}"
+        }
+      ],
+      "attestations": [
+        {
+          "type": "https://in-toto.io/Statement/v0.1",
+          "predicateType": "https://slsa.dev/provenance/v0.2",
+          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
+          "signatures": [
+            {
+              "keyid": "",
+              "sig": "${ATTESTATION_SIGNATURE_acceptance/vsa-multiple-image-2}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "key": "${vsa-multiple_PUBLIC_KEY_JSON}",
+  "policy": {
+    "sources": [
+      {
+        "policy": [
+          "git::${GITHOST}/git/vsa-multiple-policy.git?ref=${LATEST_COMMIT}"
+        ]
+      }
+    ],
+    "rekorUrl": "${REKOR}",
+    "publicKey": "${vsa-multiple_PUBLIC_KEY}"
+  },
+  "ec-version": "${EC_VERSION}",
+  "effective-time": "${TIMESTAMP}"
+}
+---
+
+[VSA generation with multiple images:stderr - 1]
+
+---

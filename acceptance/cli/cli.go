@@ -59,6 +59,11 @@ type status struct {
 	stderr *bytes.Buffer
 }
 
+// Vars returns the variables map from the status
+func (s *status) Vars() map[string]string {
+	return s.vars
+}
+
 type key int
 
 const (
@@ -199,6 +204,7 @@ func setupKeys(ctx context.Context, vars map[string]string, environment []string
 	// to avail all public keys that have been generated for
 	// substitution
 	publicKeys := crypto.PublicKeysFrom(ctx)
+	privateKeys := crypto.PrivateKeysFrom(ctx)
 
 	for name, publicKey := range publicKeys {
 		key, err := os.CreateTemp("", "*.pub")
@@ -232,6 +238,31 @@ func setupKeys(ctx context.Context, vars map[string]string, environment []string
 			return environment, vars, err
 		}
 		vars[name+"_PUBLIC_KEY_XML"] = publicKeyXML.String()
+	}
+
+	// Setup private keys for VSA functionality
+	for name, privateKey := range privateKeys {
+		privKey, err := os.CreateTemp("", "*.pem")
+		if err != nil {
+			return environment, vars, err
+		}
+
+		if !testenv.Persisted(ctx) {
+			testenv.Testing(ctx).Cleanup(func() {
+				os.Remove(privKey.Name())
+			})
+		}
+
+		_, err = privKey.WriteString(privateKey)
+		if err != nil {
+			return environment, vars, err
+		}
+		err = privKey.Close()
+		if err != nil {
+			return environment, vars, err
+		}
+
+		vars[name+"_PRIVATE_KEY"] = privKey.Name()
 	}
 
 	return environment, vars, nil
@@ -673,6 +704,12 @@ func ecStatusFrom(ctx context.Context) (*status, error) {
 	}
 
 	return status, nil
+}
+
+// EcStatusFrom returns the command execution status from the context
+// This is an exported wrapper for ecStatusFrom to allow access from other packages
+func EcStatusFrom(ctx context.Context) (*status, error) {
+	return ecStatusFrom(ctx)
 }
 
 // logExecution logs the details of the execution and offers hits as how to
