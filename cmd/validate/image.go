@@ -503,17 +503,21 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 
 						// Upload component VSA envelopes
 						for imageRef, envelopePath := range vsaResult.ComponentEnvelopes {
-							uploadErr := vsa.UploadVSAEnvelope(cmd.Context(), envelopePath, imageRef, data.vsaUpload, signer)
+							uploadErr := vsa.UploadVSAEnvelope(cmd.Context(), envelopePath, data.vsaUpload, signer)
 							if uploadErr != nil {
 								log.Errorf("[VSA] Upload failed for component %s: %v", imageRef, uploadErr)
+							} else {
+								log.Infof("[VSA] Uploaded Component VSA")
 							}
 						}
 
 						// Upload snapshot VSA envelope if it exists
 						if vsaResult.SnapshotEnvelope != "" {
-							uploadErr := vsa.UploadVSAEnvelope(cmd.Context(), vsaResult.SnapshotEnvelope, "", data.vsaUpload, signer)
+							uploadErr := vsa.UploadVSAEnvelope(cmd.Context(), vsaResult.SnapshotEnvelope, data.vsaUpload, signer)
 							if uploadErr != nil {
 								log.Errorf("[VSA] Upload failed for snapshot: %v", uploadErr)
+							} else {
+								log.Infof("[VSA] Uploaded Snapshot VSA")
 							}
 						}
 					} else {

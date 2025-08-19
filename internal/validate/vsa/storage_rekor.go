@@ -80,12 +80,12 @@ func (r *RekorBackend) Name() string {
 }
 
 // Upload is not supported for Rekor backend - use UploadWithSigner instead
-func (r *RekorBackend) Upload(ctx context.Context, envelopeContent []byte, imageRef string) error {
+func (r *RekorBackend) Upload(ctx context.Context, envelopeContent []byte) error {
 	return fmt.Errorf("Rekor backend requires signer access for public key. Use UploadWithSigner instead")
 }
 
 // UploadWithSigner uploads a VSA envelope to the Rekor transparency log with access to the signer for public key extraction
-func (r *RekorBackend) UploadWithSigner(ctx context.Context, envelopeContent []byte, imageRef string, signer *Signer) error {
+func (r *RekorBackend) UploadWithSigner(ctx context.Context, envelopeContent []byte, signer *Signer) error {
 	// Safely convert retries to uint
 	var retryCount uint
 	if r.retries < 0 {
@@ -132,19 +132,11 @@ func (r *RekorBackend) UploadWithSigner(ctx context.Context, envelopeContent []b
 		logIndex = "unknown"
 	}
 
-	// Log success with different messages for component vs snapshot VSAs
-	var logMessage string
-	if imageRef == "" {
-		logMessage = "[VSA] Successfully uploaded Snapshot VSA to Rekor"
-	} else {
-		logMessage = "[VSA] Successfully uploaded Component VSA to Rekor"
-	}
-
 	log.WithFields(log.Fields{
 		"rekor_uuid":  entryUUID,
 		"rekor_url":   fmt.Sprintf("%s/api/v1/log/entries/%s", r.serverURL, entryUUID),
 		"rekor_index": logIndex,
-	}).Info(logMessage)
+	}).Info("[VSA] Successfully uploaded VSA to Rekor")
 
 	return nil
 }

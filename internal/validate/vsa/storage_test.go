@@ -173,14 +173,14 @@ func TestUploadVSAEnvelope_EmptyConfigs(t *testing.T) {
 	envelopePath := tempFile.Name()
 
 	ctx := context.Background()
-	err = UploadVSAEnvelope(ctx, envelopePath, "test-image@sha256:abc123", []string{}, nil)
+	err = UploadVSAEnvelope(ctx, envelopePath, []string{}, nil)
 	assert.NoError(t, err)
 }
 
 func TestUploadVSAEnvelope_InvalidEnvelopePath(t *testing.T) {
 	ctx := context.Background()
 
-	err := UploadVSAEnvelope(ctx, "/non/existent/path", "test-image@sha256:abc123", []string{"local@/tmp"}, nil)
+	err := UploadVSAEnvelope(ctx, "/non/existent/path", []string{"local@/tmp"}, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to read VSA envelope")
 }
@@ -200,6 +200,6 @@ func TestUploadVSAEnvelope_InvalidStorageConfig(t *testing.T) {
 	envelopePath := tempFile.Name()
 
 	ctx := context.Background()
-	err = UploadVSAEnvelope(ctx, envelopePath, "test-image@sha256:abc123", []string{"invalid-format"}, nil)
+	err = UploadVSAEnvelope(ctx, envelopePath, []string{"invalid-format"}, nil)
 	assert.NoError(t, err) // Should not error, just warn and continue
 }

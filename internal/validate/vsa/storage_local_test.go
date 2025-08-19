@@ -79,19 +79,18 @@ func TestLocalBackend_Name(t *testing.T) {
 	assert.Equal(t, "Local (/tmp/test)", backend.Name())
 }
 
-func TestLocalBackend_Upload_ComponentVSA(t *testing.T) {
+func TestLocalBackend_Upload(t *testing.T) {
 	// Create temporary directory
 	tempDir := t.TempDir()
 	backend := &LocalBackend{basePath: tempDir}
 
 	ctx := context.Background()
-	testEnvelope := `{"payload":"test-component","signatures":[{"sig":"test-sig"}]}`
-	imageRef := "quay.io/test/image@sha256:abc123def456"
+	testEnvelope := `{"payload":"test-vsa","signatures":[{"sig":"test-sig"}]}`
 
-	err := backend.Upload(ctx, []byte(testEnvelope), imageRef)
+	err := backend.Upload(ctx, []byte(testEnvelope))
 	require.NoError(t, err)
 
-	// Verify file was created (should contain hash of imageRef)
+	// Verify file was created
 	files, err := os.ReadDir(tempDir)
 	require.NoError(t, err)
 	require.Len(t, files, 1)
@@ -108,34 +107,6 @@ func TestLocalBackend_Upload_ComponentVSA(t *testing.T) {
 	assert.Equal(t, testEnvelope, string(content))
 }
 
-func TestLocalBackend_Upload_SnapshotVSA(t *testing.T) {
-	// Create temporary directory
-	tempDir := t.TempDir()
-	backend := &LocalBackend{basePath: tempDir}
-
-	ctx := context.Background()
-	testEnvelope := `{"payload":"test-snapshot","signatures":[{"sig":"test-sig"}]}`
-	imageRef := "" // Empty for snapshot VSAs
-
-	err := backend.Upload(ctx, []byte(testEnvelope), imageRef)
-	require.NoError(t, err)
-
-	// Verify file was created with snapshot naming
-	files, err := os.ReadDir(tempDir)
-	require.NoError(t, err)
-	require.Len(t, files, 1)
-
-	filename := files[0].Name()
-	assert.True(t, strings.HasPrefix(filename, "vsa-snapshot-"))
-	assert.True(t, strings.HasSuffix(filename, ".json"))
-
-	// Verify file content
-	filePath := filepath.Join(tempDir, filename)
-	content, err := os.ReadFile(filePath)
-	require.NoError(t, err)
-	assert.Equal(t, testEnvelope, string(content))
-}
-
 func TestLocalBackend_Upload_FilenameUniqueness(t *testing.T) {
 	// Create temporary directory
 	tempDir := t.TempDir()
@@ -143,13 +114,12 @@ func TestLocalBackend_Upload_FilenameUniqueness(t *testing.T) {
 
 	ctx := context.Background()
 	testEnvelope := `{"payload":"test","signatures":[{"sig":"test"}]}`
-	imageRef := "quay.io/test/image@sha256:same"
 
 	// Upload same content multiple times
-	err1 := backend.Upload(ctx, []byte(testEnvelope), imageRef)
+	err1 := backend.Upload(ctx, []byte(testEnvelope))
 	require.NoError(t, err1)
 
-	err2 := backend.Upload(ctx, []byte(testEnvelope), imageRef)
+	err2 := backend.Upload(ctx, []byte(testEnvelope))
 	require.NoError(t, err2)
 
 	// Should have created two different files due to timestamps
@@ -157,77 +127,49 @@ func TestLocalBackend_Upload_FilenameUniqueness(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, files, 2)
 
-	// Both should be valid component VSA files
+	// Both should be valid VSA files with proper naming
 	for _, file := range files {
 		assert.True(t, strings.HasPrefix(file.Name(), "vsa-"))
 		assert.True(t, strings.HasSuffix(file.Name(), ".json"))
-		assert.False(t, strings.HasPrefix(file.Name(), "vsa-snapshot-"))
+		assert.Contains(t, file.Name(), "-") // Should have timestamp and hash parts
 	}
+
+	// Verify filenames are different (uniqueness)
+	assert.NotEqual(t, files[0].Name(), files[1].Name())
 }
 
-func TestLocalBackend_Upload_SnapshotFilenameUniqueness(t *testing.T) {
-	// Create temporary directory
-	tempDir := t.TempDir()
-	backend := &LocalBackend{basePath: tempDir}
-
-	ctx := context.Background()
-	testEnvelope := `{"payload":"test-snapshot","signatures":[{"sig":"test"}]}`
-	imageRef := "" // Empty for snapshots
-
-	// Upload multiple snapshot VSAs
-	err1 := backend.Upload(ctx, []byte(testEnvelope), imageRef)
-	require.NoError(t, err1)
-
-	err2 := backend.Upload(ctx, []byte(testEnvelope), imageRef)
-	require.NoError(t, err2)
-
-	// Should have created two different files due to timestamps
-	files, err := os.ReadDir(tempDir)
-	require.NoError(t, err)
-	assert.Len(t, files, 2)
-
-	// Both should be snapshot VSA files
-	for _, file := range files {
-		assert.True(t, strings.HasPrefix(file.Name(), "vsa-snapshot-"))
-		assert.True(t, strings.HasSuffix(file.Name(), ".json"))
-	}
-}
-
-func TestLocalBackend_Upload_WriteError(t *testing.T) {
-	// Use non-existent directory to trigger write error (without creating it first)
-	backend := &LocalBackend{basePath: "/non/existent/path"}
-
+func TestLocalBackend_Upload_DirectoryHandling(t *testing.T) {
 	ctx := context.Background()
 	testEnvelope := `{"payload":"test","signatures":[{"sig":"test"}]}`
-	imageRef := "test-image@sha256:abc123"
 
-	err := backend.Upload(ctx, []byte(testEnvelope), imageRef)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to create directory")
-}
+	t.Run("successful directory creation", func(t *testing.T) {
+		// Create base temp directory
+		baseDir := t.TempDir()
 
-func TestLocalBackend_Upload_DirectoryCreation(t *testing.T) {
-	// Create base temp directory
-	baseDir := t.TempDir()
+		// Use a subdirectory that doesn't exist yet
+		subDir := filepath.Join(baseDir, "subdir", "nested")
+		backend := &LocalBackend{basePath: subDir}
 
-	// Use a subdirectory that doesn't exist yet
-	subDir := filepath.Join(baseDir, "subdir", "nested")
-	backend := &LocalBackend{basePath: subDir}
+		// This should create the directory structure
+		err := backend.Upload(ctx, []byte(testEnvelope))
+		require.NoError(t, err)
 
-	ctx := context.Background()
-	testEnvelope := `{"payload":"test","signatures":[{"sig":"test"}]}`
-	imageRef := "test-image@sha256:abc123"
+		// Verify directory was created
+		_, err = os.Stat(subDir)
+		assert.NoError(t, err)
 
-	// This should create the directory structure
-	err := backend.Upload(ctx, []byte(testEnvelope), imageRef)
-	require.NoError(t, err)
+		// Verify file was created
+		files, err := os.ReadDir(subDir)
+		require.NoError(t, err)
+		assert.Len(t, files, 1)
+	})
 
-	// Verify directory was created
-	_, err = os.Stat(subDir)
-	assert.NoError(t, err)
+	t.Run("directory creation error", func(t *testing.T) {
+		// Use non-existent directory to trigger write error (without creating it first)
+		backend := &LocalBackend{basePath: "/non/existent/path"}
 
-	// Verify file was created
-	files, err := os.ReadDir(subDir)
-	require.NoError(t, err)
-	assert.Len(t, files, 1)
+		err := backend.Upload(ctx, []byte(testEnvelope))
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to create directory")
+	})
 }

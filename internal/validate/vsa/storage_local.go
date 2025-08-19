@@ -65,24 +65,16 @@ func (l *LocalBackend) Name() string {
 }
 
 // Upload saves the VSA envelope to a local file
-func (l *LocalBackend) Upload(ctx context.Context, envelopeContent []byte, imageRef string) error {
+func (l *LocalBackend) Upload(ctx context.Context, envelopeContent []byte) error {
 	// Create directory if it doesn't exist
 	if err := os.MkdirAll(l.basePath, 0755); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", l.basePath, err)
 	}
 
-	// Generate filename based on imageRef type
+	// Generate filename with timestamp and content hash for uniqueness
 	timestamp := time.Now().Format("2006-01-02T15-04-05.000000000")
-	var filename string
-	if imageRef == "" {
-		// Snapshot VSA - include content hash for uniqueness
-		contentHash := sha256.Sum256(envelopeContent)
-		filename = fmt.Sprintf("vsa-snapshot-%s-%x.json", timestamp, contentHash[:4])
-	} else {
-		// Component VSA
-		hash := sha256.Sum256([]byte(imageRef))
-		filename = fmt.Sprintf("vsa-%s-%x.json", timestamp, hash[:8])
-	}
+	contentHash := sha256.Sum256(envelopeContent)
+	filename := fmt.Sprintf("vsa-%s-%x.json", timestamp, contentHash[:8])
 
 	// Write to file
 	filePath := filepath.Join(l.basePath, filename)
@@ -96,18 +88,10 @@ func (l *LocalBackend) Upload(ctx context.Context, envelopeContent []byte, image
 		absPath = filePath // fallback to relative path
 	}
 
-	// Log success with different messages for component vs snapshot VSAs
-	var logMessage string
-	if imageRef == "" {
-		logMessage = "[VSA] Successfully saved Snapshot VSA to local file"
-	} else {
-		logMessage = "[VSA] Successfully saved Component VSA to local file"
-	}
-
 	log.WithFields(log.Fields{
 		"path": absPath,
 		"size": len(envelopeContent),
-	}).Info(logMessage)
+	}).Info("[VSA] Successfully saved VSA to local file")
 
 	return nil
 }

@@ -29,14 +29,14 @@ import (
 // StorageBackend defines the interface for VSA storage implementations
 type StorageBackend interface {
 	Name() string
-	Upload(ctx context.Context, envelopeContent []byte, imageRef string) error
+	Upload(ctx context.Context, envelopeContent []byte) error
 }
 
 // SignerAwareUploader extends StorageBackend for backends that need access to the signer
 // (e.g., Rekor backend needs the public key for transparency log upload)
 type SignerAwareUploader interface {
 	StorageBackend
-	UploadWithSigner(ctx context.Context, envelopeContent []byte, imageRef string, signer *Signer) error
+	UploadWithSigner(ctx context.Context, envelopeContent []byte, signer *Signer) error
 }
 
 // StorageConfig represents parsed storage configuration
@@ -141,8 +141,7 @@ func CreateStorageBackend(config *StorageConfig) (StorageBackend, error) {
 }
 
 // UploadVSAEnvelope uploads a VSA envelope to the configured storage backends
-// imageRef should be the full container image reference for component VSAs, or empty string for snapshot VSAs
-func UploadVSAEnvelope(ctx context.Context, envelopePath string, imageRef string, storageConfigs []string, signer *Signer) error {
+func UploadVSAEnvelope(ctx context.Context, envelopePath string, storageConfigs []string, signer *Signer) error {
 	if len(storageConfigs) == 0 {
 		log.Infof("[VSA] No storage backends configured, skipping upload")
 		return nil
@@ -171,9 +170,9 @@ func UploadVSAEnvelope(ctx context.Context, envelopePath string, imageRef string
 		// Upload using the appropriate method
 		var uploadErr error
 		if signerAwareUploader, ok := backend.(SignerAwareUploader); ok && signer != nil {
-			uploadErr = signerAwareUploader.UploadWithSigner(ctx, envelopeContent, imageRef, signer)
+			uploadErr = signerAwareUploader.UploadWithSigner(ctx, envelopeContent, signer)
 		} else {
-			uploadErr = backend.Upload(ctx, envelopeContent, imageRef)
+			uploadErr = backend.Upload(ctx, envelopeContent)
 		}
 
 		if uploadErr != nil {
