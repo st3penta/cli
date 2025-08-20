@@ -55,7 +55,7 @@ LABEL \
   summary="Provides the binaries for downloading the Conforma CLI. Also used as a runner image for Tekton tasks." \
   io.k8s.display-name="Conforma" \
   io.openshift.tags="rhtas rhtap trusted-artifact-signer trusted-application-pipeline enterprise-contract conforma ec opa cosign sigstore" \
-  com.redhat.component="ec"
+  com.redhat.component="conforma"
 
 # Install tools we want to use in the Tekton task
 RUN microdnf upgrade --assumeyes --nodocs --setopt=keepcache=0 --refresh && microdnf -y --nodocs --setopt=keepcache=0 install gzip jq ca-certificates
