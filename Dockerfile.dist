@@ -54,7 +54,7 @@ LABEL \
   io.k8s.description="Conforma verifies and checks supply chain artifacts to ensure they meet security and business policies." \
   summary="Provides the binaries for downloading the Conforma CLI. Also used as a runner image for Tekton tasks." \
   io.k8s.display-name="Conforma" \
-  io.openshift.tags="rhtas rhtap trusted-artifact-signer trusted-application-pipeline enterprise-contract conforma ec opa cosign sigstore" \
+  io.openshift.tags="rhtas rhads-scc rhtap trusted-artifact-signer trusted-application-pipeline advanced-developer-suite software-supply-chain enterprise-contract conforma ec opa cosign sigstore" \
   com.redhat.component="conforma"
 
 # Install tools we want to use in the Tekton task
