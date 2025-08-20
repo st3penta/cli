@@ -35,7 +35,6 @@ import (
 	"github.com/conforma/cli/internal/kubernetes"
 	"github.com/conforma/cli/internal/logging"
 	"github.com/conforma/cli/internal/tracing"
-	"github.com/conforma/cli/internal/version"
 )
 
 var (
@@ -67,10 +66,10 @@ func (customDeadlineExceededError) Temporary() bool { return true }
 func NewRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "ec",
-		Short: version.CliName() + " CLI",
+		Short: "Conforma CLI",
 
 		Long: hd.Doc(`
-			` + version.CliName() + ` CLI
+			Conforma CLI
 
 			Secure your software supply chain by validating that your artifacts meet security and 
 			compliance requirements. Conforma helps you verify the authenticity and integrity of 
