@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	dbg "runtime/debug"
-	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -108,40 +107,4 @@ func dependencyVersion(name string, path string, dependencies []*dbg.Module) Com
 	}
 
 	return ci
-}
-
-// For productized Red Hat builds we currently want to continue using the
-// "Enterprise Contract" name. Determine if we're a productized Red Hat build
-// by looking at the value of Version. See also the build arg BUILD_SUFFIX,
-// and hack/derive-version.sh.
-
-// Use a var so we aren't recalculating every time CliName is called
-var (
-	cliName      string
-	cliShortName string
-)
-
-func setCliName() {
-	cliName = "Conforma"
-	cliShortName = "Conforma"
-	if strings.HasSuffix(Version, "+redhat") {
-		cliName = "Enterprise Contract"
-		cliShortName = "EC"
-	}
-}
-
-func CliName() string {
-	if cliName != "" {
-		return cliName
-	}
-	setCliName()
-	return cliName
-}
-
-func CliShortName() string {
-	if cliShortName != "" {
-		return cliShortName
-	}
-	setCliName()
-	return cliShortName
 }
