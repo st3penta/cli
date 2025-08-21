@@ -23,6 +23,8 @@ import (
 	ecc "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+
+	"github.com/conforma/cli/internal/opa/rule"
 )
 
 //////////////////////////////////////////////////////////////////////////////
@@ -269,6 +271,347 @@ func TestFilteringWithRulesWithoutMetadata(t *testing.T) {
 			filters := filterFactory.CreateFilters(tc.source)
 			got := filterNamespaces(rules, filters...)
 			assert.ElementsMatch(t, tc.expectedPkg, got, tc.description)
+		})
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// NewDefaultFilterFactory tests
+//////////////////////////////////////////////////////////////////////////////
+
+// MockRuleInfo creates a mock rule.Info for testing
+func MockRuleInfo(pkg string, collections []string, pipelineIntention []string) rule.Info {
+	return rule.Info{
+		Package:           pkg,
+		Collections:       collections,
+		PipelineIntention: pipelineIntention,
+		Code:              "MOCK001",
+		Description:       "Mock rule for testing",
+		Kind:              "deny",
+		ShortName:         "mock",
+		Title:             "Mock Rule",
+	}
+}
+
+// MockSource creates a mock ecc.Source for testing
+func MockSource(ruleData string, includes []string) ecc.Source {
+	source := ecc.Source{}
+
+	if ruleData != "" {
+		source.RuleData = &extv1.JSON{Raw: json.RawMessage(ruleData)}
+	}
+
+	if len(includes) > 0 {
+		source.Config = &ecc.SourceConfig{Include: includes}
+	}
+
+	return source
+}
+
+func TestNewDefaultFilterFactory(t *testing.T) {
+	tests := []struct {
+		name               string
+		source             ecc.Source
+		expectedCount      int
+		expectedType       string
+		description        string
+		expectedIntentions []string
+		expectedIncludes   []string
+	}{
+		{
+			name:               "source with pipeline_intention - only PipelineIntentionFilter",
+			source:             MockSource(`{"pipeline_intention": "release"}`, nil),
+			expectedCount:      1,
+			expectedType:       "*evaluator.DefaultFilterFactory",
+			description:        "Source with pipeline_intention should create only PipelineIntentionFilter",
+			expectedIntentions: []string{"release"},
+			expectedIncludes:   nil,
+		},
+		{
+			name:               "source with includes only",
+			source:             MockSource("", []string{"@redhat", "security"}),
+			expectedCount:      2,
+			expectedType:       "*evaluator.DefaultFilterFactory",
+			description:        "Source with only includes should create PipelineIntentionFilter and IncludeListFilter",
+			expectedIntentions: []string{},
+			expectedIncludes:   []string{"@redhat", "security"},
+		},
+		{
+			name:               "source with both pipeline_intention and includes",
+			source:             MockSource(`{"pipeline_intention": ["release", "production"]}`, []string{"@redhat"}),
+			expectedCount:      2,
+			expectedType:       "*evaluator.DefaultFilterFactory",
+			description:        "Source with both should create PipelineIntentionFilter and IncludeListFilter",
+			expectedIntentions: []string{"release", "production"},
+			expectedIncludes:   []string{"@redhat"},
+		},
+		{
+			name:               "source with empty pipeline_intention array",
+			source:             MockSource(`{"pipeline_intention": []}`, nil),
+			expectedCount:      1,
+			expectedType:       "*evaluator.DefaultFilterFactory",
+			description:        "Source with empty pipeline_intention array should create only PipelineIntentionFilter",
+			expectedIntentions: []string{},
+			expectedIncludes:   nil,
+		},
+		{
+			name:               "source with complex pipeline_intention types",
+			source:             MockSource(`{"pipeline_intention": ["dev", "staging", "release"]}`, nil),
+			expectedCount:      1,
+			expectedType:       "*evaluator.DefaultFilterFactory",
+			description:        "Source with complex pipeline_intention array should create only PipelineIntentionFilter",
+			expectedIntentions: []string{"dev", "staging", "release"},
+			expectedIncludes:   nil,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange
+			factory := NewDefaultFilterFactory()
+
+			// Act
+			filters := factory.CreateFilters(tc.source)
+
+			// Assert: Basic filter count and type validation
+			assert.Len(t, filters, tc.expectedCount, tc.description)
+			assert.IsType(t, &PipelineIntentionFilter{}, filters[0], "first filter should be PipelineIntentionFilter")
+
+			// Enhanced validation: Check PipelineIntentionFilter configuration
+			if tc.expectedIntentions != nil {
+				pipelineFilter := filters[0].(*PipelineIntentionFilter)
+				assert.ElementsMatch(t, tc.expectedIntentions, pipelineFilter.targetIntentions,
+					"PipelineIntentionFilter should have correct target intentions")
+			}
+
+			// Enhanced validation: Check IncludeListFilter configuration when present
+			if tc.expectedCount > 1 {
+				assert.IsType(t, &IncludeListFilter{}, filters[1], "second filter should be IncludeListFilter")
+
+				if tc.expectedIncludes != nil {
+					includeFilter := filters[1].(*IncludeListFilter)
+					assert.ElementsMatch(t, tc.expectedIncludes, includeFilter.entries,
+						"IncludeListFilter should have correct entries")
+				}
+			}
+
+			// Test actual filtering behavior for all test cases
+			// Create mock rules for testing different scenarios
+			mockRules := policyRules{
+				"security.cve": {
+					Collections:       []string{"security", "redhat"},
+					PipelineIntention: []string{"release"},
+				},
+				"general.rule": {
+					Collections:       []string{"redhat"},
+					PipelineIntention: []string{"staging"},
+				},
+			}
+
+			// Apply filters to mock rules
+			result := filterNamespaces(mockRules, filters...)
+
+			// Test filtering behavior based on test case
+			switch tc.name {
+			case "source with pipeline_intention - only PipelineIntentionFilter":
+				// Should only include packages with matching pipeline_intention
+				assert.ElementsMatch(t, []string{"security"}, result,
+					"should only include packages with matching pipeline_intention metadata")
+
+			case "source with includes only":
+				// Should only include packages matching include criteria with no pipeline_intention metadata
+				// general.rule has redhat collection but has pipeline intention, so it won't match
+				assert.ElementsMatch(t, []string{}, result,
+					"should not include any packages since none match both no pipeline intention and include criteria")
+
+			case "source with both pipeline_intention and includes":
+				// Should only include packages matching both pipeline_intention and include criteria
+				assert.ElementsMatch(t, []string{"security"}, result,
+					"should only include packages matching both pipeline_intention and include criteria")
+
+			case "source with complex pipeline_intention types":
+				// Should include packages with any of the complex pipeline_intention values
+				assert.ElementsMatch(t, []string{"security", "general"}, result,
+					"should include packages with any matching pipeline_intention from complex array")
+			}
+
+		})
+	}
+}
+
+// TestNewPipelineIntentionFilter tests the NewPipelineIntentionFilter function
+func TestNewPipelineIntentionFilter(t *testing.T) {
+	tests := []struct {
+		name             string
+		targetIntentions []string
+		expectedType     string
+		description      string
+	}{
+		{
+			name:             "create filter with target intentions",
+			targetIntentions: []string{"release", "staging"},
+			expectedType:     "*evaluator.PipelineIntentionFilter",
+			description:      "Should create PipelineIntentionFilter with specified target intentions",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Act
+			filter := NewPipelineIntentionFilter(tc.targetIntentions)
+
+			// Assert
+			assert.NotNil(t, filter, "Filter should not be nil")
+			assert.IsType(t, &PipelineIntentionFilter{}, filter, tc.description)
+
+			// Verify the filter has the correct target intentions
+			pipelineFilter := filter.(*PipelineIntentionFilter)
+			assert.ElementsMatch(t, tc.targetIntentions, pipelineFilter.targetIntentions,
+				"Filter should have correct target intentions")
+		})
+	}
+}
+
+// TestPipelineIntentionFilter_Include tests the Include method of PipelineIntentionFilter
+func TestPipelineIntentionFilter_Include(t *testing.T) {
+	tests := []struct {
+		name             string
+		targetIntentions []string
+		mockRules        []rule.Info
+		expectedResult   bool
+		description      string
+	}{
+		{
+			name:             "target intentions - include packages with matching pipeline intention",
+			targetIntentions: []string{"release", "staging"},
+			mockRules: []rule.Info{
+				{
+					Collections:       []string{"security"},
+					PipelineIntention: []string{"release"},
+				},
+			},
+			expectedResult: true,
+			description:    "Should include package when target intentions match rule pipeline intention",
+		},
+		{
+			name:             "target intentions - exclude packages with no matching pipeline intention",
+			targetIntentions: []string{"release", "staging"},
+			mockRules: []rule.Info{
+				{
+					Collections:       []string{"security"},
+					PipelineIntention: []string{"production"},
+				},
+			},
+			expectedResult: false,
+			description:    "Should exclude package when no rule pipeline intention matches target intentions",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange
+			filter := &PipelineIntentionFilter{targetIntentions: tc.targetIntentions}
+
+			// Act
+			result := filter.Include("test-package", tc.mockRules)
+
+			// Assert
+			assert.Equal(t, tc.expectedResult, result, tc.description)
+		})
+	}
+}
+
+// TestIncludeListFilter_Include tests the Include method of IncludeListFilter
+func TestIncludeListFilter_Include(t *testing.T) {
+	tests := []struct {
+		name           string
+		entries        []string
+		packageName    string
+		mockRules      []rule.Info
+		expectedResult bool
+		description    string
+	}{
+		{
+			name:        "collection-based filtering - @redhat",
+			entries:     []string{"@redhat", "security"},
+			packageName: "general",
+			mockRules: []rule.Info{
+				{
+					Collections:       []string{"redhat"},
+					PipelineIntention: []string{},
+				},
+			},
+			expectedResult: true,
+			description:    "Should include package when any rule belongs to @redhat collection",
+		},
+		{
+			name:        "no matches found",
+			entries:     []string{"@redhat", "security"},
+			packageName: "general",
+			mockRules: []rule.Info{
+				{
+					Collections:       []string{"quality"},
+					PipelineIntention: []string{},
+				},
+			},
+			expectedResult: false,
+			description:    "Should exclude package when no entries match package or collections",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange
+			filter := &IncludeListFilter{entries: tc.entries}
+
+			// Act
+			result := filter.Include(tc.packageName, tc.mockRules)
+
+			// Assert
+			assert.Equal(t, tc.expectedResult, result, tc.description)
+		})
+	}
+}
+
+// TestExtractStringArrayFromRuleData tests the extractStringArrayFromRuleData function
+func TestExtractStringArrayFromRuleData(t *testing.T) {
+	tests := []struct {
+		name           string
+		source         ecc.Source
+		key            string
+		expectedResult []string
+		description    string
+	}{
+		{
+			name:           "single string value - should convert to array",
+			source:         MockSource(`{"pipeline_intention": "release"}`, nil),
+			key:            "pipeline_intention",
+			expectedResult: []string{"release"},
+			description:    "Should convert single string value to string array as per documentation example",
+		},
+		{
+			name:           "string array value - should extract as is",
+			source:         MockSource(`{"pipeline_intention": ["release", "production"]}`, nil),
+			key:            "pipeline_intention",
+			expectedResult: []string{"release", "production"},
+			description:    "Should extract string array when value is already an array as per documentation example",
+		},
+		{
+			name:           "key not found - should return empty array",
+			source:         MockSource(`{}`, nil),
+			key:            "pipeline_intention",
+			expectedResult: []string{},
+			description:    "Should return empty array when key does not exist as per documentation example",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Act
+			result := extractStringArrayFromRuleData(tc.source, tc.key)
+
+			// Assert
+			assert.ElementsMatch(t, tc.expectedResult, result, tc.description)
 		})
 	}
 }
