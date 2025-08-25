@@ -62,6 +62,10 @@ git fetch upstream
 git push upstream refs/remotes/upstream/main:refs/heads/${BRANCH_NAME}
 git checkout -b ${BRANCH_NAME} upstream/${BRANCH_NAME}
 
+$(nice_title Bump version in main branch)
+
+Run `make bump-minor-version` in main branch and make a PR for that.
+
 $(nice_title Create a PR in for konflux-release-data)
 
 This repo: https://gitlab.cee.redhat.com/releng/konflux-release-data/
