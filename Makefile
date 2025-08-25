@@ -102,6 +102,7 @@ TEST_OUTPUT_FILTER=grep -vE '0.0% of statements|\[no test files\]'
 .PHONY: test
 test: ## Run all unit tests
 	@echo "Unit tests:"
+    # The timeout here was previously 1 second, but we've made it longer because we were seeing timeouts when testing with Sealights
 	@set -o pipefail && go test -race -covermode=atomic -coverprofile=coverage-unit.out -timeout 10s -tags=unit ./... | $(TEST_OUTPUT_FILTER)
 	@echo "Integration tests:"
 	@set -o pipefail && go test -race -covermode=atomic -coverprofile=coverage-integration.out -timeout 15s -tags=integration ./... | $(TEST_OUTPUT_FILTER)
