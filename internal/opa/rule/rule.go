@@ -34,7 +34,7 @@ func title(a *ast.AnnotationsRef) string {
 }
 
 // xrefRegExp is used to detect asciidoc links in a string.
-var xrefRegExp = regexp.MustCompile(`xref:(?:([^:]+):ROOT:(.+?)\.adoc#([^[]+)|[\w\.\$\#]+)\[([\w\s/\.]+)\]`)
+var xrefRegExp = regexp.MustCompile(`xref:(?:([^:]+):ROOT:(.+?)\.adoc(#[^[]+)?|[\w\.\$\#/]+)\[([\w\s/\.]+)\]`)
 
 func description(a *ast.AnnotationsRef) string {
 	if a == nil || a.Annotations == nil {
@@ -82,7 +82,7 @@ func replaceXrefReferencesWithURL(input string) string {
 		group := matches[1]
 		filename := matches[2]
 		anchor := matches[3]
-		return "https://conforma.dev/docs/" + group + "/" + filename + ".html#" + anchor
+		return "https://conforma.dev/docs/" + group + "/" + filename + ".html" + anchor
 	})
 }
 
