@@ -17,10 +17,10 @@
 package vsa
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -294,77 +294,71 @@ func (r *RekorBackend) uploadDSSE(ctx context.Context, rekorClient *gen_client.R
 	return &logEntry, nil
 }
 
-// prepareDSSEForRekor prepares the DSSE envelope for Rekor by canonicalizing the base64 payload and injecting public keys.
-// This canonicalized envelope is used for both DSSE and in-toto uploads to ensure consistency between the two entries.
+// prepareDSSEForRekor prepares the DSSE envelope for Rekor by injecting public keys.
+// This envelope is used for both DSSE and in-toto uploads to ensure consistency between the two entries.
+// The payload hash is calculated from the decoded payload bytes, not the envelope JSON, to ensure
+// a stable join key between DSSE and in-toto entries.
 func (r *RekorBackend) prepareDSSEForRekor(envelopeContent []byte, pubKeyBytes []byte) ([]byte, string, error) {
-	// Parse the existing DSSE envelope
-	var envelope map[string]interface{}
-	if err := json.Unmarshal(envelopeContent, &envelope); err != nil {
+	// Strongly-typed DSSE envelope to avoid map gymnastics
+	type dsseSig struct {
+		KeyID     string  `json:"keyid,omitempty"`
+		Sig       string  `json:"sig"`
+		PublicKey *string `json:"publicKey,omitempty"`
+	}
+	type dsseEnvelope struct {
+		Payload     string    `json:"payload"`
+		PayloadType string    `json:"payloadType"`
+		Signatures  []dsseSig `json:"signatures"`
+	}
+
+	var env dsseEnvelope
+	if err := json.Unmarshal(envelopeContent, &env); err != nil {
 		return nil, "", fmt.Errorf("failed to parse DSSE envelope: %w", err)
 	}
-
-	// Canonicalize the payload base64
-	if payload, ok := envelope["payload"].(string); ok {
-		canonicalizedPayload, err := r.canonicalizeBase64([]byte(payload))
-		if err != nil {
-			return nil, "", fmt.Errorf("failed to canonicalize payload: %w", err)
-		}
-		envelope["payload"] = string(canonicalizedPayload)
+	if env.Payload == "" || env.PayloadType == "" || len(env.Signatures) == 0 {
+		return nil, "", fmt.Errorf("invalid DSSE envelope: missing payload/payloadType/signatures")
 	}
 
-	// Canonicalize signature base64 and inject public keys
-	if signatures, ok := envelope["signatures"].([]interface{}); ok {
-		for i, sig := range signatures {
-			if sigMap, ok := sig.(map[string]interface{}); ok {
-				// Canonicalize signature
-				if sigValue, ok := sigMap["sig"].(string); ok {
-					canonicalizedSig, err := r.canonicalizeBase64([]byte(sigValue))
-					if err != nil {
-						return nil, "", fmt.Errorf("failed to canonicalize signature %d: %w", i, err)
-					}
-					sigMap["sig"] = string(canonicalizedSig)
-				}
-
-				// Inject public key if missing
-				if _, hasKey := sigMap["publicKey"]; !hasKey {
-					sigMap["publicKey"] = string(pubKeyBytes)
-				}
-			}
+	// Decode payload bytes (try URL-safe no-pad first, then std no-pad, then std)
+	decodeB64 := func(s string) ([]byte, error) {
+		if b, err := base64.RawURLEncoding.DecodeString(s); err == nil {
+			return b, nil
 		}
+		if b, err := base64.RawStdEncoding.DecodeString(s); err == nil {
+			return b, nil
+		}
+		return base64.StdEncoding.DecodeString(s)
 	}
 
-	// Marshal back to JSON
-	canonicalizedEnvelope, err := json.Marshal(envelope)
+	payloadBytes, err := decodeB64(env.Payload)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to marshal canonicalized envelope: %w", err)
-	}
-
-	// Calculate the payload hash (SHA256 of the canonicalized envelope)
-	payloadHash := sha256.Sum256(canonicalizedEnvelope)
-	payloadHashHex := fmt.Sprintf("%x", payloadHash[:])
-
-	return canonicalizedEnvelope, payloadHashHex, nil
-}
-
-// canonicalizeBase64 canonicalizes the base64 payload by removing newlines and ensuring proper padding
-func (r *RekorBackend) canonicalizeBase64(payload []byte) ([]byte, error) {
-	// Remove newlines first
-	payload = bytes.ReplaceAll(payload, []byte("\n"), []byte(""))
-
-	// Remove existing padding
-	payload = bytes.TrimRight(payload, "=")
-
-	// Add proper padding back for Rekor compatibility
-	missingPadding := len(payload) % 4
-	if missingPadding > 0 {
-		padding := make([]byte, 4-missingPadding)
-		for i := range padding {
-			padding[i] = '='
+		// include a short prefix to aid debugging, but avoid dumping entire payload
+		prefix := env.Payload
+		if len(prefix) > 16 {
+			prefix = prefix[:16] + "..."
 		}
-		payload = append(payload, padding...)
+		return nil, "", fmt.Errorf("could not base64-decode DSSE payload (tried RawURL, RawStd, Std): prefix=%q: %w", prefix, err)
 	}
 
-	return payload, nil
+	// Hash = sha256(decoded payload bytes) - this is the stable join key
+	sum := sha256.Sum256(payloadBytes)
+	payloadHashHex := fmt.Sprintf("%x", sum[:])
+
+	// Inject PEM public key into each signature if missing
+	pub := string(pubKeyBytes) // must be PEM with BEGIN/END PUBLIC KEY
+	for i := range env.Signatures {
+		if env.Signatures[i].PublicKey == nil || *env.Signatures[i].PublicKey == "" {
+			env.Signatures[i].PublicKey = &pub
+		}
+	}
+
+	// Re-marshal envelope **only** with publicKey additions (no payload/sig changes)
+	out, err := json.Marshal(env)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to marshal DSSE envelope with public keys: %w", err)
+	}
+
+	return out, payloadHashHex, nil
 }
 
 // extractPublicKeyFromSigner extracts the public key from the signer and converts it to PEM format

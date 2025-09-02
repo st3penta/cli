@@ -29,6 +29,9 @@ type VSARetriever interface {
 	RetrieveVSA(ctx context.Context, imageDigest string) ([]VSARecord, error)
 	// FindByPayloadHash retrieves dual entries by payload hash
 	FindByPayloadHash(ctx context.Context, payloadHashHex string) (*DualEntryPair, error)
+	// GetPairedVSAWithSignatures retrieves a VSA with its corresponding signatures by payloadHash
+	// This ensures the signatures actually correspond to the VSA Statement being evaluated
+	GetPairedVSAWithSignatures(ctx context.Context, payloadHashHex string) (*PairedVSAWithSignatures, error)
 }
 
 // VSARecord represents a VSA record retrieved from Rekor
@@ -47,6 +50,17 @@ type DualEntryPair struct {
 	PayloadHash string
 	IntotoEntry *models.LogEntryAnon
 	DSSEEntry   *models.LogEntryAnon
+}
+
+// PairedVSAWithSignatures represents a VSA with its corresponding signatures
+// This ensures the signatures actually correspond to the VSA Statement being evaluated
+type PairedVSAWithSignatures struct {
+	PayloadHash   string                   `json:"payloadHash"`
+	VSAStatement  []byte                   `json:"vsaStatement"`
+	Signatures    []map[string]interface{} `json:"signatures"`
+	IntotoEntry   *models.LogEntryAnon     `json:"intotoEntry"`
+	DSSEEntry     *models.LogEntryAnon     `json:"dsseEntry"`
+	PredicateType string                   `json:"predicateType"`
 }
 
 // RetrievalOptions configures VSA retrieval behavior

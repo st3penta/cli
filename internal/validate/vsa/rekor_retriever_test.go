@@ -18,6 +18,7 @@ package vsa
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -249,4 +250,129 @@ func TestRekorVSARetriever_IsValidHexHash(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestRekorVSARetriever_GetPairedVSAWithSignatures(t *testing.T) {
+	// Create mock entries that share the same payloadHash
+	dsseEnvelope := `{
+		"payload": "eyJfdHlwZSI6Imh0dHBzOi8vaW4tdG90by5pby9TdGF0ZW1lbnQvdjAuMSIsInN1YmplY3QiOlt7Im5hbWUiOiJ0ZXN0LWltYWdlIiwiaGFzaGVzIjp7InNoYTI1NiI6ImFiYzEyMyJ9fV0sInByZWRpY2F0ZVR5cGUiOiJodHRwczovL2NvbmZvcm1hLmRldi92ZXJpZmljYXRpb25fc3VtbWFyeS92MSIsInByZWRpY2F0ZSI6eyJ0ZXN0IjoiZGF0YSJ9fQ==",
+		"signatures": [{"sig": "dGVzdA==", "publicKey": "dGVzdC1wdWJsaWMta2V5"}]
+	}`
+
+	intotoEntry := models.LogEntryAnon{
+		LogIndex: &[]int64{123}[0],
+		LogID:    &[]string{"intoto-uuid"}[0],
+		Body:     fmt.Sprintf(`{"intoto": "v0.0.1", "content": {"envelope": %s}}`, dsseEnvelope),
+		Attestation: &models.LogEntryAnonAttestation{
+			Data: strfmt.Base64(base64.StdEncoding.EncodeToString([]byte(dsseEnvelope))),
+		},
+	}
+
+	dsseEntry := models.LogEntryAnon{
+		LogIndex: &[]int64{124}[0],
+		LogID:    &[]string{"dsse-uuid"}[0],
+		Body:     fmt.Sprintf(`{"dsse": "v0.0.1", "content": {"envelope": %s}}`, dsseEnvelope),
+		Attestation: &models.LogEntryAnonAttestation{
+			Data: strfmt.Base64(base64.StdEncoding.EncodeToString([]byte(dsseEnvelope))),
+		},
+	}
+
+	// Create a mock client that returns both entries
+	mockClient := &MockRekorClient{entries: []models.LogEntryAnon{intotoEntry, dsseEntry}}
+	retriever := NewRekorVSARetrieverWithClient(mockClient, DefaultRetrievalOptions())
+
+	// Calculate the expected payload hash
+	payloadBytes, _ := base64.StdEncoding.DecodeString("eyJfdHlwZSI6Imh0dHBzOi8vaW4tdG90by5pby9TdGF0ZW1lbnQvdjAuMSIsInN1YmplY3QiOlt7Im5hbWUiOiJ0ZXN0LWltYWdlIiwiaGFzaGVzIjp7InNoYTI1NiI6ImFiYzEyMyJ9fV0sInByZWRpY2F0ZVR5cGUiOiJodHRwczovL2NvbmZvcm1hLmRldi92ZXJpZmljYXRpb25fc3VtbWFyeS92MSIsInByZWRpY2F0ZSI6eyJ0ZXN0IjoiZGF0YSJ9fQ==")
+	hash := sha256.Sum256(payloadBytes)
+	expectedPayloadHash := fmt.Sprintf("%x", hash[:])
+
+	// Test successful pairing
+	result, err := retriever.GetPairedVSAWithSignatures(context.Background(), expectedPayloadHash)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	// Verify the result structure
+	assert.Equal(t, expectedPayloadHash, result.PayloadHash)
+	assert.Equal(t, "https://conforma.dev/verification_summary/v1", result.PredicateType)
+	assert.NotNil(t, result.VSAStatement)
+	assert.NotNil(t, result.Signatures)
+	assert.NotNil(t, result.IntotoEntry)
+	assert.NotNil(t, result.DSSEEntry)
+
+	// Verify the VSA Statement content
+	var statement map[string]interface{}
+	err = json.Unmarshal(result.VSAStatement, &statement)
+	assert.NoError(t, err)
+	assert.Equal(t, "https://in-toto.io/Statement/v0.1", statement["_type"])
+	assert.Equal(t, "https://conforma.dev/verification_summary/v1", statement["predicateType"])
+
+	// Verify the signatures
+	assert.Len(t, result.Signatures, 1)
+	signature := result.Signatures[0]
+	assert.Equal(t, "dGVzdA==", signature["sig"])
+	assert.Equal(t, "dGVzdC1wdWJsaWMta2V5", signature["publicKey"])
+}
+
+func TestRekorVSARetriever_GetPairedVSAWithSignatures_IncompletePair(t *testing.T) {
+	// Test case: Only in-toto entry found
+	t.Run("only_intoto_entry", func(t *testing.T) {
+		dsseEnvelope := `{
+			"payload": "eyJfdHlwZSI6Imh0dHBzOi8vaW4tdG90by5pby9TdGF0ZW1lbnQvdjAuMSIsInN1YmplY3QiOlt7Im5hbWUiOiJ0ZXN0LWltYWdlIiwiaGFzaGVzIjp7InNoYTI1NiI6ImFiYzEyMyJ9fV0sInByZWRpY2F0ZVR5cGUiOiJodHRwczovL2NvbmZvcm1hLmRldi92ZXJpZmljYXRpb25fc3VtbWFyeS92MSIsInByZWRpY2F0ZSI6eyJ0ZXN0IjoiZGF0YSJ9fQ==",
+			"signatures": [{"sig": "dGVzdA=="}]
+		}`
+
+		intotoEntry := models.LogEntryAnon{
+			LogIndex: &[]int64{123}[0],
+			LogID:    &[]string{"intoto-uuid"}[0],
+			Body:     fmt.Sprintf(`{"intoto": "v0.0.1", "content": {"envelope": %s}}`, dsseEnvelope),
+			Attestation: &models.LogEntryAnonAttestation{
+				Data: strfmt.Base64(base64.StdEncoding.EncodeToString([]byte(dsseEnvelope))),
+			},
+		}
+
+		// Create a mock client that returns only the in-toto entry
+		mockClient := &MockRekorClient{entries: []models.LogEntryAnon{intotoEntry}}
+		retriever := NewRekorVSARetrieverWithClient(mockClient, DefaultRetrievalOptions())
+
+		// Calculate the expected payload hash
+		payloadBytes, _ := base64.StdEncoding.DecodeString("eyJfdHlwZSI6Imh0dHBzOi8vaW4tdG90by5pby9TdGF0ZW1lbnQvdjAuMSIsInN1YmplY3QiOlt7Im5hbWUiOiJ0ZXN0LWltYWdlIiwiaGFzaGVzIjp7InNoYTI1NiI6ImFiYzEyMyJ9fV0sInByZWRpY2F0ZVR5cGUiOiJodHRwczovL2NvbmZvcm1hLmRldi92ZXJpZmljYXRpb25fc3VtbWFyeS92MSIsInByZWRpY2F0ZSI6eyJ0ZXN0IjoiZGF0YSJ9fQ==")
+		hash := sha256.Sum256(payloadBytes)
+		expectedPayloadHash := fmt.Sprintf("%x", hash[:])
+
+		// Test that it correctly rejects incomplete pairs
+		_, err := retriever.GetPairedVSAWithSignatures(context.Background(), expectedPayloadHash)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "incomplete dual upload: found in-toto entry but no DSSE entry")
+	})
+
+	// Test case: Only DSSE entry found
+	t.Run("only_dsse_entry", func(t *testing.T) {
+		dsseEnvelope := `{
+			"payload": "eyJfdHlwZSI6Imh0dHBzOi8vaW4tdG90by5pby9TdGF0ZW1lbnQvdjAuMSIsInN1YmplY3QiOlt7Im5hbWUiOiJ0ZXN0LWltYWdlIiwiaGFzaGVzIjp7InNoYTI1NiI6ImFiYzEyMyJ9fV0sInByZWRpY2F0ZVR5cGUiOiJodHRwczovL2NvbmZvcm1hLmRldi92ZXJpZmljYXRpb25fc3VtbWFyeS92MSIsInByZWRpY2F0ZSI6eyJ0ZXN0IjoiZGF0YSJ9fQ==",
+			"signatures": [{"sig": "dGVzdA=="}]
+		}`
+
+		dsseEntry := models.LogEntryAnon{
+			LogIndex: &[]int64{124}[0],
+			LogID:    &[]string{"dsse-uuid"}[0],
+			Body:     fmt.Sprintf(`{"dsse": "v0.0.1", "content": {"envelope": %s}}`, dsseEnvelope),
+			Attestation: &models.LogEntryAnonAttestation{
+				Data: strfmt.Base64(base64.StdEncoding.EncodeToString([]byte(dsseEnvelope))),
+			},
+		}
+
+		// Create a mock client that returns only the DSSE entry
+		mockClient := &MockRekorClient{entries: []models.LogEntryAnon{dsseEntry}}
+		retriever := NewRekorVSARetrieverWithClient(mockClient, DefaultRetrievalOptions())
+
+		// Calculate the expected payload hash
+		payloadBytes, _ := base64.StdEncoding.DecodeString("eyJfdHlwZSI6Imh0dHBzOi8vaW4tdG90by5pby9TdGF0ZW1lbnQvdjAuMSIsInN1YmplY3QiOlt7Im5hbWUiOiJ0ZXN0LWltYWdlIiwiaGFzaGVzIjp7InNoYTI1NiI6ImFiYzEyMyJ9fV0sInByZWRpY2F0ZVR5cGUiOiJodHRwczovL2NvbmZvcm1hLmRldi92ZXJpZmljYXRpb25fc3VtbWFyeS92MSIsInByZWRpY2F0ZSI6eyJ0ZXN0IjoiZGF0YSJ9fQ==")
+		hash := sha256.Sum256(payloadBytes)
+		expectedPayloadHash := fmt.Sprintf("%x", hash[:])
+
+		// Test that it correctly rejects incomplete pairs
+		_, err := retriever.GetPairedVSAWithSignatures(context.Background(), expectedPayloadHash)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "incomplete dual upload: found DSSE entry but no in-toto entry")
+	})
 }
