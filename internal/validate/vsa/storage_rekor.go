@@ -139,7 +139,7 @@ func (r *RekorBackend) UploadWithSigner(ctx context.Context, envelopeContent []b
 
 // uploadBoth uploads the same envelope as both DSSE and in-toto entries
 func (r *RekorBackend) uploadBoth(ctx context.Context, rekorClient *gen_client.Rekor, envelopeContent []byte, pubKeyBytes []byte) (string, error) {
-	// Prepare the DSSE envelope for Rekor
+	// Prepare the DSSE envelope for Rekor - canonicalize once for both uploads
 	preparedEnvelope, payloadHash, err := r.prepareDSSEForRekor(envelopeContent, pubKeyBytes)
 	if err != nil {
 		return "", fmt.Errorf("failed to prepare DSSE envelope for Rekor: %w", err)
@@ -153,16 +153,16 @@ func (r *RekorBackend) uploadBoth(ctx context.Context, rekorClient *gen_client.R
 		"prepared_preview": string(preparedEnvelope[:min(100, len(preparedEnvelope))]),
 	}).Info("[VSA] Prepared DSSE envelope for dual upload")
 
-	// Upload as in-toto entry first
+	// Upload as in-toto entry first using the canonicalized envelope
 	log.Info("[VSA] Starting in-toto entry upload")
-	intotoEntry, err := r.uploadIntotoEnvelope(ctx, rekorClient, envelopeContent, pubKeyBytes)
+	intotoEntry, err := r.uploadIntotoEnvelope(ctx, rekorClient, preparedEnvelope, pubKeyBytes)
 	if err != nil {
 		log.WithError(err).Error("[VSA] Failed to upload in-toto entry")
 		return "", fmt.Errorf("failed to upload in-toto entry: %w", err)
 	}
 	log.Info("[VSA] Completed in-toto entry upload")
 
-	// Upload as DSSE entry
+	// Upload as DSSE entry using the same canonicalized envelope
 	log.Info("[VSA] Starting DSSE entry upload")
 	dsseEntry, err := r.uploadDSSE(ctx, rekorClient, preparedEnvelope, pubKeyBytes)
 	if err != nil {
@@ -189,12 +189,13 @@ func (r *RekorBackend) uploadBoth(ctx context.Context, rekorClient *gen_client.R
 func (r *RekorBackend) uploadIntotoEnvelope(ctx context.Context, rekorClient *gen_client.Rekor, envelopeContent []byte, pubKeyBytes []byte) (*models.LogEntryAnon, error) {
 	log.Info("[VSA] Creating artifact properties for in-toto entry")
 
-	// Log the envelope content for debugging
+	// Log the envelope content for debugging (now canonicalized)
 	log.WithFields(log.Fields{
 		"envelope_size":    len(envelopeContent),
 		"envelope_preview": string(envelopeContent[:min(200, len(envelopeContent))]),
 		"pubkey_size":      len(pubKeyBytes),
-	}).Info("[VSA] Envelope content for in-toto upload")
+		"note":             "envelope is now canonicalized for consistency with DSSE entry",
+	}).Info("[VSA] Canonicalized envelope content for in-toto upload")
 
 	// Create artifact properties for in-toto entry
 	artifactProps := types.ArtifactProperties{
@@ -293,7 +294,8 @@ func (r *RekorBackend) uploadDSSE(ctx context.Context, rekorClient *gen_client.R
 	return &logEntry, nil
 }
 
-// prepareDSSEForRekor prepares the DSSE envelope for Rekor by canonicalizing the base64 payload and injecting public keys
+// prepareDSSEForRekor prepares the DSSE envelope for Rekor by canonicalizing the base64 payload and injecting public keys.
+// This canonicalized envelope is used for both DSSE and in-toto uploads to ensure consistency between the two entries.
 func (r *RekorBackend) prepareDSSEForRekor(envelopeContent []byte, pubKeyBytes []byte) ([]byte, string, error) {
 	// Parse the existing DSSE envelope
 	var envelope map[string]interface{}

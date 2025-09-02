@@ -343,3 +343,82 @@ func TestRekorBackend_PrepareDSSEForRekor(t *testing.T) {
 		t.Error("payload hash is not deterministic")
 	}
 }
+
+func TestRekorBackend_UploadBoth_Consistency(t *testing.T) {
+	// Create a test backend
+	backend := &RekorBackend{
+		serverURL: "https://rekor.test",
+	}
+
+	// Create test envelope content
+	envelopeContent := []byte(`{
+		"payload": "dGVzdC1wYXlsb2Fk",
+		"signatures": [
+			{
+				"sig": "dGVzdC1zaWduYXR1cmU="
+			}
+		]
+	}`)
+
+	// Mock public key
+	pubKeyBytes := []byte("-----BEGIN PUBLIC KEY-----\ntest-key\n-----END PUBLIC KEY-----")
+
+	// Test that prepareDSSEForRekor produces consistent output
+	preparedEnvelope1, payloadHash1, err := backend.prepareDSSEForRekor(envelopeContent, pubKeyBytes)
+	require.NoError(t, err)
+	require.NotEmpty(t, payloadHash1)
+
+	preparedEnvelope2, payloadHash2, err := backend.prepareDSSEForRekor(envelopeContent, pubKeyBytes)
+	require.NoError(t, err)
+	require.NotEmpty(t, payloadHash2)
+
+	// Verify that the same input produces the same output (deterministic)
+	require.Equal(t, preparedEnvelope1, preparedEnvelope2, "Canonicalized envelopes should be identical")
+	require.Equal(t, payloadHash1, payloadHash2, "Payload hashes should be identical")
+
+	// Verify that the content is different from the original (should be canonicalized)
+	require.NotEqual(t, envelopeContent, preparedEnvelope1, "Uploaded content should be canonicalized, not original")
+
+	// Verify that the content contains the injected public key
+	require.Contains(t, string(preparedEnvelope1), "-----BEGIN PUBLIC KEY-----", "Canonicalized content should contain public key")
+
+	// Verify that the content contains canonicalized base64 (no newlines in base64 fields)
+	// Parse the JSON to check specific fields
+	var envelope map[string]interface{}
+	err = json.Unmarshal(preparedEnvelope1, &envelope)
+	require.NoError(t, err)
+
+	// Check payload field
+	if payload, ok := envelope["payload"].(string); ok {
+		require.NotContains(t, payload, "\n", "Payload base64 should not contain newlines")
+	}
+
+	// Check signature field
+	if signatures, ok := envelope["signatures"].([]interface{}); ok && len(signatures) > 0 {
+		if sigMap, ok := signatures[0].(map[string]interface{}); ok {
+			if sigValue, ok := sigMap["sig"].(string); ok {
+				require.NotContains(t, sigValue, "\n", "Signature base64 should not contain newlines")
+			}
+		}
+	}
+
+	// Verify that both the original and canonicalized content can be parsed as valid JSON
+	var originalEnvelope map[string]interface{}
+	err = json.Unmarshal(envelopeContent, &originalEnvelope)
+	require.NoError(t, err, "Original envelope should be valid JSON")
+
+	var canonicalizedEnvelope map[string]interface{}
+	err = json.Unmarshal(preparedEnvelope1, &canonicalizedEnvelope)
+	require.NoError(t, err, "Canonicalized envelope should be valid JSON")
+
+	// Verify that the canonicalized envelope has the expected structure
+	require.Contains(t, canonicalizedEnvelope, "payload", "Canonicalized envelope should contain payload")
+	require.Contains(t, canonicalizedEnvelope, "signatures", "Canonicalized envelope should contain signatures")
+
+	// Check that the first signature contains publicKey
+	if signatures, ok := canonicalizedEnvelope["signatures"].([]interface{}); ok && len(signatures) > 0 {
+		if sigMap, ok := signatures[0].(map[string]interface{}); ok {
+			require.Contains(t, sigMap, "publicKey", "First signature should contain publicKey field")
+		}
+	}
+}
