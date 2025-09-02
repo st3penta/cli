@@ -512,3 +512,45 @@ func TestNewVSAChecker(t *testing.T) {
 		})
 	}
 }
+
+func TestVSAChecker_CheckExistingVSA_ErrorCases(t *testing.T) {
+	checker := NewVSAChecker("https://rekor.sigstore.dev", 30*time.Second)
+	ctx := context.Background()
+
+	tests := []struct {
+		name        string
+		imageRef    string
+		expiration  time.Duration
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "tag reference should fail",
+			imageRef:    "registry.example.com/test:latest",
+			expiration:  24 * time.Hour,
+			expectError: true,
+			errorMsg:    "failed to extract digest from image reference",
+		},
+		{
+			name:        "empty image reference",
+			imageRef:    "",
+			expiration:  24 * time.Hour,
+			expectError: true,
+			errorMsg:    "failed to extract digest from image reference",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := checker.CheckExistingVSA(ctx, tt.imageRef, tt.expiration)
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorMsg)
+				assert.Nil(t, result)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+			}
+		})
+	}
+}
