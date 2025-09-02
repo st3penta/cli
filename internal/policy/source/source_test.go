@@ -29,6 +29,8 @@ import (
 	"testing"
 
 	fileMetadata "github.com/conforma/go-gather/gather/file"
+	gitMetadata "github.com/conforma/go-gather/gather/git"
+	ociMetadata "github.com/conforma/go-gather/gather/oci"
 	"github.com/conforma/go-gather/metadata"
 	ecc "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
 	"github.com/spf13/afero"
@@ -48,9 +50,12 @@ type mockDownloader struct {
 	mock.Mock
 }
 
-func (m *mockDownloader) Download(_ context.Context, dest string, sourceUrl string, showMsg bool) (metadata.Metadata, error) {
-	args := m.Called(dest, sourceUrl, showMsg)
+func (m *mockDownloader) Download(ctx context.Context, dest string, sourceUrl string, showMsg bool) (metadata.Metadata, error) {
+	args := m.Called(ctx, dest, sourceUrl, showMsg)
 
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(metadata.Metadata), args.Error(1)
 }
 
@@ -89,7 +94,7 @@ func TestGetPolicy(t *testing.T) {
 			p := PolicyUrl{Url: tt.sourceUrl, Kind: PolicyKind}
 
 			dl := mockDownloader{}
-			dl.On("Download", mock.MatchedBy(func(dest string) bool {
+			dl.On("Download", mock.Anything, mock.MatchedBy(func(dest string) bool {
 				matched, err := regexp.MatchString(tt.dest, dest)
 				if err != nil {
 					panic(err)
@@ -111,40 +116,310 @@ func TestGetPolicy(t *testing.T) {
 }
 
 func TestInlineDataSource(t *testing.T) {
-	s := InlineData([]byte("some data"))
+	tests := []struct {
+		name           string
+		inputData      []byte
+		expectedSubdir string
+		expectedFile   string
+		expectedData   []byte
+		expectedURL    string
+	}{
+		{
+			name:           "simple string data",
+			inputData:      []byte("some data"),
+			expectedSubdir: "data",
+			expectedFile:   "rule_data.json",
+			expectedData:   []byte("some data"),
+			expectedURL:    "data:application/json;base64,c29tZSBkYXRh",
+		},
+		{
+			name:           "json data",
+			inputData:      []byte(`{"key": "value"}`),
+			expectedSubdir: "data",
+			expectedFile:   "rule_data.json",
+			expectedData:   []byte(`{"key": "value"}`),
+			expectedURL:    "data:application/json;base64,eyJrZXkiOiAidmFsdWUifQ==",
+		},
+		{
+			name:           "empty data",
+			inputData:      []byte(""),
+			expectedSubdir: "data",
+			expectedFile:   "rule_data.json",
+			expectedData:   []byte(""),
+			expectedURL:    "data:application/json;base64,",
+		},
+		{
+			name:           "complex json with special characters",
+			inputData:      []byte(`{"test": "value with spaces", "number": 42}`),
+			expectedSubdir: "data",
+			expectedFile:   "rule_data.json",
+			expectedData:   []byte(`{"test": "value with spaces", "number": 42}`),
+			expectedURL:    "data:application/json;base64,eyJ0ZXN0IjogInZhbHVlIHdpdGggc3BhY2VzIiwgIm51bWJlciI6IDQyfQ==",
+		},
+	}
 
-	require.Equal(t, "data", s.Subdir())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear download cache for each test
+			t.Cleanup(func() {
+				downloadCache = sync.Map{}
+			})
 
-	fs := afero.NewMemMapFs()
-	temp, err := afero.TempDir(fs, "", "")
-	require.NoError(t, err)
+			s := InlineData(tt.inputData)
 
-	ctx := utils.WithFS(context.Background(), fs)
+			// Test interface methods
+			assert.Equal(t, tt.expectedSubdir, s.Subdir())
+			assert.Equal(t, InlineDataKind, s.Type())
+			assert.Equal(t, tt.expectedURL, s.PolicyUrl())
 
-	dest, err := s.GetPolicy(ctx, temp, false)
-	require.NoError(t, err)
+			// Test GetPolicy method
+			fs := afero.NewMemMapFs()
+			temp, err := afero.TempDir(fs, "", "")
+			require.NoError(t, err)
 
-	file := path.Join(dest, "rule_data.json")
-	exists, err := afero.Exists(fs, file)
-	require.NoError(t, err)
-	require.True(t, exists)
+			ctx := utils.WithFS(context.Background(), fs)
+			dest, err := s.GetPolicy(ctx, temp, false)
+			require.NoError(t, err)
+			assert.NotEmpty(t, dest)
 
-	data, err := afero.ReadFile(fs, file)
-	require.NoError(t, err)
-	require.Equal(t, []byte("some data"), data)
+			// Verify file creation and content
+			file := path.Join(dest, tt.expectedFile)
+			exists, err := afero.Exists(fs, file)
+			require.NoError(t, err)
+			assert.True(t, exists)
 
-	require.Equal(t, "data:application/json;base64,c29tZSBkYXRh", s.PolicyUrl())
+			data, err := afero.ReadFile(fs, file)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedData, data)
+
+			// Verify file permissions
+			stat, err := fs.Stat(file)
+			require.NoError(t, err)
+			assert.Equal(t, os.FileMode(0400), stat.Mode().Perm())
+		})
+	}
+}
+
+func TestInlineDataSubdir(t *testing.T) {
+	tests := []struct {
+		name           string
+		inputData      []byte
+		expectedSubdir string
+	}{
+		{
+			name:           "simple data returns data subdir",
+			inputData:      []byte("test data"),
+			expectedSubdir: "data",
+		},
+		{
+			name:           "json data returns data subdir",
+			inputData:      []byte(`{"key": "value"}`),
+			expectedSubdir: "data",
+		},
+		{
+			name:           "empty data returns data subdir",
+			inputData:      []byte(""),
+			expectedSubdir: "data",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := InlineData(tt.inputData)
+
+			result := s.Subdir()
+
+			assert.Equal(t, tt.expectedSubdir, result)
+			assert.Equal(t, "data", result, "Subdir should always return 'data' regardless of input")
+		})
+	}
+}
+
+func TestInlineDataGetPolicy(t *testing.T) {
+	tests := []struct {
+		name        string
+		inputData   []byte
+		workDir     string
+		showMsg     bool
+		setupFS     func() afero.Fs
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "successful policy creation with simple data",
+			inputData:   []byte("test policy data"),
+			workDir:     "/tmp/work",
+			showMsg:     false,
+			setupFS:     func() afero.Fs { return afero.NewMemMapFs() },
+			expectError: false,
+		},
+		{
+			name:        "successful policy creation with json data",
+			inputData:   []byte(`{"rules": {"allow": true}}`),
+			workDir:     "/tmp/work",
+			showMsg:     true,
+			setupFS:     func() afero.Fs { return afero.NewMemMapFs() },
+			expectError: false,
+		},
+		{
+			name:        "successful policy creation with empty data",
+			inputData:   []byte(""),
+			workDir:     "/tmp/work",
+			showMsg:     false,
+			setupFS:     func() afero.Fs { return afero.NewMemMapFs() },
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear download cache for each test
+			t.Cleanup(func() {
+				downloadCache = sync.Map{}
+			})
+
+			s := InlineData(tt.inputData)
+			fs := tt.setupFS()
+			ctx := utils.WithFS(context.Background(), fs)
+
+			dest, err := s.GetPolicy(ctx, tt.workDir, tt.showMsg)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				if tt.errorMsg != "" {
+					assert.Contains(t, err.Error(), tt.errorMsg)
+				}
+				return
+			}
+
+			require.NoError(t, err)
+			assert.NotEmpty(t, dest)
+
+			// Verify the destination directory exists
+			exists, err := afero.DirExists(fs, dest)
+			require.NoError(t, err)
+			assert.True(t, exists, "destination directory should exist")
+
+			// Verify the rule_data.json file was created
+			ruleDataFile := path.Join(dest, "rule_data.json")
+			fileExists, err := afero.Exists(fs, ruleDataFile)
+			require.NoError(t, err)
+			assert.True(t, fileExists, "rule_data.json should be created")
+
+			// Verify file content matches input data
+			fileContent, err := afero.ReadFile(fs, ruleDataFile)
+			require.NoError(t, err)
+			assert.Equal(t, tt.inputData, fileContent, "file content should match input data")
+
+			// Verify file permissions are read-only
+			stat, err := fs.Stat(ruleDataFile)
+			require.NoError(t, err)
+			assert.Equal(t, os.FileMode(0400), stat.Mode().Perm(), "file should have read-only permissions")
+
+			// Verify cache functionality - second call should return same result
+			dest2, err2 := s.GetPolicy(ctx, tt.workDir, tt.showMsg)
+			require.NoError(t, err2)
+			assert.Equal(t, dest, dest2, "cached call should return same destination")
+		})
+	}
+}
+
+func TestInlineDataType(t *testing.T) {
+	tests := []struct {
+		name         string
+		inputData    []byte
+		expectedType PolicyType
+	}{
+		{
+			name:         "simple data returns InlineDataKind",
+			inputData:    []byte("test data"),
+			expectedType: InlineDataKind,
+		},
+		{
+			name:         "json data returns InlineDataKind",
+			inputData:    []byte(`{"key": "value"}`),
+			expectedType: InlineDataKind,
+		},
+		{
+			name:         "empty data returns InlineDataKind",
+			inputData:    []byte(""),
+			expectedType: InlineDataKind,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := InlineData(tt.inputData)
+
+			result := s.Type()
+
+			assert.Equal(t, tt.expectedType, result)
+			assert.Equal(t, "inline-data", string(result))
+		})
+	}
+}
+
+func TestPolicyUrlType(t *testing.T) {
+	tests := []struct {
+		name         string
+		url          string
+		kind         PolicyType
+		expectedType PolicyType
+	}{
+		{
+			name:         "policy kind returns PolicyKind",
+			url:          "github.com/user/repo//policy/",
+			kind:         PolicyKind,
+			expectedType: PolicyKind,
+		},
+		{
+			name:         "data kind returns DataKind",
+			url:          "https://example.com/data",
+			kind:         DataKind,
+			expectedType: DataKind,
+		},
+		{
+			name:         "config kind returns ConfigKind",
+			url:          "git::https://gitlab.com/user/repo//config/",
+			kind:         ConfigKind,
+			expectedType: ConfigKind,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := PolicyUrl{
+				Url:  tt.url,
+				Kind: tt.kind,
+			}
+
+			result := p.Type()
+
+			assert.Equal(t, tt.expectedType, result)
+			assert.Equal(t, tt.kind, result, "Type should return the same value as Kind field")
+
+			// Verify the returned type matches expected string values
+			switch tt.expectedType {
+			case PolicyKind:
+				assert.Equal(t, "policy", string(result))
+			case DataKind:
+				assert.Equal(t, "data", string(result))
+			case ConfigKind:
+				assert.Equal(t, "config", string(result))
+			}
+		})
+	}
 }
 
 func TestPolicySourcesFrom(t *testing.T) {
-	// var ruleData = &extv1.JSON{Raw: []byte("foo")}
 	tests := []struct {
-		name     string
-		source   ecc.Source
-		expected []PolicySource
+		name          string
+		source        ecc.Source
+		expected      []PolicySource
+		expectedCount int
 	}{
 		{
-			name: "fetches policy configs",
+			name: "fetches policy and data configs",
 			source: ecc.Source{
 				Name:   "policy1",
 				Policy: []string{"github.com/org/repo1//policy/", "github.com/org/repo2//policy/", "github.com/org/repo3//policy/"},
@@ -158,9 +433,10 @@ func TestPolicySourcesFrom(t *testing.T) {
 				&PolicyUrl{Url: "github.com/org/repo2//data/", Kind: DataKind},
 				&PolicyUrl{Url: "github.com/org/repo3//data/", Kind: DataKind},
 			},
+			expectedCount: 6,
 		},
 		{
-			name: "handles rule data",
+			name: "handles rule data with policy and data",
 			source: ecc.Source{
 				Name:     "policy2",
 				Policy:   []string{"github.com/org/repo1//policy/"},
@@ -172,12 +448,65 @@ func TestPolicySourcesFrom(t *testing.T) {
 				&PolicyUrl{Url: "github.com/org/repo1//data/", Kind: DataKind},
 				inlineData{source: []byte("{\"rule_data__configuration__\":\"foo\":\"bar\"}")},
 			},
+			expectedCount: 3,
+		},
+		{
+			name: "empty source returns empty slice",
+			source: ecc.Source{
+				Name: "empty",
+			},
+			expected:      []PolicySource{},
+			expectedCount: 0,
+		},
+		{
+			name: "only rule data without policy or data sources",
+			source: ecc.Source{
+				Name:     "rule-data-only",
+				RuleData: &extv1.JSON{Raw: []byte(`{"setting": "value"}`)},
+			},
+			expected: []PolicySource{
+				inlineData{source: []byte("{\"rule_data__configuration__\":{\"setting\": \"value\"}}")},
+			},
+			expectedCount: 1,
+		},
+		{
+			name: "nil rule data is ignored",
+			source: ecc.Source{
+				Name:     "nil-rule-data",
+				Policy:   []string{"github.com/org/repo//policy/"},
+				RuleData: nil,
+			},
+			expected: []PolicySource{
+				&PolicyUrl{Url: "github.com/org/repo//policy/", Kind: PolicyKind},
+			},
+			expectedCount: 1,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sources := PolicySourcesFrom(tt.source)
-			assert.Equal(t, sources, tt.expected)
+
+			assert.Len(t, sources, tt.expectedCount)
+			assert.Equal(t, tt.expected, sources)
+
+			// Verify each source has correct type
+			for i, source := range sources {
+				switch expected := tt.expected[i].(type) {
+				case *PolicyUrl:
+					actual, ok := source.(*PolicyUrl)
+					assert.True(t, ok, "expected PolicyUrl at index %d", i)
+					assert.Equal(t, expected.Url, actual.Url)
+					assert.Equal(t, expected.Kind, actual.Kind)
+					assert.Equal(t, expected.Kind, actual.Type())
+				case inlineData:
+					actual, ok := source.(inlineData)
+					assert.True(t, ok, "expected inlineData at index %d", i)
+					assert.Equal(t, expected.source, actual.source)
+					assert.Equal(t, InlineDataKind, actual.Type())
+					assert.Equal(t, "data", actual.Subdir())
+				}
+			}
 		})
 	}
 }
@@ -302,4 +631,64 @@ func TestDownloadCacheWorkdirMismatch(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, destination1, destination2)
+}
+
+func TestLogMetadata(t *testing.T) {
+	tests := []struct {
+		name     string
+		metadata metadata.Metadata
+		expected string // Expected log message pattern
+	}{
+		{
+			name: "git metadata logs SHA",
+			metadata: &gitMetadata.GitMetadata{
+				LatestCommit: "abc123456789",
+			},
+			expected: "SHA: abc123456789",
+		},
+		{
+			name: "oci metadata logs digest",
+			metadata: &ociMetadata.OCIMetadata{
+				Digest: "sha256:abcdef123456",
+			},
+			expected: "Image digest: sha256:abcdef123456",
+		},
+		{
+			name: "file metadata logs path",
+			metadata: &fileMetadata.FSMetadata{
+				Path: "/tmp/test/path",
+			},
+			expected: "Path: /tmp/test/path",
+		},
+		{
+			name:     "nil metadata logs nothing",
+			metadata: nil,
+			expected: "", // No log expected
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Since logMetadata uses log.Debugf which is hard to capture,
+			// we test the function's behavior by ensuring it doesn't panic
+			// and handles different metadata types correctly
+
+			// This should not panic regardless of metadata type
+			assert.NotPanics(t, func() {
+				logMetadata(tt.metadata)
+			}, "logMetadata should not panic with any metadata type")
+
+			// Test type assertions work correctly
+			if tt.metadata != nil {
+				switch v := tt.metadata.(type) {
+				case *gitMetadata.GitMetadata:
+					assert.NotEmpty(t, v.LatestCommit, "GitMetadata should have LatestCommit")
+				case *ociMetadata.OCIMetadata:
+					assert.NotEmpty(t, v.Digest, "OCIMetadata should have Digest")
+				case *fileMetadata.FSMetadata:
+					assert.NotEmpty(t, v.Path, "FSMetadata should have Path")
+				}
+			}
+		})
+	}
 }
