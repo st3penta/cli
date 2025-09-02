@@ -153,11 +153,6 @@ func (r *RekorVSARetriever) FindByPayloadHash(ctx context.Context, payloadHashHe
 
 	log.Debugf("FindByPayloadHash: search returned %d entries", len(entries))
 
-	// Pair entries by payloadHash to ensure they actually correspond to the same content
-	dualPair := &DualEntryPair{
-		PayloadHash: payloadHashHex,
-	}
-
 	// Group entries by type and verify they share the same payloadHash
 	var intotoEntries []models.LogEntryAnon
 	var dsseEntries []models.LogEntryAnon
@@ -176,27 +171,29 @@ func (r *RekorVSARetriever) FindByPayloadHash(ctx context.Context, payloadHashHe
 
 	log.Debugf("Found %d in-toto entries and %d DSSE entries", len(intotoEntries), len(dsseEntries))
 
-	// Find the correct pair by verifying they share the same payloadHash
-	// This ensures the DSSE signatures correspond to the correct in-toto Statement
+	// First, find all valid pairs that actually share the same payloadHash
+	// This ensures we're selecting from entries that actually correspond to each other
+	var validPairs []DualEntryPair
 	for _, intotoEntry := range intotoEntries {
 		for _, dsseEntry := range dsseEntries {
 			// Verify both entries actually contain the same payloadHash
 			if r.entriesSharePayloadHash(intotoEntry, dsseEntry, payloadHashHex) {
-				dualPair.IntotoEntry = &intotoEntry
-				dualPair.DSSEEntry = &dsseEntry
-				log.Debugf("Found matching pair: intoto LogIndex=%d, DSSE LogIndex=%d",
+				validPairs = append(validPairs, DualEntryPair{
+					PayloadHash: payloadHashHex,
+					IntotoEntry: &intotoEntry,
+					DSSEEntry:   &dsseEntry,
+				})
+				log.Debugf("Found valid pair: intoto LogIndex=%d, DSSE LogIndex=%d",
 					*intotoEntry.LogIndex, *dsseEntry.LogIndex)
-				break
 			}
-		}
-		if dualPair.IntotoEntry != nil && dualPair.DSSEEntry != nil {
-			break
 		}
 	}
 
-	// If no matching pair found, try to find entries that might be incomplete
-	if dualPair.IntotoEntry == nil && dualPair.DSSEEntry == nil {
-		log.Debugf("No matching pair found for payload hash: %s", payloadHashHex)
+	log.Debugf("Found %d valid pairs that share the same payloadHash", len(validPairs))
+
+	// If no valid pairs found, handle the error cases
+	if len(validPairs) == 0 {
+		log.Debugf("No valid pairs found for payload hash: %s", payloadHashHex)
 
 		// Check if we have entries but they don't match (this indicates a problem)
 		if len(intotoEntries) > 0 && len(dsseEntries) > 0 {
@@ -208,32 +205,107 @@ func (r *RekorVSARetriever) FindByPayloadHash(ctx context.Context, payloadHashHe
 		// If we only have one type of entry, that's incomplete and indicates a problem
 		if len(intotoEntries) > 0 {
 			log.Warnf("Found only in-toto entry for payload hash: %s. This indicates an incomplete dual upload - DSSE entry is missing.", payloadHashHex)
-			return nil, fmt.Errorf("incomplete dual upload: found in-toto entry but no DSSE entry for payload hash: %s", payloadHashHex)
+			return nil, fmt.Errorf("incomplete dual upload: found in-toto entry but no DSSE entry for payload hash: %s. Both entries are required for signature verification.", payloadHashHex)
 		}
 		if len(dsseEntries) > 0 {
 			log.Warnf("Found only DSSE entry for payload hash: %s. This indicates an incomplete dual upload - in-toto entry is missing.", payloadHashHex)
-			return nil, fmt.Errorf("incomplete dual upload: found DSSE entry but no in-toto entry for payload hash: %s", payloadHashHex)
+			return nil, fmt.Errorf("incomplete dual upload: found DSSE entry but no in-toto entry for payload hash: %s. Both entries are required for signature verification.", payloadHashHex)
 		}
 
 		// If we still have no entries at all, return an error for backward compatibility
-		if dualPair.IntotoEntry == nil && dualPair.DSSEEntry == nil {
-			return nil, fmt.Errorf("no entries found for payload hash: %s", payloadHashHex)
+		return nil, fmt.Errorf("no entries found for payload hash: %s", payloadHashHex)
+	}
+
+	// Now select the latest pair from the valid pairs based on IntegratedTime
+	// This ensures we get the most recent data from entries that actually correspond to each other
+	latestPair := validPairs[0]
+	for _, pair := range validPairs[1:] {
+		if r.isPairNewer(pair, latestPair) {
+			latestPair = pair
 		}
 	}
 
-	// Log warnings for incomplete pairs to help with debugging
-	if dualPair.IntotoEntry == nil {
-		log.Warnf("Found DSSE entry but no in-toto entry for payload hash: %s. This may indicate an incomplete dual upload.", payloadHashHex)
-	}
-	if dualPair.DSSEEntry == nil {
-		log.Warnf("Found in-toto entry but no DSSE entry for payload hash: %s. This may indicate an incomplete dual upload.", payloadHashHex)
+	log.Debugf("Selected latest valid pair: intoto LogIndex=%d, DSSE LogIndex=%d",
+		*latestPair.IntotoEntry.LogIndex, *latestPair.DSSEEntry.LogIndex)
+
+	return &latestPair, nil
+}
+
+// isPairNewer determines if pair1 is newer than pair2 based on IntegratedTime
+// Returns true if pair1 is newer, false otherwise
+func (r *RekorVSARetriever) isPairNewer(pair1, pair2 DualEntryPair) bool {
+	time1 := r.getPairTimestamp(pair1)
+	time2 := r.getPairTimestamp(pair2)
+
+	// If both have timestamps, compare them
+	if time1 != nil && time2 != nil {
+		return *time1 > *time2
 	}
 
-	// Log detailed status information
-	status := r.GetDualEntryStatus(dualPair)
-	log.Debugf("Payload hash %s: %s", payloadHashHex, status)
+	// If only one has a timestamp, prefer the one with timestamp
+	if time1 != nil && time2 == nil {
+		return true
+	}
+	if time1 == nil && time2 != nil {
+		return false
+	}
 
-	return dualPair, nil
+	// If neither has a timestamp, prefer the first one (maintains original order)
+	return false
+}
+
+// getPairTimestamp returns the timestamp for a pair based on the earliest IntegratedTime
+// This ensures we're consistent about which timestamp represents the pair
+func (r *RekorVSARetriever) getPairTimestamp(pair DualEntryPair) *int64 {
+	var intotoTime, dsseTime *int64
+
+	if pair.IntotoEntry != nil && pair.IntotoEntry.IntegratedTime != nil {
+		intotoTime = pair.IntotoEntry.IntegratedTime
+	}
+	if pair.DSSEEntry != nil && pair.DSSEEntry.IntegratedTime != nil {
+		dsseTime = pair.DSSEEntry.IntegratedTime
+	}
+
+	// If both have timestamps, return the earlier one (more conservative)
+	if intotoTime != nil && dsseTime != nil {
+		if *intotoTime < *dsseTime {
+			return intotoTime
+		}
+		return dsseTime
+	}
+
+	// If only one has a timestamp, return that one
+	if intotoTime != nil {
+		return intotoTime
+	}
+	if dsseTime != nil {
+		return dsseTime
+	}
+
+	// Neither has a timestamp
+	return nil
+}
+
+// findLatestEntryByIntegratedTime finds the entry with the latest IntegratedTime
+// If multiple entries have the same time or no IntegratedTime, returns the first one
+func (r *RekorVSARetriever) findLatestEntryByIntegratedTime(entries []models.LogEntryAnon) *models.LogEntryAnon {
+	if len(entries) == 0 {
+		return nil
+	}
+
+	latest := entries[0]
+	for _, entry := range entries[1:] {
+		if entry.IntegratedTime != nil && latest.IntegratedTime != nil {
+			if *entry.IntegratedTime > *latest.IntegratedTime {
+				latest = entry
+			}
+		} else if entry.IntegratedTime != nil && latest.IntegratedTime == nil {
+			// Prefer entries with IntegratedTime over those without
+			latest = entry
+		}
+	}
+
+	return &latest
 }
 
 // GetDualEntryStatus provides a detailed status summary of the dual entry pair

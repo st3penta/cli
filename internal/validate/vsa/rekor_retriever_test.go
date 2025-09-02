@@ -123,6 +123,69 @@ func TestRekorVSARetriever_FindByPayloadHash_NoEntries(t *testing.T) {
 	assert.Contains(t, err.Error(), "no entries found for payload hash")
 }
 
+func TestRekorVSARetriever_FindByPayloadHash_MultipleEntries(t *testing.T) {
+	// Create a mock client with multiple entries for the same payload hash
+	// The test should select the latest entries based on IntegratedTime
+	mockClient := &MockRekorClient{
+		entries: []models.LogEntryAnon{
+			// Older in-toto entry
+			{
+				LogIndex:       &[]int64{123}[0],
+				LogID:          &[]string{"intoto-old"}[0],
+				IntegratedTime: int64Ptr(1234567890), // Older time
+				Body:           `{"intoto": "v0.0.1", "content": {"envelope": {"payload": "dGVzdA==", "signatures": [{"sig": "dGVzdA=="}]}}}`,
+				Attestation: &models.LogEntryAnonAttestation{
+					Data: strfmt.Base64("ZXlKd2NtVmthV05oZEdWVWVYQmxJam9pYUhSMGNITTZMeTlqYjI1bWIzSnRZUzVrWlhZdmRtVnlhV1pwWTJGMGFXOXVYM04xYlcxaGNua3ZkakVpTENKemRXSnFaV04wSWpwYmV5SnVZVzFsSWpvaWNYVmhlUzVwYnk5MFpYTjBMMmx0WVdkbElpd2laR2xuWlhOMElqcDdJbk5vWVRJMU5pSTZJbUZpWXpFeU15SjlmVjE5"),
+				},
+			},
+			// Newer in-toto entry
+			{
+				LogIndex:       &[]int64{125}[0],
+				LogID:          &[]string{"intoto-new"}[0],
+				IntegratedTime: int64Ptr(1234567892), // Newer time
+				Body:           `{"intoto": "v0.0.1", "content": {"envelope": {"payload": "dGVzdA==", "signatures": [{"sig": "dGVzdA=="}]}}}`,
+				Attestation: &models.LogEntryAnonAttestation{
+					Data: strfmt.Base64("ZXlKd2NtVmthV05oZEdWVWVYQmxJam9pYUhSMGNITTZMeTlqYjI1bWIzSnRZUzVrWlhZdmRtVnlhV1pwWTJGMGFXOXVYM04xYlcxaGNua3ZkakVpTENKemRXSnFaV04wSWpwYmV5SnVZVzFsSWpvaWNYVmhlUzVwYnk5MFpYTjBMMmx0WVdkbElpd2laR2xuWlhOMElqcDdJbk5vWVRJMU5pSTZJbUZpWXpFeU15SjlmVjE5"),
+				},
+			},
+			// Older DSSE entry
+			{
+				LogIndex:       &[]int64{124}[0],
+				LogID:          &[]string{"dsse-old"}[0],
+				IntegratedTime: int64Ptr(1234567891), // Older time
+				Body:           `{"dsse": "v0.0.1", "content": {"envelope": {"payload": "dGVzdA==", "signatures": [{"sig": "dGVzdA=="}]}}}`,
+			},
+			// Newer DSSE entry
+			{
+				LogIndex:       &[]int64{126}[0],
+				LogID:          &[]string{"dsse-new"}[0],
+				IntegratedTime: int64Ptr(1234567893), // Newest time
+				Body:           `{"dsse": "v0.0.1", "content": {"envelope": {"payload": "dGVzdA==", "signatures": [{"sig": "dGVzdA=="}]}}}`,
+			},
+		},
+	}
+
+	retriever := NewRekorVSARetrieverWithClient(mockClient, DefaultRetrievalOptions())
+
+	// Test successful retrieval - should select the latest entries
+	dualPair, err := retriever.FindByPayloadHash(context.Background(), "abcdef1234567890")
+	assert.NoError(t, err)
+	assert.NotNil(t, dualPair)
+	assert.Equal(t, "abcdef1234567890", dualPair.PayloadHash)
+	assert.NotNil(t, dualPair.IntotoEntry)
+	assert.NotNil(t, dualPair.DSSEEntry)
+
+	// Verify that the latest in-toto entry was selected (LogIndex 125, IntegratedTime 1234567892)
+	assert.Equal(t, int64(125), *dualPair.IntotoEntry.LogIndex)
+	assert.Equal(t, "intoto-new", *dualPair.IntotoEntry.LogID)
+	assert.Equal(t, int64(1234567892), *dualPair.IntotoEntry.IntegratedTime)
+
+	// Verify that the latest DSSE entry was selected (LogIndex 126, IntegratedTime 1234567893)
+	assert.Equal(t, int64(126), *dualPair.DSSEEntry.LogIndex)
+	assert.Equal(t, "dsse-new", *dualPair.DSSEEntry.LogID)
+	assert.Equal(t, int64(1234567893), *dualPair.DSSEEntry.IntegratedTime)
+}
+
 func TestRekorVSARetriever_ExtractStatementFromIntoto(t *testing.T) {
 	// Create a mock in-toto entry with DSSE envelope
 	dsseEnvelope := `{
@@ -375,4 +438,84 @@ func TestRekorVSARetriever_GetPairedVSAWithSignatures_IncompletePair(t *testing.
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "incomplete dual upload: found DSSE entry but no in-toto entry")
 	})
+}
+
+func TestRekorVSARetriever_FindLatestEntryByIntegratedTime(t *testing.T) {
+	retriever := &RekorVSARetriever{}
+
+	// Test with entries having different IntegratedTime values
+	entries := []models.LogEntryAnon{
+		{
+			LogIndex:       &[]int64{1}[0],
+			IntegratedTime: int64Ptr(1000),
+		},
+		{
+			LogIndex:       &[]int64{2}[0],
+			IntegratedTime: int64Ptr(2000), // Latest
+		},
+		{
+			LogIndex:       &[]int64{3}[0],
+			IntegratedTime: int64Ptr(1500),
+		},
+	}
+
+	latest := retriever.findLatestEntryByIntegratedTime(entries)
+	assert.NotNil(t, latest)
+	assert.Equal(t, int64(2), *latest.LogIndex)
+	assert.Equal(t, int64(2000), *latest.IntegratedTime)
+
+	// Test with entries having some nil IntegratedTime values
+	entriesWithNil := []models.LogEntryAnon{
+		{
+			LogIndex:       &[]int64{1}[0],
+			IntegratedTime: nil,
+		},
+		{
+			LogIndex:       &[]int64{2}[0],
+			IntegratedTime: int64Ptr(2000), // Latest
+		},
+		{
+			LogIndex:       &[]int64{3}[0],
+			IntegratedTime: int64Ptr(1500),
+		},
+	}
+
+	latestWithNil := retriever.findLatestEntryByIntegratedTime(entriesWithNil)
+	assert.NotNil(t, latestWithNil)
+	assert.Equal(t, int64(2), *latestWithNil.LogIndex)
+	assert.Equal(t, int64(2000), *latestWithNil.IntegratedTime)
+
+	// Test with all nil IntegratedTime values
+	entriesAllNil := []models.LogEntryAnon{
+		{
+			LogIndex:       &[]int64{1}[0],
+			IntegratedTime: nil,
+		},
+		{
+			LogIndex:       &[]int64{2}[0],
+			IntegratedTime: nil,
+		},
+	}
+
+	latestAllNil := retriever.findLatestEntryByIntegratedTime(entriesAllNil)
+	assert.NotNil(t, latestAllNil)
+	assert.Equal(t, int64(1), *latestAllNil.LogIndex) // Should return first entry
+
+	// Test with empty slice
+	emptyEntries := []models.LogEntryAnon{}
+	latestEmpty := retriever.findLatestEntryByIntegratedTime(emptyEntries)
+	assert.Nil(t, latestEmpty)
+
+	// Test with single entry
+	singleEntry := []models.LogEntryAnon{
+		{
+			LogIndex:       &[]int64{1}[0],
+			IntegratedTime: int64Ptr(1000),
+		},
+	}
+
+	latestSingle := retriever.findLatestEntryByIntegratedTime(singleEntry)
+	assert.NotNil(t, latestSingle)
+	assert.Equal(t, int64(1), *latestSingle.LogIndex)
+	assert.Equal(t, int64(1000), *latestSingle.IntegratedTime)
 }
