@@ -177,7 +177,7 @@ func (r *RekorVSARetriever) FindByPayloadHash(ctx context.Context, payloadHashHe
 	for _, intotoEntry := range intotoEntries {
 		for _, dsseEntry := range dsseEntries {
 			// Verify both entries actually contain the same payloadHash
-			if r.entriesSharePayloadHash(intotoEntry, dsseEntry, payloadHashHex) {
+			if r.entriesSharePayloadHash(intotoEntry, dsseEntry) {
 				validPairs = append(validPairs, DualEntryPair{
 					PayloadHash: payloadHashHex,
 					IntotoEntry: &intotoEntry,
@@ -363,6 +363,132 @@ func (r *RekorVSARetriever) searchForImageDigest(ctx context.Context, imageDiges
 	return entries, nil
 }
 
+// GetAllEntriesForImageDigest returns all entries for an image digest without VSA filtering
+func (r *RekorVSARetriever) GetAllEntriesForImageDigest(ctx context.Context, imageDigest string) ([]models.LogEntryAnon, error) {
+	return r.searchForImageDigest(ctx, imageDigest)
+}
+
+// FindLatestMatchingPair finds the latest pair where intoto has attestation and DSSE matches
+func (r *RekorVSARetriever) FindLatestMatchingPair(ctx context.Context, entries []models.LogEntryAnon) *DualEntryPair {
+	var latestPair *DualEntryPair
+	var latestTime int64
+
+	// Separate intoto and DSSE entries
+	var intotoEntries []models.LogEntryAnon
+	var dsseEntries []models.LogEntryAnon
+
+	for _, entry := range entries {
+		// Decode body to determine entry type
+		if body, err := r.decodeBodyJSON(entry); err == nil {
+			if kind, ok := body["kind"].(string); ok {
+				switch strings.ToLower(kind) {
+				case "intoto":
+					intotoEntries = append(intotoEntries, entry)
+				case "dsse":
+					dsseEntries = append(dsseEntries, entry)
+				}
+			}
+		}
+	}
+
+	log.Debugf("Found %d intoto entries and %d DSSE entries", len(intotoEntries), len(dsseEntries))
+
+	// Find matching pairs
+	for _, intotoEntry := range intotoEntries {
+		// Only consider intoto entries with attestations
+		if intotoEntry.Attestation == nil || intotoEntry.Attestation.Data == nil {
+			continue
+		}
+
+		// Extract the payload hash from the intoto entry body
+		intotoPayloadHash, err := r.extractIntotoPayloadHash(intotoEntry)
+		if err != nil {
+			log.Debugf("Failed to extract intoto payload hash: %v", err)
+			continue
+		}
+
+		// Find matching DSSE entry
+		for _, dsseEntry := range dsseEntries {
+			dssePayloadHash, err := r.extractDSSEPayloadHash(dsseEntry)
+			if err != nil {
+				continue
+			}
+
+			// Check if payload hashes match
+			if intotoPayloadHash == dssePayloadHash {
+				// Check if this pair is newer than our current latest
+				if intotoEntry.IntegratedTime != nil && *intotoEntry.IntegratedTime > latestTime {
+					latestTime = *intotoEntry.IntegratedTime
+					latestPair = &DualEntryPair{
+						PayloadHash: intotoPayloadHash,
+						IntotoEntry: &intotoEntry,
+						DSSEEntry:   &dsseEntry,
+					}
+				}
+			}
+		}
+	}
+
+	return latestPair
+}
+
+// decodeBodyJSON decodes the base64-encoded body of a Rekor entry
+func (r *RekorVSARetriever) decodeBodyJSON(entry models.LogEntryAnon) (map[string]any, error) {
+	bodyStr, ok := entry.Body.(string)
+	if !ok || bodyStr == "" {
+		return nil, fmt.Errorf("empty or non-string body")
+	}
+	raw, err := base64.StdEncoding.DecodeString(bodyStr)
+	if err != nil {
+		return nil, fmt.Errorf("rekor body base64 decode failed: %w", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, fmt.Errorf("rekor body json unmarshal failed: %w", err)
+	}
+	return m, nil
+}
+
+// extractIntotoPayloadHash extracts the payload hash from an intoto entry's body
+func (r *RekorVSARetriever) extractIntotoPayloadHash(entry models.LogEntryAnon) (string, error) {
+	body, err := r.decodeBodyJSON(entry)
+	if err != nil {
+		return "", err
+	}
+
+	// Look for spec.content.payloadHash.value structure (intoto entries)
+	if spec, ok := body["spec"].(map[string]any); ok {
+		if content, ok := spec["content"].(map[string]any); ok {
+			if payloadHash, ok := content["payloadHash"].(map[string]any); ok {
+				if value, ok := payloadHash["value"].(string); ok {
+					return value, nil
+				}
+			}
+		}
+	}
+
+	return "", fmt.Errorf("could not extract payload hash from intoto entry")
+}
+
+// extractDSSEPayloadHash extracts the payload hash from a DSSE entry
+func (r *RekorVSARetriever) extractDSSEPayloadHash(entry models.LogEntryAnon) (string, error) {
+	body, err := r.decodeBodyJSON(entry)
+	if err != nil {
+		return "", err
+	}
+
+	// Look for spec.payloadHash.value structure
+	if spec, ok := body["spec"].(map[string]any); ok {
+		if payloadHash, ok := spec["payloadHash"].(map[string]any); ok {
+			if value, ok := payloadHash["value"].(string); ok {
+				return value, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("could not extract payload hash from DSSE entry")
+}
+
 // searchForPayloadHash searches Rekor for entries containing the given payload hash
 func (r *RekorVSARetriever) searchForPayloadHash(ctx context.Context, payloadHashHex string) ([]models.LogEntryAnon, error) {
 	log.Debugf("searchForPayloadHash called with payloadHashHex: %s", payloadHashHex)
@@ -480,56 +606,56 @@ func (r *RekorVSARetriever) parseVSARecord(entry models.LogEntryAnon) (VSARecord
 	return record, nil
 }
 
+// decodeBodyJSON decodes the base64-encoded body of a Rekor entry and unmarshals it as JSON
+func decodeBodyJSON(entry models.LogEntryAnon) (map[string]any, error) {
+	bodyStr, ok := entry.Body.(string)
+	if !ok || bodyStr == "" {
+		return nil, fmt.Errorf("empty or non-string body")
+	}
+	raw, err := base64.StdEncoding.DecodeString(bodyStr)
+	if err != nil {
+		return nil, fmt.Errorf("rekor body base64 decode failed: %w", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, fmt.Errorf("rekor body json unmarshal failed: %w", err)
+	}
+	return m, nil
+}
+
 // classifyEntryKind determines the kind of a Rekor entry (intoto, dsse, etc.)
 func (r *RekorVSARetriever) classifyEntryKind(entry models.LogEntryAnon) string {
-	// Check for explicit type indicators in the entry body
-	if entry.Body != nil {
-		if bodyStr, ok := entry.Body.(string); ok {
-			// Parse JSON body to look for explicit type field
-			var body map[string]interface{}
-			if err := json.Unmarshal([]byte(bodyStr), &body); err == nil {
-				if entryType, exists := body["type"]; exists {
-					if typeStr, ok := entryType.(string); ok {
-						switch typeStr {
-						case "intoto":
-							return "intoto"
-						case "dsse":
-							return "dsse"
-						}
-					}
-				}
-
-				// Check for version fields that indicate entry type
-				if intotoVer, exists := body["intoto"]; exists && intotoVer != nil {
-					return "intoto"
-				}
-				if dsseVer, exists := body["dsse"]; exists && dsseVer != nil {
-					return "dsse"
-				}
-			}
-
-			// Fallback to string pattern matching for backward compatibility
-			if strings.Contains(bodyStr, `"intoto"`) {
+	// Prefer Body structure from the decoded Rekor body
+	body, err := decodeBodyJSON(entry)
+	if err == nil {
+		// Check for the top-level "kind" field which indicates the entry type
+		if kind, ok := body["kind"].(string); ok {
+			switch strings.ToLower(kind) {
+			case "intoto":
 				return "intoto"
-			}
-			if strings.Contains(bodyStr, `"dsse"`) {
+			case "dsse":
 				return "dsse"
 			}
 		}
+
+		// Fallback: check for top-level entry type indicators (legacy format)
+		if _, hasIntoto := body["intoto"]; hasIntoto {
+			return "intoto"
+		}
+		if _, hasDsse := body["dsse"]; hasDsse {
+			return "dsse"
+		}
 	}
 
-	// Check attestation data for VSA predicate type (indicates in-toto entry)
+	// Fallback (only if Body missing/unreadable): look at Attestation for VSA predicate (intoto hint)
 	if entry.Attestation != nil && entry.Attestation.Data != nil {
-		attestationData, err := base64.StdEncoding.DecodeString(string(entry.Attestation.Data))
-		if err == nil {
-			attestationStr := string(attestationData)
-			if strings.Contains(attestationStr, "https://conforma.dev/verification_summary/v1") {
+		if attBytes, err := base64.StdEncoding.DecodeString(string(entry.Attestation.Data)); err == nil {
+			if strings.Contains(string(attBytes), "https://conforma.dev/verification_summary/v1") {
 				return "intoto"
 			}
 		}
 	}
 
-	// Default to unknown if we can't determine the type
 	return "unknown"
 }
 
@@ -594,21 +720,18 @@ func (r *RekorVSARetriever) extractDSSEEnvelopeFromEntry(entry *models.LogEntryA
 
 	// Try to extract from body field
 	if entry.Body != nil {
-		if bodyStr, ok := entry.Body.(string); ok {
-			// Try to parse as JSON
-			var body map[string]interface{}
-			if err := json.Unmarshal([]byte(bodyStr), &body); err == nil {
-				// Look for content.envelope structure
-				if content, ok := body["content"].(map[string]interface{}); ok {
-					if envelope, ok := content["envelope"].(map[string]interface{}); ok {
-						// If it has payload and signatures, it's a DSSE envelope
-						if _, hasPayload := envelope["payload"]; hasPayload {
-							if _, hasSignatures := envelope["signatures"]; hasSignatures {
-								// Return the envelope as JSON
-								envelopeBytes, err := json.Marshal(envelope)
-								if err == nil {
-									return envelopeBytes, nil
-								}
+		body, err := decodeBodyJSON(*entry)
+		if err == nil {
+			// Look for content.envelope structure
+			if content, ok := body["content"].(map[string]interface{}); ok {
+				if envelope, ok := content["envelope"].(map[string]interface{}); ok {
+					// If it has payload and signatures, it's a DSSE envelope
+					if _, hasPayload := envelope["payload"]; hasPayload {
+						if _, hasSignatures := envelope["signatures"]; hasSignatures {
+							// Return the envelope as JSON
+							envelopeBytes, err := json.Marshal(envelope)
+							if err == nil {
+								return envelopeBytes, nil
 							}
 						}
 					}
@@ -648,7 +771,7 @@ func (r *RekorVSARetriever) extractSignaturesAndPublicKey(entry models.LogEntryA
 }
 
 // entriesSharePayloadHash checks if two Rekor entries share the same payloadHash
-func (r *RekorVSARetriever) entriesSharePayloadHash(intotoEntry, dsseEntry models.LogEntryAnon, payloadHashHex string) bool {
+func (r *RekorVSARetriever) entriesSharePayloadHash(intotoEntry, dsseEntry models.LogEntryAnon) bool {
 	// Extract payload hashes from both entries
 	intotoPayloadHash, err := r.extractPayloadHash(intotoEntry)
 	if err != nil {
@@ -690,21 +813,38 @@ func (r *RekorVSARetriever) extractPayloadHash(entry models.LogEntryAnon) (strin
 
 	// Try to extract from body field
 	if entry.Body != nil {
-		if bodyStr, ok := entry.Body.(string); ok {
-			// Try to parse as JSON
-			var body map[string]interface{}
-			if err := json.Unmarshal([]byte(bodyStr), &body); err == nil {
-				// Look for content.envelope.payload structure
-				if content, ok := body["content"].(map[string]interface{}); ok {
-					if envelope, ok := content["envelope"].(map[string]interface{}); ok {
-						if payload, ok := envelope["payload"].(string); ok {
-							// Decode the base64 payload to get the actual content
-							payloadBytes, err := base64.StdEncoding.DecodeString(payload)
-							if err == nil {
-								// Calculate SHA256 hash of the decoded payload
-								hash := sha256.Sum256(payloadBytes)
-								return fmt.Sprintf("%x", hash[:]), nil
-							}
+		body, err := decodeBodyJSON(entry)
+		if err == nil {
+			// Look for spec.content.payloadHash.value structure (intoto entries)
+			if spec, ok := body["spec"].(map[string]interface{}); ok {
+				if content, ok := spec["content"].(map[string]interface{}); ok {
+					if payloadHash, ok := content["payloadHash"].(map[string]interface{}); ok {
+						if value, ok := payloadHash["value"].(string); ok {
+							return value, nil
+						}
+					}
+				}
+			}
+
+			// Fallback: Look for spec.payloadHash.value structure (DSSE entries)
+			if spec, ok := body["spec"].(map[string]interface{}); ok {
+				if payloadHash, ok := spec["payloadHash"].(map[string]interface{}); ok {
+					if value, ok := payloadHash["value"].(string); ok {
+						return value, nil
+					}
+				}
+			}
+
+			// Legacy fallback: Look for content.envelope.payload structure
+			if content, ok := body["content"].(map[string]interface{}); ok {
+				if envelope, ok := content["envelope"].(map[string]interface{}); ok {
+					if payload, ok := envelope["payload"].(string); ok {
+						// Decode the base64 payload to get the actual content
+						payloadBytes, err := base64.StdEncoding.DecodeString(payload)
+						if err == nil {
+							// Calculate SHA256 hash of the decoded payload
+							hash := sha256.Sum256(payloadBytes)
+							return fmt.Sprintf("%x", hash[:]), nil
 						}
 					}
 				}

@@ -63,12 +63,15 @@ func (m *MockRekorClient) GetLogEntryByUUID(ctx context.Context, uuid string) (*
 
 func TestRekorVSARetriever_FindByPayloadHash(t *testing.T) {
 	// Create a mock client with dual entries
+	// The payload "dGVzdA==" decodes to "test" and has SHA256 hash "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+	expectedPayloadHash := "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+
 	mockClient := &MockRekorClient{
 		entries: []models.LogEntryAnon{
 			{
 				LogIndex: &[]int64{123}[0],
 				LogID:    &[]string{"intoto-uuid"}[0],
-				Body:     `{"intoto": "v0.0.1", "content": {"envelope": {"payload": "dGVzdA==", "signatures": [{"sig": "dGVzdA=="}]}}}`,
+				Body:     base64.StdEncoding.EncodeToString([]byte(`{"intoto": "v0.0.1", "content": {"envelope": {"payload": "dGVzdA==", "signatures": [{"sig": "dGVzdA=="}]}}}`)),
 				Attestation: &models.LogEntryAnonAttestation{
 					Data: strfmt.Base64("ZXlKd2NtVmthV05oZEdWVWVYQmxJam9pYUhSMGNITTZMeTlqYjI1bWIzSnRZUzVrWlhZdmRtVnlhV1pwWTJGMGFXOXVYM04xYlcxaGNua3ZkakVpTENKemRXSnFaV04wSWpwYmV5SnVZVzFsSWpvaWNYVmhlUzVwYnk5MFpYTjBMMmx0WVdkbElpd2laR2xuWlhOMElqcDdJbk5vWVRJMU5pSTZJbUZpWXpFeU15SjlmVjE5"),
 				},
@@ -76,7 +79,7 @@ func TestRekorVSARetriever_FindByPayloadHash(t *testing.T) {
 			{
 				LogIndex: &[]int64{124}[0],
 				LogID:    &[]string{"dsse-uuid"}[0],
-				Body:     `{"dsse": "v0.0.1", "content": {"envelope": {"payload": "dGVzdA==", "signatures": [{"sig": "dGVzdA=="}]}}}`,
+				Body:     base64.StdEncoding.EncodeToString([]byte(`{"dsse": "v0.0.1", "content": {"envelope": {"payload": "dGVzdA==", "signatures": [{"sig": "dGVzdA=="}]}}}`)),
 			},
 		},
 	}
@@ -84,10 +87,10 @@ func TestRekorVSARetriever_FindByPayloadHash(t *testing.T) {
 	retriever := NewRekorVSARetrieverWithClient(mockClient, DefaultRetrievalOptions())
 
 	// Test successful retrieval
-	dualPair, err := retriever.FindByPayloadHash(context.Background(), "abcdef1234567890")
+	dualPair, err := retriever.FindByPayloadHash(context.Background(), expectedPayloadHash)
 	assert.NoError(t, err)
 	assert.NotNil(t, dualPair)
-	assert.Equal(t, "abcdef1234567890", dualPair.PayloadHash)
+	assert.Equal(t, expectedPayloadHash, dualPair.PayloadHash)
 	assert.NotNil(t, dualPair.IntotoEntry)
 	assert.NotNil(t, dualPair.DSSEEntry)
 	assert.Equal(t, int64(123), *dualPair.IntotoEntry.LogIndex)
@@ -126,6 +129,9 @@ func TestRekorVSARetriever_FindByPayloadHash_NoEntries(t *testing.T) {
 func TestRekorVSARetriever_FindByPayloadHash_MultipleEntries(t *testing.T) {
 	// Create a mock client with multiple entries for the same payload hash
 	// The test should select the latest entries based on IntegratedTime
+	// The payload "dGVzdA==" decodes to "test" and has SHA256 hash "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+	expectedPayloadHash := "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+
 	mockClient := &MockRekorClient{
 		entries: []models.LogEntryAnon{
 			// Older in-toto entry
@@ -133,7 +139,7 @@ func TestRekorVSARetriever_FindByPayloadHash_MultipleEntries(t *testing.T) {
 				LogIndex:       &[]int64{123}[0],
 				LogID:          &[]string{"intoto-old"}[0],
 				IntegratedTime: int64Ptr(1234567890), // Older time
-				Body:           `{"intoto": "v0.0.1", "content": {"envelope": {"payload": "dGVzdA==", "signatures": [{"sig": "dGVzdA=="}]}}}`,
+				Body:           base64.StdEncoding.EncodeToString([]byte(`{"intoto": "v0.0.1", "content": {"envelope": {"payload": "dGVzdA==", "signatures": [{"sig": "dGVzdA=="}]}}}`)),
 				Attestation: &models.LogEntryAnonAttestation{
 					Data: strfmt.Base64("ZXlKd2NtVmthV05oZEdWVWVYQmxJam9pYUhSMGNITTZMeTlqYjI1bWIzSnRZUzVrWlhZdmRtVnlhV1pwWTJGMGFXOXVYM04xYlcxaGNua3ZkakVpTENKemRXSnFaV04wSWpwYmV5SnVZVzFsSWpvaWNYVmhlUzVwYnk5MFpYTjBMMmx0WVdkbElpd2laR2xuWlhOMElqcDdJbk5vWVRJMU5pSTZJbUZpWXpFeU15SjlmVjE5"),
 				},
@@ -143,7 +149,7 @@ func TestRekorVSARetriever_FindByPayloadHash_MultipleEntries(t *testing.T) {
 				LogIndex:       &[]int64{125}[0],
 				LogID:          &[]string{"intoto-new"}[0],
 				IntegratedTime: int64Ptr(1234567892), // Newer time
-				Body:           `{"intoto": "v0.0.1", "content": {"envelope": {"payload": "dGVzdA==", "signatures": [{"sig": "dGVzdA=="}]}}}`,
+				Body:           base64.StdEncoding.EncodeToString([]byte(`{"intoto": "v0.0.1", "content": {"envelope": {"payload": "dGVzdA==", "signatures": [{"sig": "dGVzdA=="}]}}}`)),
 				Attestation: &models.LogEntryAnonAttestation{
 					Data: strfmt.Base64("ZXlKd2NtVmthV05oZEdWVWVYQmxJam9pYUhSMGNITTZMeTlqYjI1bWIzSnRZUzVrWlhZdmRtVnlhV1pwWTJGMGFXOXVYM04xYlcxaGNua3ZkakVpTENKemRXSnFaV04wSWpwYmV5SnVZVzFsSWpvaWNYVmhlUzVwYnk5MFpYTjBMMmx0WVdkbElpd2laR2xuWlhOMElqcDdJbk5vWVRJMU5pSTZJbUZpWXpFeU15SjlmVjE5"),
 				},
@@ -153,14 +159,14 @@ func TestRekorVSARetriever_FindByPayloadHash_MultipleEntries(t *testing.T) {
 				LogIndex:       &[]int64{124}[0],
 				LogID:          &[]string{"dsse-old"}[0],
 				IntegratedTime: int64Ptr(1234567891), // Older time
-				Body:           `{"dsse": "v0.0.1", "content": {"envelope": {"payload": "dGVzdA==", "signatures": [{"sig": "dGVzdA=="}]}}}`,
+				Body:           base64.StdEncoding.EncodeToString([]byte(`{"dsse": "v0.0.1", "content": {"envelope": {"payload": "dGVzdA==", "signatures": [{"sig": "dGVzdA=="}]}}}`)),
 			},
 			// Newer DSSE entry
 			{
 				LogIndex:       &[]int64{126}[0],
 				LogID:          &[]string{"dsse-new"}[0],
 				IntegratedTime: int64Ptr(1234567893), // Newest time
-				Body:           `{"dsse": "v0.0.1", "content": {"envelope": {"payload": "dGVzdA==", "signatures": [{"sig": "dGVzdA=="}]}}}`,
+				Body:           base64.StdEncoding.EncodeToString([]byte(`{"dsse": "v0.0.1", "content": {"envelope": {"payload": "dGVzdA==", "signatures": [{"sig": "dGVzdA=="}]}}}`)),
 			},
 		},
 	}
@@ -168,10 +174,10 @@ func TestRekorVSARetriever_FindByPayloadHash_MultipleEntries(t *testing.T) {
 	retriever := NewRekorVSARetrieverWithClient(mockClient, DefaultRetrievalOptions())
 
 	// Test successful retrieval - should select the latest entries
-	dualPair, err := retriever.FindByPayloadHash(context.Background(), "abcdef1234567890")
+	dualPair, err := retriever.FindByPayloadHash(context.Background(), expectedPayloadHash)
 	assert.NoError(t, err)
 	assert.NotNil(t, dualPair)
-	assert.Equal(t, "abcdef1234567890", dualPair.PayloadHash)
+	assert.Equal(t, expectedPayloadHash, dualPair.PayloadHash)
 	assert.NotNil(t, dualPair.IntotoEntry)
 	assert.NotNil(t, dualPair.DSSEEntry)
 
@@ -196,7 +202,7 @@ func TestRekorVSARetriever_ExtractStatementFromIntoto(t *testing.T) {
 	entry := models.LogEntryAnon{
 		LogIndex: &[]int64{123}[0],
 		LogID:    &[]string{"intoto-uuid"}[0],
-		Body:     fmt.Sprintf(`{"intoto": "v0.0.1", "content": {"envelope": %s}}`, dsseEnvelope),
+		Body:     base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"intoto": "v0.0.1", "content": {"envelope": %s}}`, dsseEnvelope))),
 		Attestation: &models.LogEntryAnonAttestation{
 			Data: strfmt.Base64(base64.StdEncoding.EncodeToString([]byte(dsseEnvelope))),
 		},
@@ -231,7 +237,7 @@ func TestRekorVSARetriever_ExtractStatementFromIntoto_NotIntotoEntry(t *testing.
 	entry := models.LogEntryAnon{
 		LogIndex: &[]int64{123}[0],
 		LogID:    &[]string{"dsse-uuid"}[0],
-		Body:     `{"dsse": "v0.0.1"}`,
+		Body:     base64.StdEncoding.EncodeToString([]byte(`{"dsse": "v0.0.1"}`)),
 	}
 
 	mockClient := &MockRekorClient{entries: []models.LogEntryAnon{entry}}
@@ -254,14 +260,14 @@ func TestRekorVSARetriever_ClassifyEntryKind(t *testing.T) {
 		{
 			name: "intoto entry by body",
 			entry: models.LogEntryAnon{
-				Body: `{"intoto": "v0.0.1"}`,
+				Body: base64.StdEncoding.EncodeToString([]byte(`{"intoto": "v0.0.1"}`)),
 			},
 			expected: "intoto",
 		},
 		{
 			name: "dsse entry by body",
 			entry: models.LogEntryAnon{
-				Body: `{"dsse": "v0.0.1"}`,
+				Body: base64.StdEncoding.EncodeToString([]byte(`{"dsse": "v0.0.1"}`)),
 			},
 			expected: "dsse",
 		},
@@ -277,7 +283,7 @@ func TestRekorVSARetriever_ClassifyEntryKind(t *testing.T) {
 		{
 			name: "unknown entry",
 			entry: models.LogEntryAnon{
-				Body: `{"unknown": "type"}`,
+				Body: base64.StdEncoding.EncodeToString([]byte(`{"unknown": "type"}`)),
 			},
 			expected: "unknown",
 		},
@@ -325,7 +331,7 @@ func TestRekorVSARetriever_GetPairedVSAWithSignatures(t *testing.T) {
 	intotoEntry := models.LogEntryAnon{
 		LogIndex: &[]int64{123}[0],
 		LogID:    &[]string{"intoto-uuid"}[0],
-		Body:     fmt.Sprintf(`{"intoto": "v0.0.1", "content": {"envelope": %s}}`, dsseEnvelope),
+		Body:     base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"intoto": "v0.0.1", "content": {"envelope": %s}}`, dsseEnvelope))),
 		Attestation: &models.LogEntryAnonAttestation{
 			Data: strfmt.Base64(base64.StdEncoding.EncodeToString([]byte(dsseEnvelope))),
 		},
@@ -334,7 +340,7 @@ func TestRekorVSARetriever_GetPairedVSAWithSignatures(t *testing.T) {
 	dsseEntry := models.LogEntryAnon{
 		LogIndex: &[]int64{124}[0],
 		LogID:    &[]string{"dsse-uuid"}[0],
-		Body:     fmt.Sprintf(`{"dsse": "v0.0.1", "content": {"envelope": %s}}`, dsseEnvelope),
+		Body:     base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"dsse": "v0.0.1", "content": {"envelope": %s}}`, dsseEnvelope))),
 		Attestation: &models.LogEntryAnonAttestation{
 			Data: strfmt.Base64(base64.StdEncoding.EncodeToString([]byte(dsseEnvelope))),
 		},
@@ -387,7 +393,7 @@ func TestRekorVSARetriever_GetPairedVSAWithSignatures_IncompletePair(t *testing.
 		intotoEntry := models.LogEntryAnon{
 			LogIndex: &[]int64{123}[0],
 			LogID:    &[]string{"intoto-uuid"}[0],
-			Body:     fmt.Sprintf(`{"intoto": "v0.0.1", "content": {"envelope": %s}}`, dsseEnvelope),
+			Body:     base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"intoto": "v0.0.1", "content": {"envelope": %s}}`, dsseEnvelope))),
 			Attestation: &models.LogEntryAnonAttestation{
 				Data: strfmt.Base64(base64.StdEncoding.EncodeToString([]byte(dsseEnvelope))),
 			},
@@ -418,7 +424,7 @@ func TestRekorVSARetriever_GetPairedVSAWithSignatures_IncompletePair(t *testing.
 		dsseEntry := models.LogEntryAnon{
 			LogIndex: &[]int64{124}[0],
 			LogID:    &[]string{"dsse-uuid"}[0],
-			Body:     fmt.Sprintf(`{"dsse": "v0.0.1", "content": {"envelope": %s}}`, dsseEnvelope),
+			Body:     base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"dsse": "v0.0.1", "content": {"envelope": %s}}`, dsseEnvelope))),
 			Attestation: &models.LogEntryAnonAttestation{
 				Data: strfmt.Base64(base64.StdEncoding.EncodeToString([]byte(dsseEnvelope))),
 			},

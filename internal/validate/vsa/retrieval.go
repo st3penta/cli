@@ -32,6 +32,8 @@ type VSARetriever interface {
 	// GetPairedVSAWithSignatures retrieves a VSA with its corresponding signatures by payloadHash
 	// This ensures the signatures actually correspond to the VSA Statement being evaluated
 	GetPairedVSAWithSignatures(ctx context.Context, payloadHashHex string) (*PairedVSAWithSignatures, error)
+	// FindLatestMatchingPair finds the latest pair where intoto has attestation and DSSE matches
+	FindLatestMatchingPair(ctx context.Context, entries []models.LogEntryAnon) *DualEntryPair
 }
 
 // VSARecord represents a VSA record retrieved from Rekor
