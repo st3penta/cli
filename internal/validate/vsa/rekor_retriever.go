@@ -308,38 +308,6 @@ func (r *RekorVSARetriever) findLatestEntryByIntegratedTime(entries []models.Log
 	return &latest
 }
 
-// GetDualEntryStatus provides a detailed status summary of the dual entry pair
-func (r *RekorVSARetriever) GetDualEntryStatus(dualPair *DualEntryPair) string {
-	if dualPair == nil {
-		return "no dual entries found"
-	}
-
-	var status strings.Builder
-	status.WriteString("dual entry status: ")
-
-	if dualPair.IntotoEntry != nil && dualPair.DSSEEntry != nil {
-		status.WriteString("complete pair found")
-		if dualPair.IntotoEntry.LogIndex != nil && dualPair.DSSEEntry.LogIndex != nil {
-			status.WriteString(fmt.Sprintf(" (intoto: %d, dsse: %d)",
-				*dualPair.IntotoEntry.LogIndex, *dualPair.DSSEEntry.LogIndex))
-		}
-	} else if dualPair.IntotoEntry != nil {
-		status.WriteString("incomplete - only in-toto entry found")
-		if dualPair.IntotoEntry.LogIndex != nil {
-			status.WriteString(fmt.Sprintf(" (index: %d)", *dualPair.IntotoEntry.LogIndex))
-		}
-	} else if dualPair.DSSEEntry != nil {
-		status.WriteString("incomplete - only DSSE entry found")
-		if dualPair.DSSEEntry.LogIndex != nil {
-			status.WriteString(fmt.Sprintf(" (index: %d)", *dualPair.DSSEEntry.LogIndex))
-		}
-	} else {
-		status.WriteString("no entries found")
-	}
-
-	return status.String()
-}
-
 // searchForImageDigest searches Rekor for entries containing the given image digest
 func (r *RekorVSARetriever) searchForImageDigest(ctx context.Context, imageDigest string) ([]models.LogEntryAnon, error) {
 	log.Debugf("searchForImageDigest called with imageDigest: %s", imageDigest)
@@ -378,16 +346,12 @@ func (r *RekorVSARetriever) FindLatestMatchingPair(ctx context.Context, entries 
 	var dsseEntries []models.LogEntryAnon
 
 	for _, entry := range entries {
-		// Decode body to determine entry type
-		if body, err := r.decodeBodyJSON(entry); err == nil {
-			if kind, ok := body["kind"].(string); ok {
-				switch strings.ToLower(kind) {
-				case "intoto":
-					intotoEntries = append(intotoEntries, entry)
-				case "dsse":
-					dsseEntries = append(dsseEntries, entry)
-				}
-			}
+		entryKind := r.classifyEntryKind(entry)
+		switch entryKind {
+		case "intoto":
+			intotoEntries = append(intotoEntries, entry)
+		case "dsse":
+			dsseEntries = append(dsseEntries, entry)
 		}
 	}
 
@@ -416,14 +380,18 @@ func (r *RekorVSARetriever) FindLatestMatchingPair(ctx context.Context, entries 
 
 			// Check if payload hashes match
 			if intotoPayloadHash == dssePayloadHash {
-				// Check if this pair is newer than our current latest
-				if intotoEntry.IntegratedTime != nil && *intotoEntry.IntegratedTime > latestTime {
-					latestTime = *intotoEntry.IntegratedTime
-					latestPair = &DualEntryPair{
-						PayloadHash: intotoPayloadHash,
-						IntotoEntry: &intotoEntry,
-						DSSEEntry:   &dsseEntry,
-					}
+				// Create a temporary pair to get its timestamp
+				tempPair := &DualEntryPair{
+					PayloadHash: intotoPayloadHash,
+					IntotoEntry: &intotoEntry,
+					DSSEEntry:   &dsseEntry,
+				}
+
+				// Get the pair timestamp (earliest of intoto and DSSE times)
+				pairTime := r.getPairTimestamp(*tempPair)
+				if pairTime != nil && *pairTime > latestTime {
+					latestTime = *pairTime
+					latestPair = tempPair
 				}
 			}
 		}
@@ -606,27 +574,10 @@ func (r *RekorVSARetriever) parseVSARecord(entry models.LogEntryAnon) (VSARecord
 	return record, nil
 }
 
-// decodeBodyJSON decodes the base64-encoded body of a Rekor entry and unmarshals it as JSON
-func decodeBodyJSON(entry models.LogEntryAnon) (map[string]any, error) {
-	bodyStr, ok := entry.Body.(string)
-	if !ok || bodyStr == "" {
-		return nil, fmt.Errorf("empty or non-string body")
-	}
-	raw, err := base64.StdEncoding.DecodeString(bodyStr)
-	if err != nil {
-		return nil, fmt.Errorf("rekor body base64 decode failed: %w", err)
-	}
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return nil, fmt.Errorf("rekor body json unmarshal failed: %w", err)
-	}
-	return m, nil
-}
-
 // classifyEntryKind determines the kind of a Rekor entry (intoto, dsse, etc.)
 func (r *RekorVSARetriever) classifyEntryKind(entry models.LogEntryAnon) string {
 	// Prefer Body structure from the decoded Rekor body
-	body, err := decodeBodyJSON(entry)
+	body, err := r.decodeBodyJSON(entry)
 	if err == nil {
 		// Check for the top-level "kind" field which indicates the entry type
 		if kind, ok := body["kind"].(string); ok {
@@ -701,6 +652,9 @@ func (r *RekorVSARetriever) ExtractStatementFromIntoto(entry *models.LogEntryAno
 
 // extractDSSEEnvelopeFromEntry extracts the DSSE envelope from a Rekor entry
 func (r *RekorVSARetriever) extractDSSEEnvelopeFromEntry(entry *models.LogEntryAnon) ([]byte, error) {
+	// Determine entry type first
+	entryKind := r.classifyEntryKind(*entry)
+
 	// Try to extract from attestation data first
 	if entry.Attestation != nil && entry.Attestation.Data != nil {
 		attestationData, err := base64.StdEncoding.DecodeString(string(entry.Attestation.Data))
@@ -708,8 +662,12 @@ func (r *RekorVSARetriever) extractDSSEEnvelopeFromEntry(entry *models.LogEntryA
 			// Check if this contains a DSSE envelope
 			var attestation map[string]interface{}
 			if err := json.Unmarshal(attestationData, &attestation); err == nil {
-				// If it has payload and signatures, it's likely a DSSE envelope
 				if _, hasPayload := attestation["payload"]; hasPayload {
+					// For intoto entries, payload is sufficient (signatures not required)
+					if entryKind == "intoto" {
+						return attestationData, nil
+					}
+					// For DSSE entries, require both payload and signatures
 					if _, hasSignatures := attestation["signatures"]; hasSignatures {
 						return attestationData, nil
 					}
@@ -720,13 +678,21 @@ func (r *RekorVSARetriever) extractDSSEEnvelopeFromEntry(entry *models.LogEntryA
 
 	// Try to extract from body field
 	if entry.Body != nil {
-		body, err := decodeBodyJSON(*entry)
+		body, err := r.decodeBodyJSON(*entry)
 		if err == nil {
 			// Look for content.envelope structure
 			if content, ok := body["content"].(map[string]interface{}); ok {
 				if envelope, ok := content["envelope"].(map[string]interface{}); ok {
-					// If it has payload and signatures, it's a DSSE envelope
 					if _, hasPayload := envelope["payload"]; hasPayload {
+						// For intoto entries, payload is sufficient (signatures not required)
+						if entryKind == "intoto" {
+							// Return the envelope as JSON
+							envelopeBytes, err := json.Marshal(envelope)
+							if err == nil {
+								return envelopeBytes, nil
+							}
+						}
+						// For DSSE entries, require both payload and signatures
 						if _, hasSignatures := envelope["signatures"]; hasSignatures {
 							// Return the envelope as JSON
 							envelopeBytes, err := json.Marshal(envelope)
@@ -790,30 +756,9 @@ func (r *RekorVSARetriever) entriesSharePayloadHash(intotoEntry, dsseEntry model
 
 // extractPayloadHash extracts the payload hash from a Rekor entry's body or attestation data
 func (r *RekorVSARetriever) extractPayloadHash(entry models.LogEntryAnon) (string, error) {
-	// Try to extract from attestation data first
-	if entry.Attestation != nil && entry.Attestation.Data != nil {
-		attestationData, err := base64.StdEncoding.DecodeString(string(entry.Attestation.Data))
-		if err == nil {
-			// Check if this contains a DSSE envelope
-			var attestation map[string]interface{}
-			if err := json.Unmarshal(attestationData, &attestation); err == nil {
-				// If it has payload and signatures, it's likely a DSSE envelope
-				if payload, ok := attestation["payload"].(string); ok {
-					// Decode the base64 payload to get the actual content
-					payloadBytes, err := base64.StdEncoding.DecodeString(payload)
-					if err == nil {
-						// Calculate SHA256 hash of the decoded payload
-						hash := sha256.Sum256(payloadBytes)
-						return fmt.Sprintf("%x", hash[:]), nil
-					}
-				}
-			}
-		}
-	}
-
-	// Try to extract from body field
+	// Try to extract from body field first (modern schema)
 	if entry.Body != nil {
-		body, err := decodeBodyJSON(entry)
+		body, err := r.decodeBodyJSON(entry)
 		if err == nil {
 			// Look for spec.content.payloadHash.value structure (intoto entries)
 			if spec, ok := body["spec"].(map[string]interface{}); ok {
@@ -826,7 +771,7 @@ func (r *RekorVSARetriever) extractPayloadHash(entry models.LogEntryAnon) (strin
 				}
 			}
 
-			// Fallback: Look for spec.payloadHash.value structure (DSSE entries)
+			// Look for spec.payloadHash.value structure (DSSE entries)
 			if spec, ok := body["spec"].(map[string]interface{}); ok {
 				if payloadHash, ok := spec["payloadHash"].(map[string]interface{}); ok {
 					if value, ok := payloadHash["value"].(string); ok {
@@ -834,8 +779,28 @@ func (r *RekorVSARetriever) extractPayloadHash(entry models.LogEntryAnon) (strin
 					}
 				}
 			}
+		}
+	}
 
-			// Legacy fallback: Look for content.envelope.payload structure
+	// Try to extract from attestation data (only if it contains a direct hash)
+	if entry.Attestation != nil && entry.Attestation.Data != nil {
+		attestationData, err := base64.StdEncoding.DecodeString(string(entry.Attestation.Data))
+		if err == nil {
+			// Check if this contains a DSSE envelope with a direct payloadHash
+			var attestation map[string]interface{}
+			if err := json.Unmarshal(attestationData, &attestation); err == nil {
+				// Look for direct payloadHash in attestation (if available)
+				if payloadHash, ok := attestation["payloadHash"].(string); ok {
+					return payloadHash, nil
+				}
+			}
+		}
+	}
+
+	// Legacy fallback: Look for content.envelope.payload structure (only if absolutely necessary)
+	if entry.Body != nil {
+		body, err := r.decodeBodyJSON(entry)
+		if err == nil {
 			if content, ok := body["content"].(map[string]interface{}); ok {
 				if envelope, ok := content["envelope"].(map[string]interface{}); ok {
 					if payload, ok := envelope["payload"].(string); ok {
