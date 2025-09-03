@@ -23,7 +23,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/sigstore/cosign/v2/cmd/cosign/cli/rekor"
 	"github.com/sigstore/rekor/pkg/generated/client"
@@ -153,33 +156,55 @@ func (r *RekorVSARetriever) FindByPayloadHash(ctx context.Context, payloadHashHe
 
 	log.Debugf("FindByPayloadHash: search returned %d entries", len(entries))
 
-	// Group entries by type and verify they share the same payloadHash
-	var intotoEntries []models.LogEntryAnon
-	var dsseEntries []models.LogEntryAnon
+	// Maps to store the latest entry per payload hash for each type
+	intotoMap := make(map[string]models.LogEntryAnon)
+	dsseMap := make(map[string]models.LogEntryAnon)
 
+	// Single pass: classify entries and extract payload hashes, keeping only the latest per hash
 	for _, entry := range entries {
 		entryKind := r.classifyEntryKind(entry)
 		switch entryKind {
 		case "intoto":
-			intotoEntries = append(intotoEntries, entry)
+			// Extract the payload hash from the intoto entry
+			payloadHash, err := r.extractPayloadHash(entry)
+			if err != nil {
+				log.Debugf("Failed to extract payload hash from intoto entry: %v", err)
+				continue
+			}
+
+			// Keep only the latest intoto entry per payload hash
+			if existing, exists := intotoMap[payloadHash]; !exists || r.isEntryNewer(entry, existing) {
+				intotoMap[payloadHash] = entry
+			}
+
 		case "dsse":
-			dsseEntries = append(dsseEntries, entry)
+			// Extract the payload hash from the DSSE entry
+			payloadHash, err := r.extractPayloadHash(entry)
+			if err != nil {
+				log.Debugf("Failed to extract payload hash from DSSE entry: %v", err)
+				continue
+			}
+
+			// Keep only the latest DSSE entry per payload hash
+			if existing, exists := dsseMap[payloadHash]; !exists || r.isEntryNewer(entry, existing) {
+				dsseMap[payloadHash] = entry
+			}
+
 		default:
 			log.Debugf("Ignoring entry of unknown kind: %s", entryKind)
 		}
 	}
 
-	log.Debugf("Found %d in-toto entries and %d DSSE entries", len(intotoEntries), len(dsseEntries))
+	log.Debugf("Found %d unique intoto payload hashes and %d unique DSSE payload hashes", len(intotoMap), len(dsseMap))
 
-	// First, find all valid pairs that actually share the same payloadHash
-	// This ensures we're selecting from entries that actually correspond to each other
+	// Find all valid pairs by checking intersection of payload hashes
 	var validPairs []DualEntryPair
-	for _, intotoEntry := range intotoEntries {
-		for _, dsseEntry := range dsseEntries {
-			// Verify both entries actually contain the same payloadHash
+	for payloadHash, intotoEntry := range intotoMap {
+		if dsseEntry, exists := dsseMap[payloadHash]; exists {
+			// Verify both entries actually contain the same payloadHash (double-check)
 			if r.entriesSharePayloadHash(intotoEntry, dsseEntry) {
 				validPairs = append(validPairs, DualEntryPair{
-					PayloadHash: payloadHashHex,
+					PayloadHash: payloadHash,
 					IntotoEntry: &intotoEntry,
 					DSSEEntry:   &dsseEntry,
 				})
@@ -196,18 +221,18 @@ func (r *RekorVSARetriever) FindByPayloadHash(ctx context.Context, payloadHashHe
 		log.Debugf("No valid pairs found for payload hash: %s", payloadHashHex)
 
 		// Check if we have entries but they don't match (this indicates a problem)
-		if len(intotoEntries) > 0 && len(dsseEntries) > 0 {
+		if len(intotoMap) > 0 && len(dsseMap) > 0 {
 			log.Warnf("Found %d in-toto and %d DSSE entries but none share the same payloadHash. This may indicate corrupted or mismatched entries.",
-				len(intotoEntries), len(dsseEntries))
+				len(intotoMap), len(dsseMap))
 			return nil, fmt.Errorf("found entries but none share the same payloadHash: %s", payloadHashHex)
 		}
 
 		// If we only have one type of entry, that's incomplete and indicates a problem
-		if len(intotoEntries) > 0 {
+		if len(intotoMap) > 0 {
 			log.Warnf("Found only in-toto entry for payload hash: %s. This indicates an incomplete dual upload - DSSE entry is missing.", payloadHashHex)
 			return nil, fmt.Errorf("incomplete dual upload: found in-toto entry but no DSSE entry for payload hash: %s. Both entries are required for signature verification.", payloadHashHex)
 		}
-		if len(dsseEntries) > 0 {
+		if len(dsseMap) > 0 {
 			log.Warnf("Found only DSSE entry for payload hash: %s. This indicates an incomplete dual upload - in-toto entry is missing.", payloadHashHex)
 			return nil, fmt.Errorf("incomplete dual upload: found DSSE entry but no in-toto entry for payload hash: %s. Both entries are required for signature verification.", payloadHashHex)
 		}
@@ -229,6 +254,29 @@ func (r *RekorVSARetriever) FindByPayloadHash(ctx context.Context, payloadHashHe
 		*latestPair.IntotoEntry.LogIndex, *latestPair.DSSEEntry.LogIndex)
 
 	return &latestPair, nil
+}
+
+// isEntryNewer determines if entry1 is newer than entry2 based on IntegratedTime
+// Returns true if entry1 is newer, false otherwise
+func (r *RekorVSARetriever) isEntryNewer(entry1, entry2 models.LogEntryAnon) bool {
+	time1 := entry1.IntegratedTime
+	time2 := entry2.IntegratedTime
+
+	// If both have timestamps, compare them
+	if time1 != nil && time2 != nil {
+		return *time1 > *time2
+	}
+
+	// If only one has a timestamp, prefer the one with timestamp
+	if time1 != nil && time2 == nil {
+		return true
+	}
+	if time1 == nil && time2 != nil {
+		return false
+	}
+
+	// If neither has a timestamp, prefer the first one (maintains original order)
+	return false
 }
 
 // isPairNewer determines if pair1 is newer than pair2 based on IntegratedTime
@@ -338,61 +386,67 @@ func (r *RekorVSARetriever) GetAllEntriesForImageDigest(ctx context.Context, ima
 
 // FindLatestMatchingPair finds the latest pair where intoto has attestation and DSSE matches
 func (r *RekorVSARetriever) FindLatestMatchingPair(ctx context.Context, entries []models.LogEntryAnon) *DualEntryPair {
-	var latestPair *DualEntryPair
-	var latestTime int64
+	// Maps to store the latest entry per payload hash for each type
+	intotoMap := make(map[string]models.LogEntryAnon)
+	dsseMap := make(map[string]models.LogEntryAnon)
 
-	// Separate intoto and DSSE entries
-	var intotoEntries []models.LogEntryAnon
-	var dsseEntries []models.LogEntryAnon
-
+	// Single pass: classify entries and extract payload hashes, keeping only the latest per hash
 	for _, entry := range entries {
 		entryKind := r.classifyEntryKind(entry)
+
 		switch entryKind {
 		case "intoto":
-			intotoEntries = append(intotoEntries, entry)
+			// Only consider intoto entries with attestations
+			if entry.Attestation == nil || entry.Attestation.Data == nil {
+				continue
+			}
+
+			// Extract the payload hash from the intoto entry body
+			payloadHash, err := r.extractIntotoPayloadHash(entry)
+			if err != nil {
+				log.Debugf("Failed to extract intoto payload hash: %v", err)
+				continue
+			}
+
+			// Keep only the latest intoto entry per payload hash
+			if existing, exists := intotoMap[payloadHash]; !exists || r.isEntryNewer(entry, existing) {
+				intotoMap[payloadHash] = entry
+			}
+
 		case "dsse":
-			dsseEntries = append(dsseEntries, entry)
-		}
-	}
-
-	log.Debugf("Found %d intoto entries and %d DSSE entries", len(intotoEntries), len(dsseEntries))
-
-	// Find matching pairs
-	for _, intotoEntry := range intotoEntries {
-		// Only consider intoto entries with attestations
-		if intotoEntry.Attestation == nil || intotoEntry.Attestation.Data == nil {
-			continue
-		}
-
-		// Extract the payload hash from the intoto entry body
-		intotoPayloadHash, err := r.extractIntotoPayloadHash(intotoEntry)
-		if err != nil {
-			log.Debugf("Failed to extract intoto payload hash: %v", err)
-			continue
-		}
-
-		// Find matching DSSE entry
-		for _, dsseEntry := range dsseEntries {
-			dssePayloadHash, err := r.extractDSSEPayloadHash(dsseEntry)
+			// Extract the payload hash from the DSSE entry body
+			payloadHash, err := r.extractDSSEPayloadHash(entry)
 			if err != nil {
 				continue
 			}
 
-			// Check if payload hashes match
-			if intotoPayloadHash == dssePayloadHash {
-				// Create a temporary pair to get its timestamp
-				tempPair := &DualEntryPair{
-					PayloadHash: intotoPayloadHash,
-					IntotoEntry: &intotoEntry,
-					DSSEEntry:   &dsseEntry,
-				}
+			// Keep only the latest DSSE entry per payload hash
+			if existing, exists := dsseMap[payloadHash]; !exists || r.isEntryNewer(entry, existing) {
+				dsseMap[payloadHash] = entry
+			}
+		}
+	}
 
-				// Get the pair timestamp (earliest of intoto and DSSE times)
-				pairTime := r.getPairTimestamp(*tempPair)
-				if pairTime != nil && *pairTime > latestTime {
-					latestTime = *pairTime
-					latestPair = tempPair
-				}
+	log.Debugf("Found %d unique intoto payload hashes and %d unique DSSE payload hashes", len(intotoMap), len(dsseMap))
+
+	// Find the latest matching pair by checking intersection of payload hashes
+	var latestPair *DualEntryPair
+	var latestTime int64
+
+	for payloadHash, intotoEntry := range intotoMap {
+		if dsseEntry, exists := dsseMap[payloadHash]; exists {
+			// Found matching pair - create it and check if it's the latest
+			tempPair := &DualEntryPair{
+				PayloadHash: payloadHash,
+				IntotoEntry: &intotoEntry,
+				DSSEEntry:   &dsseEntry,
+			}
+
+			// Get the pair timestamp (earliest of intoto and DSSE times)
+			pairTime := r.getPairTimestamp(*tempPair)
+			if pairTime != nil && *pairTime > latestTime {
+				latestTime = *pairTime
+				latestPair = tempPair
 			}
 		}
 	}
@@ -944,24 +998,163 @@ func (rc *rekorClient) SearchIndex(ctx context.Context, query *models.SearchInde
 	}
 
 	// SearchIndex returns a list of UUIDs, we need to fetch the full entries
-	var entries []models.LogEntryAnon
+	if len(result.Payload) == 0 {
+		log.Debugf("SearchIndex returned no UUIDs")
+		return nil, nil
+	}
 
-	if result.Payload != nil {
-		for _, uuid := range result.Payload {
-			// Fetch the full log entry for each UUID
-			entry, err := rc.GetLogEntryByUUID(ctx, uuid)
-			if err != nil {
-				log.Debugf("Failed to fetch log entry for UUID %s: %v", uuid, err)
-				continue
+	log.Debugf("SearchIndex returned %d UUIDs, fetching full entries in parallel", len(result.Payload))
+
+	// Fetch the full log entries for each UUID using parallel workers
+	entries, err := rc.fetchLogEntriesParallel(ctx, result.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch log entries: %w", err)
+	}
+
+	log.Debugf("Successfully fetched %d full entries from %d UUIDs", len(entries), len(result.Payload))
+	return entries, nil
+}
+
+// fetchLogEntriesParallel fetches log entries in parallel using a worker pool
+func (rc *rekorClient) fetchLogEntriesParallel(ctx context.Context, uuids []string) ([]models.LogEntryAnon, error) {
+	if len(uuids) == 0 {
+		return nil, nil
+	}
+
+	// Get worker count from environment variable, default to 8
+	workerCount := rc.getWorkerCount()
+
+	// For small numbers of UUIDs, use fewer workers to avoid overhead
+	if len(uuids) < workerCount {
+		workerCount = len(uuids)
+	}
+
+	log.Debugf("Fetching %d log entries using %d workers", len(uuids), workerCount)
+
+	// Create channels for coordination
+	uuidChan := make(chan string, len(uuids))
+	resultChan := make(chan fetchResult, len(uuids))
+	errorChan := make(chan error, 1)
+
+	// Start worker goroutines
+	var wg sync.WaitGroup
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			rc.worker(ctx, uuidChan, resultChan, errorChan, workerID)
+		}(i)
+	}
+
+	// Send UUIDs to workers
+	go func() {
+		defer close(uuidChan)
+		for _, uuid := range uuids {
+			select {
+			case uuidChan <- uuid:
+			case <-ctx.Done():
+				return
 			}
-			if entry != nil {
-				entries = append(entries, *entry)
-			}
+		}
+	}()
+
+	// Collect results in a separate goroutine
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	// Collect results and handle errors
+	var entries []models.LogEntryAnon
+	var fetchErrors []error
+
+	// Collect all results
+	for result := range resultChan {
+		if result.err != nil {
+			fetchErrors = append(fetchErrors, result.err)
+			continue
+		}
+		if result.entry != nil {
+			entries = append(entries, *result.entry)
 		}
 	}
 
-	log.Debugf("SearchIndex returned %d UUIDs, fetched %d full entries", len(result.Payload), len(entries))
+	// Check for context cancellation or worker errors
+	select {
+	case err := <-errorChan:
+		return nil, fmt.Errorf("worker error: %w", err)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		// No immediate errors, continue
+	}
+
+	// Log any fetch errors but don't fail the entire operation
+	if len(fetchErrors) > 0 {
+		log.Debugf("Failed to fetch %d log entries (continuing with %d successful): %v",
+			len(fetchErrors), len(entries), fetchErrors)
+	}
+
 	return entries, nil
+}
+
+// fetchResult represents the result of a single UUID fetch operation
+type fetchResult struct {
+	entry *models.LogEntryAnon
+	err   error
+}
+
+// worker processes UUIDs from the input channel and sends results to the output channel
+func (rc *rekorClient) worker(ctx context.Context, uuidChan <-chan string, resultChan chan<- fetchResult, errorChan chan<- error, workerID int) {
+
+	for uuid := range uuidChan {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			// Continue processing
+		}
+
+		// Fetch the log entry
+		entry, err := rc.GetLogEntryByUUID(ctx, uuid)
+		if err != nil {
+			log.Debugf("Worker %d: Failed to fetch log entry for UUID %s: %v", workerID, uuid, err)
+			select {
+			case resultChan <- fetchResult{entry: nil, err: err}:
+			case <-ctx.Done():
+				return
+			}
+			continue
+		}
+
+		// Send successful result
+		select {
+		case resultChan <- fetchResult{entry: entry, err: nil}:
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// getWorkerCount returns the number of workers to use for parallel operations
+func (rc *rekorClient) getWorkerCount() int {
+	// Default to 8 workers
+	defaultWorkers := 8
+
+	// Check environment variable
+	if workerStr := os.Getenv("EC_REKOR_WORKERS"); workerStr != "" {
+		if workers, err := strconv.Atoi(workerStr); err == nil && workers > 0 {
+			// Cap at reasonable maximum to prevent resource exhaustion
+			if workers > 64 {
+				log.Warnf("EC_REKOR_WORKERS=%d exceeds maximum, capping at 64", workers)
+				workers = 64
+			}
+			return workers
+		}
+		log.Warnf("Invalid EC_REKOR_WORKERS value '%s', using default %d", workerStr, defaultWorkers)
+	}
+
+	return defaultWorkers
 }
 
 func (rc *rekorClient) SearchLogQuery(ctx context.Context, query *models.SearchLogQuery) ([]models.LogEntryAnon, error) {
