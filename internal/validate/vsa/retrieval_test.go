@@ -251,7 +251,7 @@ func TestRekorVSARetriever_RetrieveVSA(t *testing.T) {
 					assert.NotNil(t, record.Attestation)
 
 					// Verify the record contains the image digest
-					assert.True(t, isVSARecord(tt.mockEntries[i], tt.imageDigest))
+					assert.True(t, isVSARecord(tt.mockEntries[i]))
 				}
 			}
 		})
@@ -316,10 +316,9 @@ func TestIsValidImageDigest(t *testing.T) {
 
 func TestIsVSARecord(t *testing.T) {
 	tests := []struct {
-		name        string
-		entry       models.LogEntryAnon
-		imageDigest string
-		expected    bool
+		name     string
+		entry    models.LogEntryAnon
+		expected bool
 	}{
 		{
 			name: "valid VSA record with predicate type",
@@ -328,16 +327,14 @@ func TestIsVSARecord(t *testing.T) {
 					Data: strfmt.Base64("eyJwcmVkaWNhdGVUeXBlIjoiaHR0cHM6Ly9jb25mb3JtYS5kZXYvdmVyaWZpY2F0aW9uX3N1bW1hcnkvdjEiLCJzdWJqZWN0IjpbeyJuYW1lIjoicXVheS5pby90ZXN0L2ltYWdlIiwiZGlnZXN0Ijp7InNoYTI1NiI6ImFiYzEyMyJ9fV19"),
 				},
 			},
-			imageDigest: "sha256:abc123",
-			expected:    true,
+			expected: true,
 		},
 		{
 			name: "entry without attestation",
 			entry: models.LogEntryAnon{
 				Body: "sha256:abc123",
 			},
-			imageDigest: "sha256:abc123",
-			expected:    false,
+			expected: false,
 		},
 		{
 			name: "entry with nil attestation data",
@@ -346,8 +343,7 @@ func TestIsVSARecord(t *testing.T) {
 					Data: nil,
 				},
 			},
-			imageDigest: "sha256:abc123",
-			expected:    false,
+			expected: false,
 		},
 		{
 			name: "entry with non-VSA attestation",
@@ -356,8 +352,7 @@ func TestIsVSARecord(t *testing.T) {
 					Data: strfmt.Base64("eyJwcmVkaWNhdGVUeXBlIjoiaHR0cHM6Ly9leGFtcGxlLmNvbS9vdGhlci1hdHRlc3RhdGlvbiIsInN1YmplY3QiOlt7Im5hbWUiOiJxdWF5LmlvL3Rlc3QvaW1hZ2UiLCJkaWdlc3QiOnsic2hhMjU2IjoiZGVmNDU2In19XX0="),
 				},
 			},
-			imageDigest: "sha256:abc123",
-			expected:    false,
+			expected: false,
 		},
 		{
 			name: "entry with malformed attestation data",
@@ -366,14 +361,13 @@ func TestIsVSARecord(t *testing.T) {
 					Data: strfmt.Base64("aW52YWxpZC1iYXNlNjQ="),
 				},
 			},
-			imageDigest: "sha256:abc123",
-			expected:    false,
+			expected: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isVSARecord(tt.entry, tt.imageDigest)
+			result := isVSARecord(tt.entry)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
