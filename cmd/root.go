@@ -26,7 +26,6 @@ import (
 	"github.com/conforma/cli/cmd/initialize"
 	"github.com/conforma/cli/cmd/inspect"
 	"github.com/conforma/cli/cmd/opa"
-	"github.com/conforma/cli/cmd/retrieve"
 	"github.com/conforma/cli/cmd/root"
 	"github.com/conforma/cli/cmd/sigstore"
 	"github.com/conforma/cli/cmd/test"
@@ -60,7 +59,6 @@ func AddCommandsTo(cmd *cobra.Command) {
 	cmd.AddCommand(fetch.FetchCmd)
 	cmd.AddCommand(initialize.InitCmd)
 	cmd.AddCommand(inspect.InspectCmd)
-	cmd.AddCommand(retrieve.RetrieveCmd)
 	cmd.AddCommand(track.TrackCmd)
 	cmd.AddCommand(validate.ValidateCmd)
 	cmd.AddCommand(version.VersionCmd)
