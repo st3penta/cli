@@ -20,6 +20,7 @@ package evaluator
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,6 +30,8 @@ import (
 	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
 	"github.com/conforma/cli/internal/opa/rule"
+	"github.com/conforma/cli/internal/policy"
+	"github.com/conforma/cli/internal/policy/source"
 )
 
 //////////////////////////////////////////////////////////////////////////////
@@ -338,10 +341,11 @@ func TestECPolicyResolver(t *testing.T) {
 	// Verify included packages
 	assert.True(t, result.IncludedPackages["cve"], "cve package should be included")
 	assert.True(t, result.IncludedPackages["tasks"], "tasks package should be included")
+	assert.False(t, result.IncludedPackages["slsa3"], "slsa3 package should not be included (contains only excluded rules)")
+	assert.False(t, result.IncludedPackages["test"], "test package should not be included (contains only excluded rules)")
 
-	// Verify excluded packages
-	assert.True(t, result.ExcludedPackages["slsa3"], "slsa3 package should be excluded")
-	assert.True(t, result.ExcludedPackages["test"], "test package should be excluded")
+	// Verify that packages with only excluded rules are not included
+	// (they should not appear in IncludedPackages)
 
 	// Verify explanations
 	assert.Contains(t, result.Explanations["cve.high_severity"], "included")
@@ -380,7 +384,7 @@ func TestECPolicyResolver_DefaultBehavior(t *testing.T) {
 	assert.True(t, result.ExcludedRules["test.test_data_found"], "test.test_data_found should be excluded")
 }
 
-func TestECPolicyResolver_PipelineIntention(t *testing.T) {
+func TestECPolicyResolver_PipelineIntention_RuleLevel(t *testing.T) {
 	// Create a source with pipeline intention
 	source := ecc.Source{
 		RuleData: &extv1.JSON{Raw: json.RawMessage(`{"pipeline_intention":["build"]}`)},
@@ -421,15 +425,54 @@ func TestECPolicyResolver_PipelineIntention(t *testing.T) {
 	t.Logf("Excluded rules: %v", result.ExcludedRules)
 	t.Logf("Explanations: %v", result.Explanations)
 
-	// Pipeline intention filtering works at package level
-	// If any rule in a package matches the pipeline intention, the entire package is included
-	assert.True(t, result.IncludedRules["tasks.build_task"], "tasks.build_task should be included")
-	assert.True(t, result.IncludedRules["tasks.deploy_task"], "tasks.deploy_task should be included (same package as build_task)")
-	assert.False(t, result.IncludedRules["general.security_check"], "general.security_check should not be included")
+	// Pipeline intention filtering now works at rule level
+	// Only rules that match the pipeline intention should be included
+	assert.True(t, result.IncludedRules["tasks.build_task"], "tasks.build_task should be included (matches build intention)")
+	assert.False(t, result.IncludedRules["tasks.deploy_task"], "tasks.deploy_task should not be included (doesn't match build intention)")
+	assert.False(t, result.IncludedRules["general.security_check"], "general.security_check should not be included (no pipeline intention)")
 
-	// Check package inclusion
+	// Check package inclusion - tasks package should be included because it has at least one included rule
 	assert.True(t, result.IncludedPackages["tasks"], "tasks package should be included (has included rules)")
 	assert.False(t, result.IncludedPackages["general"], "general package should not be included (no included rules)")
+}
+
+func TestECPolicyResolver_PipelineIntention_NoIntentionSpecified(t *testing.T) {
+	// Create a source with no pipeline intention
+	source := ecc.Source{
+		RuleData: &extv1.JSON{Raw: json.RawMessage(`{}`)},
+		Config: &ecc.SourceConfig{
+			Include: []string{"*"},
+		},
+	}
+
+	configProvider := &simpleConfigProvider{
+		effectiveTime: time.Now(),
+	}
+
+	resolver := NewECPolicyResolver(source, configProvider)
+
+	rules := policyRules{
+		"tasks.build_task": rule.Info{
+			Package:           "tasks",
+			Code:              "tasks.build_task",
+			PipelineIntention: []string{"build"},
+		},
+		"general.security_check": rule.Info{
+			Package: "general",
+			Code:    "general.security_check",
+			// No pipeline intention - should be included
+		},
+	}
+
+	result := resolver.ResolvePolicy(rules, "test-target")
+
+	// When no pipeline intention is specified, only rules with no pipeline intention should be included
+	assert.False(t, result.IncludedRules["tasks.build_task"], "tasks.build_task should not be included (has pipeline intention)")
+	assert.True(t, result.IncludedRules["general.security_check"], "general.security_check should be included (no pipeline intention)")
+
+	// Check package inclusion
+	assert.False(t, result.IncludedPackages["tasks"], "tasks package should not be included (no included rules)")
+	assert.True(t, result.IncludedPackages["general"], "general package should be included (has included rules)")
 }
 
 func TestECPolicyResolver_Example(t *testing.T) {
@@ -494,7 +537,6 @@ func TestECPolicyResolver_Example(t *testing.T) {
 	t.Logf("Included Rules: %v", result.IncludedRules)
 	t.Logf("Excluded Rules: %v", result.ExcludedRules)
 	t.Logf("Included Packages: %v", result.IncludedPackages)
-	t.Logf("Excluded Packages: %v", result.ExcludedPackages)
 	t.Logf("Missing Includes: %v", result.MissingIncludes)
 	t.Logf("Explanations: %v", result.Explanations)
 
@@ -516,8 +558,11 @@ func TestECPolicyResolver_Example(t *testing.T) {
 	// Check package inclusion
 	assert.True(t, result.IncludedPackages["cve"], "cve package should be included")
 	assert.True(t, result.IncludedPackages["tasks"], "tasks package should be included")
-	assert.True(t, result.ExcludedPackages["slsa3"], "slsa3 package should be excluded")
-	assert.True(t, result.ExcludedPackages["test"], "test package should be excluded")
+	assert.False(t, result.IncludedPackages["slsa3"], "slsa3 package should not be included (contains only excluded rules)")
+	assert.False(t, result.IncludedPackages["test"], "test package should not be included (contains only excluded rules)")
+
+	// Verify that packages with only excluded rules are not included
+	// (they should not appear in IncludedPackages)
 }
 
 func TestUnifiedPostEvaluationFilter(t *testing.T) {
@@ -951,6 +996,154 @@ func TestIncludeExcludePolicyResolver(t *testing.T) {
 	require.True(t, includeExcludeResult.IncludedPackages["general"], "Include-exclude resolver should include general package")
 }
 
+func TestPackageInclusionLogic(t *testing.T) {
+	tests := []struct {
+		name             string
+		rules            policyRules
+		config           *ecc.EnterpriseContractPolicyConfiguration
+		expectedIncluded map[string]bool
+		description      string
+	}{
+		{
+			name: "Package with only included rules",
+			rules: policyRules{
+				"security.signature_check": rule.Info{
+					Code:    "security.signature_check",
+					Package: "security",
+				},
+				"security.vulnerability_scan": rule.Info{
+					Code:    "security.vulnerability_scan",
+					Package: "security",
+				},
+			},
+			config: &ecc.EnterpriseContractPolicyConfiguration{
+				Include: []string{"security"},
+			},
+			expectedIncluded: map[string]bool{
+				"security": true,
+			},
+			description: "Package with only included rules should be included",
+		},
+		{
+			name: "Package with only excluded rules",
+			rules: policyRules{
+				"test.test_data_found": rule.Info{
+					Code:    "test.test_data_found",
+					Package: "test",
+				},
+				"test.debug_info": rule.Info{
+					Code:    "test.debug_info",
+					Package: "test",
+				},
+			},
+			config: &ecc.EnterpriseContractPolicyConfiguration{
+				Exclude: []string{"test"},
+			},
+			expectedIncluded: map[string]bool{},
+			description:      "Package with only excluded rules should not be included",
+		},
+		{
+			name: "Package with mixed included and excluded rules",
+			rules: policyRules{
+				"security.signature_check": rule.Info{
+					Code:    "security.signature_check",
+					Package: "security",
+				},
+				"security.debug_info": rule.Info{
+					Code:    "security.debug_info",
+					Package: "security",
+				},
+			},
+			config: &ecc.EnterpriseContractPolicyConfiguration{
+				Include: []string{"security.signature_check"},
+				Exclude: []string{"security.debug_info"},
+			},
+			expectedIncluded: map[string]bool{
+				"security": true,
+			},
+			description: "Package with mixed rules should be included (has at least one included rule)",
+		},
+		{
+			name: "Package with no explicit include/exclude",
+			rules: policyRules{
+				"general.validation": rule.Info{
+					Code:    "general.validation",
+					Package: "general",
+				},
+			},
+			config: &ecc.EnterpriseContractPolicyConfiguration{
+				Include: []string{"*"},
+			},
+			expectedIncluded: map[string]bool{
+				"general": true,
+			},
+			description: "Package with no explicit criteria but wildcard include should be included",
+		},
+		{
+			name: "Multiple packages with different scenarios",
+			rules: policyRules{
+				"security.signature_check": rule.Info{
+					Code:    "security.signature_check",
+					Package: "security",
+				},
+				"test.debug_info": rule.Info{
+					Code:    "test.debug_info",
+					Package: "test",
+				},
+				"cve.high_severity": rule.Info{
+					Code:    "cve.high_severity",
+					Package: "cve",
+				},
+			},
+			config: &ecc.EnterpriseContractPolicyConfiguration{
+				Include: []string{"security", "cve"},
+				Exclude: []string{"test"},
+			},
+			expectedIncluded: map[string]bool{
+				"security": true,
+				"cve":      true,
+			},
+			description: "Multiple packages: included packages should be included, excluded-only packages should not",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &simpleConfigProvider{
+				effectiveTime: time.Now(),
+			}
+
+			source := ecc.Source{
+				Config: &ecc.SourceConfig{
+					Include: tc.config.Include,
+					Exclude: tc.config.Exclude,
+				},
+			}
+
+			resolver := NewIncludeExcludePolicyResolver(source, config)
+			result := resolver.ResolvePolicy(tc.rules, "test")
+
+			// Verify included packages
+			for pkg, expected := range tc.expectedIncluded {
+				if expected {
+					assert.True(t, result.IncludedPackages[pkg],
+						"Package %s should be included: %s", pkg, tc.description)
+				} else {
+					assert.False(t, result.IncludedPackages[pkg],
+						"Package %s should not be included: %s", pkg, tc.description)
+				}
+			}
+
+			// Verify that packages not in expected lists are not included
+			for pkg := range result.IncludedPackages {
+				if _, expected := tc.expectedIncluded[pkg]; !expected {
+					t.Errorf("Unexpected included package: %s", pkg)
+				}
+			}
+		})
+	}
+}
+
 func TestMissingIncludesFilterUpdate(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -1143,4 +1336,463 @@ func TestMissingIncludesFilterUpdate(t *testing.T) {
 			t.Logf("Final missingIncludes: %v", missingIncludes)
 		})
 	}
+}
+
+func TestConftestEvaluator_FilterType_ECPolicy(t *testing.T) {
+	// Test that ec-policy filter type uses ECPolicyResolver
+	sourceConfig := ecc.Source{
+		RuleData: &extv1.JSON{Raw: json.RawMessage(`{"pipeline_intention":["build"]}`)},
+		Config: &ecc.SourceConfig{
+			Include: []string{"*"},
+		},
+	}
+
+	ctx := setupTestContext(nil, nil)
+	configProvider, err := policy.NewOfflinePolicy(ctx, policy.Now)
+	assert.NoError(t, err)
+
+	policySources := []source.PolicySource{testPolicySource{}}
+	t.Logf("About to call NewConftestEvaluatorWithFilterType")
+	evaluator, err := NewConftestEvaluatorWithFilterType(ctx, policySources, configProvider, sourceConfig, "ec-policy")
+	t.Logf("NewConftestEvaluatorWithFilterType returned: evaluator=%v, err=%v", evaluator, err)
+	if err != nil {
+		t.Logf("Error creating evaluator: %v", err)
+	}
+	assert.NoError(t, err)
+	assert.NotNil(t, evaluator, "evaluator should not be nil")
+
+	t.Logf("Evaluator type: %T", evaluator)
+	conftestEval, ok := evaluator.(conftestEvaluator)
+	t.Logf("Type assertion result: ok=%v, conftestEval=%v", ok, conftestEval)
+	assert.True(t, ok, "evaluator should be conftestEvaluator")
+
+	// Should use ECPolicyResolver which supports pipeline intentions
+	_, isECPolicyResolver := conftestEval.policyResolver.(*ECPolicyResolver)
+	assert.True(t, isECPolicyResolver, "should use ECPolicyResolver for ec-policy filter type")
+}
+
+func TestConftestEvaluator_FilterType_IncludeExclude(t *testing.T) {
+	// Test that include-exclude filter type uses IncludeExcludePolicyResolver
+	sourceConfig := ecc.Source{
+		RuleData: &extv1.JSON{Raw: json.RawMessage(`{"pipeline_intention":["build"]}`)},
+		Config: &ecc.SourceConfig{
+			Include: []string{"*"},
+		},
+	}
+
+	ctx := setupTestContext(nil, nil)
+	configProvider, err := policy.NewOfflinePolicy(ctx, policy.Now)
+	assert.NoError(t, err)
+
+	policySources := []source.PolicySource{testPolicySource{}}
+	evaluator, err := NewConftestEvaluatorWithFilterType(ctx, policySources, configProvider, sourceConfig, "include-exclude")
+	assert.NoError(t, err)
+
+	conftestEval, ok := evaluator.(conftestEvaluator)
+	assert.True(t, ok, "evaluator should be conftestEvaluator")
+
+	// Should use IncludeExcludePolicyResolver which ignores pipeline intentions
+	_, isIncludeExcludeResolver := conftestEval.policyResolver.(*IncludeExcludePolicyResolver)
+	assert.True(t, isIncludeExcludeResolver, "should use IncludeExcludePolicyResolver for include-exclude filter type")
+}
+
+func TestConftestEvaluator_FilterType_Default(t *testing.T) {
+	// Test that default filter type uses IncludeExcludePolicyResolver
+	sourceConfig := ecc.Source{
+		RuleData: &extv1.JSON{Raw: json.RawMessage(`{"pipeline_intention":["build"]}`)},
+		Config: &ecc.SourceConfig{
+			Include: []string{"*"},
+		},
+	}
+
+	ctx := setupTestContext(nil, nil)
+	configProvider, err := policy.NewOfflinePolicy(ctx, policy.Now)
+	assert.NoError(t, err)
+
+	policySources := []source.PolicySource{testPolicySource{}}
+	evaluator, err := NewConftestEvaluatorWithFilterType(ctx, policySources, configProvider, sourceConfig, "unknown-type")
+	assert.NoError(t, err)
+
+	conftestEval, ok := evaluator.(conftestEvaluator)
+	assert.True(t, ok, "evaluator should be conftestEvaluator")
+
+	// Should default to IncludeExcludePolicyResolver
+	_, isIncludeExcludeResolver := conftestEval.policyResolver.(*IncludeExcludePolicyResolver)
+	assert.True(t, isIncludeExcludeResolver, "should default to IncludeExcludePolicyResolver for unknown filter type")
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Tests for Rego package with multiple rules - some with pipeline_intention, some without
+//////////////////////////////////////////////////////////////////////////////
+
+func TestRegoPackageWithMixedPipelineIntentions(t *testing.T) {
+	// Test case: A Rego package with multiple rules where some have pipeline_intention
+	// defined and some don't. Only rules with the defined pipeline_intention should be included.
+
+	t.Run("ECPolicyResolver with build intention", func(t *testing.T) {
+		// Create a source with build pipeline intention
+		source := ecc.Source{
+			RuleData: &extv1.JSON{Raw: json.RawMessage(`{"pipeline_intention":["build"]}`)},
+			Config: &ecc.SourceConfig{
+				Include: []string{"*"},
+			},
+		}
+
+		configProvider := &simpleConfigProvider{
+			effectiveTime: time.Now(),
+		}
+
+		resolver := NewECPolicyResolver(source, configProvider)
+
+		// Create rules representing a Rego package with mixed pipeline intentions
+		rules := policyRules{
+			// Rules with build pipeline intention - should be included
+			"security.build_security_check": rule.Info{
+				Package:           "security",
+				Code:              "build_security_check",
+				PipelineIntention: []string{"build"},
+			},
+			"security.build_vulnerability_scan": rule.Info{
+				Package:           "security",
+				Code:              "build_vulnerability_scan",
+				PipelineIntention: []string{"build"},
+			},
+			// Rules with different pipeline intention - should be excluded
+			"security.deploy_security_check": rule.Info{
+				Package:           "security",
+				Code:              "deploy_security_check",
+				PipelineIntention: []string{"deploy"},
+			},
+			"security.release_security_check": rule.Info{
+				Package:           "security",
+				Code:              "release_security_check",
+				PipelineIntention: []string{"release"},
+			},
+			// Rules with no pipeline intention - should be excluded when pipeline intention is specified
+			"security.general_security_check": rule.Info{
+				Package: "security",
+				Code:    "general_security_check",
+				// No pipeline intention
+			},
+			"security.basic_validation": rule.Info{
+				Package: "security",
+				Code:    "basic_validation",
+				// No pipeline intention
+			},
+		}
+
+		result := resolver.ResolvePolicy(rules, "test-target")
+
+		// Verify that only rules with build pipeline intention are included
+		assert.True(t, result.IncludedRules["build_security_check"],
+			"build_security_check should be included (matches build intention)")
+		assert.True(t, result.IncludedRules["build_vulnerability_scan"],
+			"build_vulnerability_scan should be included (matches build intention)")
+
+		// Verify that rules with different pipeline intentions are excluded
+		assert.False(t, result.IncludedRules["deploy_security_check"],
+			"deploy_security_check should be excluded (doesn't match build intention)")
+		assert.False(t, result.IncludedRules["release_security_check"],
+			"release_security_check should be excluded (doesn't match build intention)")
+
+		// Verify that rules with no pipeline intention are excluded
+		assert.False(t, result.IncludedRules["general_security_check"],
+			"general_security_check should be excluded (no pipeline intention)")
+		assert.False(t, result.IncludedRules["basic_validation"],
+			"basic_validation should be excluded (no pipeline intention)")
+
+		// Verify that the security package is included (has at least one included rule)
+		assert.True(t, result.IncludedPackages["security"],
+			"security package should be included (has included rules)")
+
+		// Verify explanations
+		assert.Contains(t, result.Explanations["build_security_check"], "included")
+		assert.Contains(t, result.Explanations["deploy_security_check"], "pipeline intention")
+		assert.Contains(t, result.Explanations["general_security_check"], "pipeline intention")
+	})
+
+	t.Run("ECPolicyResolver with no pipeline intention specified", func(t *testing.T) {
+		// Create a source with no pipeline intention
+		source := ecc.Source{
+			RuleData: &extv1.JSON{Raw: json.RawMessage(`{}`)},
+			Config: &ecc.SourceConfig{
+				Include: []string{"*"},
+			},
+		}
+
+		configProvider := &simpleConfigProvider{
+			effectiveTime: time.Now(),
+		}
+
+		resolver := NewECPolicyResolver(source, configProvider)
+
+		// Same rules as above
+		rules := policyRules{
+			"security.build_security_check": rule.Info{
+				Package:           "security",
+				Code:              "build_security_check",
+				PipelineIntention: []string{"build"},
+			},
+			"security.deploy_security_check": rule.Info{
+				Package:           "security",
+				Code:              "deploy_security_check",
+				PipelineIntention: []string{"deploy"},
+			},
+			"security.general_security_check": rule.Info{
+				Package: "security",
+				Code:    "general_security_check",
+				// No pipeline intention
+			},
+		}
+
+		result := resolver.ResolvePolicy(rules, "test-target")
+
+		// When no pipeline intention is specified, only rules with no pipeline intention should be included
+		assert.False(t, result.IncludedRules["build_security_check"],
+			"build_security_check should be excluded (has pipeline intention)")
+		assert.False(t, result.IncludedRules["deploy_security_check"],
+			"deploy_security_check should be excluded (has pipeline intention)")
+		assert.True(t, result.IncludedRules["general_security_check"],
+			"general_security_check should be included (no pipeline intention)")
+
+		// Verify that the security package is included (has at least one included rule)
+		assert.True(t, result.IncludedPackages["security"],
+			"security package should be included (has included rules)")
+	})
+
+	t.Run("IncludeExcludePolicyResolver ignores pipeline intentions", func(t *testing.T) {
+		// Create a source with build pipeline intention
+		source := ecc.Source{
+			RuleData: &extv1.JSON{Raw: json.RawMessage(`{"pipeline_intention":["build"]}`)},
+			Config: &ecc.SourceConfig{
+				Include: []string{"*"},
+			},
+		}
+
+		configProvider := &simpleConfigProvider{
+			effectiveTime: time.Now(),
+		}
+
+		resolver := NewIncludeExcludePolicyResolver(source, configProvider)
+
+		// Same rules as above
+		rules := policyRules{
+			"security.build_security_check": rule.Info{
+				Package:           "security",
+				Code:              "build_security_check",
+				PipelineIntention: []string{"build"},
+			},
+			"security.deploy_security_check": rule.Info{
+				Package:           "security",
+				Code:              "deploy_security_check",
+				PipelineIntention: []string{"deploy"},
+			},
+			"security.general_security_check": rule.Info{
+				Package: "security",
+				Code:    "general_security_check",
+				// No pipeline intention
+			},
+		}
+
+		result := resolver.ResolvePolicy(rules, "test-target")
+
+		// IncludeExcludePolicyResolver should include all rules regardless of pipeline intention
+		assert.True(t, result.IncludedRules["build_security_check"],
+			"build_security_check should be included (include-exclude ignores pipeline intention)")
+		assert.True(t, result.IncludedRules["deploy_security_check"],
+			"deploy_security_check should be included (include-exclude ignores pipeline intention)")
+		assert.True(t, result.IncludedRules["general_security_check"],
+			"general_security_check should be included (include-exclude ignores pipeline intention)")
+
+		// Verify that the security package is included
+		assert.True(t, result.IncludedPackages["security"],
+			"security package should be included")
+	})
+}
+
+func TestMultiplePackagesWithMixedPipelineIntentions(t *testing.T) {
+	// Test case: Multiple Rego packages with mixed pipeline intentions
+	// This demonstrates how the filtering works across different packages
+
+	t.Run("Multiple packages with build intention", func(t *testing.T) {
+		source := ecc.Source{
+			RuleData: &extv1.JSON{Raw: json.RawMessage(`{"pipeline_intention":["build"]}`)},
+			Config: &ecc.SourceConfig{
+				Include: []string{"*"},
+			},
+		}
+
+		configProvider := &simpleConfigProvider{
+			effectiveTime: time.Now(),
+		}
+
+		resolver := NewECPolicyResolver(source, configProvider)
+
+		// Create rules across multiple packages
+		rules := policyRules{
+			// Security package - some rules with build intention
+			"security.build_security_check": rule.Info{
+				Package:           "security",
+				Code:              "build_security_check",
+				PipelineIntention: []string{"build"},
+			},
+			"security.deploy_security_check": rule.Info{
+				Package:           "security",
+				Code:              "deploy_security_check",
+				PipelineIntention: []string{"deploy"},
+			},
+			"security.general_check": rule.Info{
+				Package: "security",
+				Code:    "general_check",
+				// No pipeline intention
+			},
+
+			// CVE package - some rules with build intention
+			"cve.build_vulnerability_scan": rule.Info{
+				Package:           "cve",
+				Code:              "build_vulnerability_scan",
+				PipelineIntention: []string{"build"},
+			},
+			"cve.release_vulnerability_scan": rule.Info{
+				Package:           "cve",
+				Code:              "release_vulnerability_scan",
+				PipelineIntention: []string{"release"},
+			},
+			"cve.general_scan": rule.Info{
+				Package: "cve",
+				Code:    "general_scan",
+				// No pipeline intention
+			},
+
+			// Tasks package - all rules with build intention
+			"tasks.build_task": rule.Info{
+				Package:           "tasks",
+				Code:              "build_task",
+				PipelineIntention: []string{"build"},
+			},
+			"tasks.build_validation": rule.Info{
+				Package:           "tasks",
+				Code:              "build_validation",
+				PipelineIntention: []string{"build"},
+			},
+
+			// General package - no rules with pipeline intention
+			"general.basic_check": rule.Info{
+				Package: "general",
+				Code:    "basic_check",
+				// No pipeline intention
+			},
+			"general.validation": rule.Info{
+				Package: "general",
+				Code:    "validation",
+				// No pipeline intention
+			},
+		}
+
+		result := resolver.ResolvePolicy(rules, "test-target")
+
+		// Verify included rules (only those with build intention)
+		assert.True(t, result.IncludedRules["build_security_check"],
+			"build_security_check should be included")
+		assert.True(t, result.IncludedRules["build_vulnerability_scan"],
+			"build_vulnerability_scan should be included")
+		assert.True(t, result.IncludedRules["build_task"],
+			"build_task should be included")
+		assert.True(t, result.IncludedRules["build_validation"],
+			"build_validation should be included")
+
+		// Verify excluded rules (different or no pipeline intention)
+		assert.False(t, result.IncludedRules["deploy_security_check"],
+			"deploy_security_check should be excluded")
+		assert.False(t, result.IncludedRules["general_check"],
+			"general_check should be excluded")
+		assert.False(t, result.IncludedRules["release_vulnerability_scan"],
+			"release_vulnerability_scan should be excluded")
+		assert.False(t, result.IncludedRules["general_scan"],
+			"general_scan should be excluded")
+		assert.False(t, result.IncludedRules["basic_check"],
+			"basic_check should be excluded")
+		assert.False(t, result.IncludedRules["validation"],
+			"validation should be excluded")
+
+		// Verify package inclusion
+		assert.True(t, result.IncludedPackages["security"],
+			"security package should be included (has included rules)")
+		assert.True(t, result.IncludedPackages["cve"],
+			"cve package should be included (has included rules)")
+		assert.True(t, result.IncludedPackages["tasks"],
+			"tasks package should be included (has included rules)")
+		assert.False(t, result.IncludedPackages["general"],
+			"general package should be excluded (no included rules)")
+
+		// Verify explanations contain appropriate information
+		// For included rules, explanations should mention "included"
+		// For excluded rules, explanations should mention "pipeline intention"
+		for ruleName, explanation := range result.Explanations {
+			if result.IncludedRules[ruleName] {
+				assert.Contains(t, explanation, "included",
+					"Explanation for included rule %s should mention 'included'", ruleName)
+			} else if strings.Contains(explanation, "pipeline intention") {
+				assert.Contains(t, explanation, "pipeline intention",
+					"Explanation for excluded rule %s should mention 'pipeline intention'", ruleName)
+			}
+		}
+	})
+}
+
+func TestPipelineIntentionWithMultipleValues(t *testing.T) {
+	// Test case: Rules with multiple pipeline intention values
+	// This demonstrates how rules with multiple intentions are handled
+
+	t.Run("Rule with multiple pipeline intentions", func(t *testing.T) {
+		source := ecc.Source{
+			RuleData: &extv1.JSON{Raw: json.RawMessage(`{"pipeline_intention":["build"]}`)},
+			Config: &ecc.SourceConfig{
+				Include: []string{"*"},
+			},
+		}
+
+		configProvider := &simpleConfigProvider{
+			effectiveTime: time.Now(),
+		}
+
+		resolver := NewECPolicyResolver(source, configProvider)
+
+		rules := policyRules{
+			// Rule with multiple pipeline intentions including build
+			"security.build_and_deploy_check": rule.Info{
+				Package:           "security",
+				Code:              "build_and_deploy_check",
+				PipelineIntention: []string{"build", "deploy"},
+			},
+			// Rule with multiple pipeline intentions not including build
+			"security.deploy_and_release_check": rule.Info{
+				Package:           "security",
+				Code:              "deploy_and_release_check",
+				PipelineIntention: []string{"deploy", "release"},
+			},
+			// Rule with single build intention
+			"security.build_only_check": rule.Info{
+				Package:           "security",
+				Code:              "build_only_check",
+				PipelineIntention: []string{"build"},
+			},
+		}
+
+		result := resolver.ResolvePolicy(rules, "test-target")
+
+		// Rules with build in their pipeline intentions should be included
+		assert.True(t, result.IncludedRules["build_and_deploy_check"],
+			"build_and_deploy_check should be included (includes build intention)")
+		assert.True(t, result.IncludedRules["build_only_check"],
+			"build_only_check should be included (build intention)")
+
+		// Rules without build in their pipeline intentions should be excluded
+		assert.False(t, result.IncludedRules["deploy_and_release_check"],
+			"deploy_and_release_check should be excluded (no build intention)")
+
+		// Verify package inclusion
+		assert.True(t, result.IncludedPackages["security"],
+			"security package should be included (has included rules)")
+	})
 }

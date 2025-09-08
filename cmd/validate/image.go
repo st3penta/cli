@@ -60,6 +60,7 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 		effectiveTime               string
 		extraRuleData               []string
 		filePath                    string // Deprecated: images replaced this
+		filterType                  string
 		imageRef                    string
 		info                        bool
 		input                       string // Deprecated: images replaced this
@@ -86,7 +87,8 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 	}{
 		strict:        true,
 		workers:       5,
-		vsaExpiration: 168 * time.Hour, // 7 days default
+		filterType:    "include-exclude", // Default to include-exclude filter
+		vsaExpiration: 168 * time.Hour,   // 7 days default
 	}
 
 	validOutputFormats := applicationsnapshot.OutputFormats
@@ -339,9 +341,9 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 				if utils.IsOpaEnabled() {
 					c, err = newOPAEvaluator()
 				} else {
-					// Use the unified filtering approach directly
-					c, err = evaluator.NewConftestEvaluatorWithNamespace(
-						cmd.Context(), policySources, data.policy, sourceGroup, nil)
+					// Use the unified filtering approach with the specified filter type
+					c, err = evaluator.NewConftestEvaluatorWithFilterType(
+						cmd.Context(), policySources, data.policy, sourceGroup, data.filterType)
 				}
 
 				if err != nil {
@@ -656,6 +658,11 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 
 	cmd.Flags().IntVar(&data.workers, "workers", data.workers, hd.Doc(`
 		Number of workers to use for validation. Defaults to 5.`))
+
+	cmd.Flags().StringVar(&data.filterType, "filter-type", data.filterType, hd.Doc(`
+		Filter type to use for policy evaluation. Options: "include-exclude" (default) or "ec-policy".
+		- "include-exclude": Uses traditional include/exclude filtering without pipeline intentions
+		- "ec-policy": Uses Enterprise Contract policy filtering with pipeline intention support`))
 
 	cmd.Flags().BoolVar(&data.vsaEnabled, "vsa", false, "Generate a Verification Summary Attestation (VSA) for each validated image.")
 	cmd.Flags().StringVar(&data.vsaSigningKey, "vsa-signing-key", "", "Path to the private key for signing the VSA.")
