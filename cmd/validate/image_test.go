@@ -1345,6 +1345,14 @@ func TestValidateImageDefaultOutput(t *testing.T) {
 
 			`)),
 		},
+		{
+			args:     append(commonArgs, "--show-warnings"),
+			expected: commonOutput, // No warnings in happyValidator, so no change
+		},
+		{
+			args:     append(commonArgs, "--show-warnings=false"),
+			expected: commonOutput, // No warnings in happyValidator, so no change
+		},
 	}
 
 	for _, c := range cases {
@@ -1529,4 +1537,97 @@ func TestValidateImageCommand_VSAUpload_NoStorageBackends(t *testing.T) {
 	// Should succeed even without storage backends - tests the "no backends" code path
 	_ = cmd.Execute()
 	// Don't assert no error since VSA processing might fail, but upload logic should be reached
+}
+
+func TestValidateImageCommand_ShowWarningsFlag(t *testing.T) {
+	// Create a validator that returns warnings
+	warningValidator := func(_ context.Context, component app.SnapshotComponent, _ *app.SnapshotSpec, _ policy.Policy, _ []evaluator.Evaluator, _ bool) (*output.Output, error) {
+		return &output.Output{
+			ImageSignatureCheck: output.VerificationStatus{
+				Passed: true,
+			},
+			ImageAccessibleCheck: output.VerificationStatus{
+				Passed: true,
+			},
+			AttestationSignatureCheck: output.VerificationStatus{
+				Passed: true,
+			},
+			AttestationSyntaxCheck: output.VerificationStatus{
+				Passed: true,
+			},
+			PolicyCheck: []evaluator.Outcome{
+				{
+					FileName:  "test.json",
+					Namespace: "test.main",
+					Warnings: []evaluator.Result{
+						{
+							Message: "This is a warning message",
+							Metadata: map[string]interface{}{
+								"code":  "warning.test",
+								"title": "Test Warning",
+							},
+						},
+					},
+				},
+			},
+			ImageURL: component.ContainerImage,
+			ExitCode: 0,
+		}, nil
+	}
+
+	cases := []struct {
+		name             string
+		args             []string
+		expectedWarnings bool
+	}{
+		{
+			name:             "default behavior (show-warnings=true)",
+			args:             []string{"validate", "image", "--image", "registry/image:tag", "--policy", fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON)},
+			expectedWarnings: true,
+		},
+		{
+			name:             "explicit show-warnings=true",
+			args:             []string{"validate", "image", "--image", "registry/image:tag", "--policy", fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON), "--show-warnings=true"},
+			expectedWarnings: true,
+		},
+		{
+			name:             "show-warnings=false",
+			args:             []string{"validate", "image", "--image", "registry/image:tag", "--policy", fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON), "--show-warnings=false"},
+			expectedWarnings: false,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			validateImageCmd := validateImageCmd(warningValidator)
+			cmd := setUpCobra(validateImageCmd)
+
+			client := fake.FakeClient{}
+			commonMockClient(&client)
+			ctx := utils.WithFS(context.Background(), afero.NewMemMapFs())
+			ctx = oci.WithClient(ctx, &client)
+			cmd.SetContext(ctx)
+
+			cmd.SetArgs(c.args)
+
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+
+			utils.SetTestRekorPublicKey(t)
+
+			err := cmd.Execute()
+			assert.NoError(t, err)
+
+			outputStr := out.String()
+			if c.expectedWarnings {
+				assert.Contains(t, outputStr, "Warning", "Warning should be displayed when show-warnings=true")
+				assert.Contains(t, outputStr, "This is a warning message", "Warning message should be displayed when show-warnings=true")
+			} else {
+				// When show-warnings=false, the warning should not appear in the Results section
+				// but the warning count will still be shown in the summary line
+				assert.NotContains(t, outputStr, "Results:", "Results section should not appear when show-warnings=false and no violations")
+				assert.NotContains(t, outputStr, "This is a warning message", "Warning message should NOT be displayed when show-warnings=false")
+			}
+		})
+	}
 }

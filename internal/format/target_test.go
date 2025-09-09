@@ -31,6 +31,7 @@ func TestTargetParser(t *testing.T) {
 	defaultPath := "default.out"
 	defaultOptions := Options{
 		ShowSuccesses: false,
+		ShowWarnings:  true,
 	}
 
 	cases := []struct {
@@ -44,9 +45,12 @@ func TestTargetParser(t *testing.T) {
 		{name: "format", expectedFormat: "spam", expectedOptions: defaultOptions, targetName: "spam"},
 		{name: "format no file", expectedFormat: "spam", expectedOptions: defaultOptions, targetName: "spam="},
 		{name: "format and file", expectedFormat: "spam", expectedOptions: defaultOptions, targetName: "spam=spam.out", expectedPath: "spam.out"},
-		{name: "format and option", expectedFormat: "spam", expectedOptions: Options{ShowSuccesses: true}, targetName: "spam?show-successes=true"},
-		{name: "format no file with option", expectedFormat: "spam", expectedOptions: Options{ShowSuccesses: true}, targetName: "spam=?show-successes=true"},
-		{name: "format with file and option", expectedFormat: "spam", expectedOptions: Options{ShowSuccesses: true}, targetName: "spam=spam.out?show-successes=true", expectedPath: "spam.out"},
+		{name: "format and option", expectedFormat: "spam", expectedOptions: Options{ShowSuccesses: true, ShowWarnings: true}, targetName: "spam?show-successes=true"},
+		{name: "format no file with option", expectedFormat: "spam", expectedOptions: Options{ShowSuccesses: true, ShowWarnings: true}, targetName: "spam=?show-successes=true"},
+		{name: "format with file and option", expectedFormat: "spam", expectedOptions: Options{ShowSuccesses: true, ShowWarnings: true}, targetName: "spam=spam.out?show-successes=true", expectedPath: "spam.out"},
+		{name: "format with show-warnings option", expectedFormat: "spam", expectedOptions: Options{ShowSuccesses: false, ShowWarnings: false}, targetName: "spam?show-warnings=false"},
+		{name: "format with both options", expectedFormat: "spam", expectedOptions: Options{ShowSuccesses: true, ShowWarnings: false}, targetName: "spam?show-successes=true&show-warnings=false"},
+		{name: "format with both options reversed", expectedFormat: "spam", expectedOptions: Options{ShowSuccesses: false, ShowWarnings: true}, targetName: "spam?show-warnings=true&show-successes=false"},
 	}
 
 	for _, c := range cases {

@@ -6,6 +6,7 @@ Validate conformance with the provided policies
 
 -h, --help:: help for validate (Default: false)
 --show-successes::  (Default: false)
+--show-warnings::  (Default: true)
 
 == Options inherited from parent commands
 

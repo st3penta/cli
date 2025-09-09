@@ -61,6 +61,7 @@ type Report struct {
 	EffectiveTime time.Time                        `json:"effective-time"`
 	PolicyInput   [][]byte                         `json:"-"`
 	ShowSuccesses bool                             `json:"-"`
+	ShowWarnings  bool                             `json:"-"`
 	Expansion     *ExpansionInfo                   `json:"-"`
 }
 
@@ -127,7 +128,7 @@ var OutputFormats = []string{
 
 // WriteReport returns a new instance of Report representing the state of
 // components from the snapshot.
-func NewReport(snapshot string, components []Component, policy policy.Policy, policyInput [][]byte, showSuccesses bool, expansion *ExpansionInfo) (Report, error) {
+func NewReport(snapshot string, components []Component, policy policy.Policy, policyInput [][]byte, showSuccesses bool, showWarnings bool, expansion *ExpansionInfo) (Report, error) {
 	success := true
 
 	// Set the report success, remains true if all components are successful
@@ -158,6 +159,7 @@ func NewReport(snapshot string, components []Component, policy policy.Policy, po
 		PolicyInput:   policyInput,
 		EffectiveTime: policy.EffectiveTime().UTC(),
 		ShowSuccesses: showSuccesses,
+		ShowWarnings:  showWarnings,
 		Expansion:     expansion,
 	}, nil
 }
@@ -261,6 +263,7 @@ func (r *Report) toSummary() summary {
 
 func (r *Report) applyOptions(opts format.Options) {
 	r.ShowSuccesses = opts.ShowSuccesses
+	r.ShowWarnings = opts.ShowWarnings
 }
 
 // condensedMsg reduces repetitive error messages.
