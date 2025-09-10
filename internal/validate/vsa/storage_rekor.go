@@ -32,8 +32,7 @@ import (
 	"github.com/sigstore/rekor/pkg/generated/client/entries"
 	"github.com/sigstore/rekor/pkg/generated/models"
 	"github.com/sigstore/rekor/pkg/types"
-	_ "github.com/sigstore/rekor/pkg/types/dsse/v0.0.1"
-	_ "github.com/sigstore/rekor/pkg/types/intoto/v0.0.1"
+	_ "github.com/sigstore/rekor/pkg/types/intoto/v0.0.2"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -45,7 +44,7 @@ func min(a, b int) int {
 	return b
 }
 
-// RekorBackend implements VSA storage in Rekor transparency log
+// RekorBackend implements VSA storage in Rekor transparency log using single in-toto 0.0.2 entries
 type RekorBackend struct {
 	serverURL string
 	timeout   time.Duration
@@ -133,13 +132,13 @@ func (r *RekorBackend) UploadWithSigner(ctx context.Context, envelopeContent []b
 		return "", fmt.Errorf("failed to extract public key from signer: %w", err)
 	}
 
-	// Use dual uploader to upload as both DSSE and in-toto entries
-	return r.uploadBoth(uploadCtx, rekorClient, envelopeContent, pubKeyBytes)
+	// Upload as single in-toto 0.0.2 entry with embedded DSSE envelope
+	return r.uploadSingle(uploadCtx, rekorClient, envelopeContent, pubKeyBytes)
 }
 
-// uploadBoth uploads the same envelope as both DSSE and in-toto entries
-func (r *RekorBackend) uploadBoth(ctx context.Context, rekorClient *gen_client.Rekor, envelopeContent []byte, pubKeyBytes []byte) (string, error) {
-	// Prepare the DSSE envelope for Rekor - canonicalize once for both uploads
+// uploadSingle uploads the envelope as a single in-toto 0.0.2 entry with embedded DSSE envelope
+func (r *RekorBackend) uploadSingle(ctx context.Context, rekorClient *gen_client.Rekor, envelopeContent []byte, pubKeyBytes []byte) (string, error) {
+	// Prepare the DSSE envelope for Rekor - canonicalize for single upload
 	preparedEnvelope, payloadHash, err := r.prepareDSSEForRekor(envelopeContent, pubKeyBytes)
 	if err != nil {
 		return "", fmt.Errorf("failed to prepare DSSE envelope for Rekor: %w", err)
@@ -151,78 +150,78 @@ func (r *RekorBackend) uploadBoth(ctx context.Context, rekorClient *gen_client.R
 		"prepared_size":    len(preparedEnvelope),
 		"payload_preview":  string(envelopeContent[:min(100, len(envelopeContent))]),
 		"prepared_preview": string(preparedEnvelope[:min(100, len(preparedEnvelope))]),
-	}).Info("[VSA] Prepared DSSE envelope for dual upload")
+	}).Info("[VSA] Prepared DSSE envelope for single entry upload")
 
-	// Upload as in-toto entry first using the canonicalized envelope
-	log.Info("[VSA] Starting in-toto entry upload")
-	intotoEntry, err := r.uploadIntotoEnvelope(ctx, rekorClient, preparedEnvelope, pubKeyBytes)
+	// Upload as single in-toto 0.0.2 entry
+	log.Info("[VSA] Starting in-toto 0.0.2 single entry upload")
+	intotoEntry, err := r.uploadIntotoV002Envelope(ctx, rekorClient, preparedEnvelope, pubKeyBytes)
 	if err != nil {
-		log.WithError(err).Error("[VSA] Failed to upload in-toto entry")
-		return "", fmt.Errorf("failed to upload in-toto entry: %w", err)
+		log.WithError(err).Error("[VSA] Failed to upload in-toto 0.0.2 entry")
+		return "", fmt.Errorf("failed to upload in-toto 0.0.2 entry: %w", err)
 	}
-	log.Info("[VSA] Completed in-toto entry upload")
+	log.Info("[VSA] Completed in-toto 0.0.2 single entry upload")
 
-	// Upload as DSSE entry using the same canonicalized envelope
-	log.Info("[VSA] Starting DSSE entry upload")
-	dsseEntry, err := r.uploadDSSE(ctx, rekorClient, preparedEnvelope, pubKeyBytes)
-	if err != nil {
-		log.WithError(err).Error("[VSA] Failed to upload DSSE entry")
-		return "", fmt.Errorf("failed to upload DSSE entry: %w", err)
-	}
-	log.Info("[VSA] Completed DSSE entry upload")
-
-	// Log successful dual upload
+	// Log successful single upload
 	log.WithFields(log.Fields{
 		"payload_hash": payloadHash,
-		"intoto_uuid":  intotoEntry.LogID,
-		"intoto_index": intotoEntry.LogIndex,
-		"dsse_uuid":    dsseEntry.LogID,
-		"dsse_index":   dsseEntry.LogIndex,
+		"intoto_uuid":  *intotoEntry.LogID,
+		"intoto_index": *intotoEntry.LogIndex,
 		"intoto_url":   fmt.Sprintf("%s/api/v1/log/entries/%s", r.serverURL, *intotoEntry.LogID),
-		"dsse_url":     fmt.Sprintf("%s/api/v1/log/entries/%s", r.serverURL, *dsseEntry.LogID),
-	}).Info("[VSA] Successfully uploaded VSA to Rekor as dual entries")
+	}).Info("[VSA] Successfully uploaded VSA to Rekor as single in-toto 0.0.2 entry")
 
 	return payloadHash, nil
 }
 
-// uploadIntotoEnvelope uploads the envelope as an in-toto entry
-func (r *RekorBackend) uploadIntotoEnvelope(ctx context.Context, rekorClient *gen_client.Rekor, envelopeContent []byte, pubKeyBytes []byte) (*models.LogEntryAnon, error) {
-	log.Info("[VSA] Creating artifact properties for in-toto entry")
+// uploadIntotoV002Envelope uploads the envelope as an in-toto 0.0.2 entry with embedded DSSE envelope
+func (r *RekorBackend) uploadIntotoV002Envelope(ctx context.Context, rekorClient *gen_client.Rekor, envelopeContent []byte, pubKeyBytes []byte) (*models.LogEntryAnon, error) {
+	log.Info("[VSA] Creating artifact properties for in-toto 0.0.2 entry")
 
 	// Log the envelope content for debugging (now canonicalized)
 	log.WithFields(log.Fields{
 		"envelope_size":    len(envelopeContent),
 		"envelope_preview": string(envelopeContent[:min(200, len(envelopeContent))]),
 		"pubkey_size":      len(pubKeyBytes),
-		"note":             "envelope is now canonicalized for consistency with DSSE entry",
-	}).Info("[VSA] Canonicalized envelope content for in-toto upload")
+		"note":             "envelope is canonicalized for in-toto 0.0.2 entry with embedded DSSE",
+	}).Info("[VSA] Canonicalized envelope content for in-toto 0.0.2 upload")
 
-	// Create artifact properties for in-toto entry
+	// Create artifact properties for in-toto 0.0.2 entry
 	artifactProps := types.ArtifactProperties{
 		ArtifactBytes:  envelopeContent,
 		PublicKeyBytes: [][]byte{pubKeyBytes},
 	}
 
-	// Create the proposed in-toto entry
-	log.Info("[VSA] Creating proposed in-toto entry")
-	proposedEntry, err := types.NewProposedEntry(ctx, "intoto", "0.0.1", artifactProps)
+	// Log the artifact properties being passed to in-toto 0.0.2 entry creation
+	publicKeyLength := 0
+	if len(artifactProps.PublicKeyBytes) > 0 {
+		publicKeyLength = len(artifactProps.PublicKeyBytes[0])
+	}
+	log.WithFields(log.Fields{
+		"artifact_bytes_length":   len(artifactProps.ArtifactBytes),
+		"artifact_bytes_preview":  string(artifactProps.ArtifactBytes[:min(200, len(artifactProps.ArtifactBytes))]),
+		"public_key_bytes_count":  len(artifactProps.PublicKeyBytes),
+		"public_key_bytes_length": publicKeyLength,
+	}).Info("[VSA] Artifact properties for in-toto 0.0.2 entry creation")
+
+	// Create the proposed in-toto 0.0.2 entry
+	log.Info("[VSA] Creating proposed in-toto 0.0.2 entry")
+	proposedEntry, err := types.NewProposedEntry(ctx, "intoto", "0.0.2", artifactProps)
 	if err != nil {
-		log.WithError(err).Error("[VSA] Failed to create proposed in-toto entry")
-		return nil, fmt.Errorf("failed to create proposed in-toto entry: %w", err)
+		log.WithError(err).Error("[VSA] Failed to create proposed in-toto 0.0.2 entry")
+		return nil, fmt.Errorf("failed to create proposed in-toto 0.0.2 entry: %w", err)
 	}
 
 	// Create the upload parameters
-	log.Info("[VSA] Creating upload parameters for in-toto")
+	log.Info("[VSA] Creating upload parameters for in-toto 0.0.2")
 	params := entries.NewCreateLogEntryParams()
 	params.SetContext(ctx)
 	params.SetProposedEntry(proposedEntry)
 
 	// Upload to Rekor
-	log.Info("[VSA] Calling CreateLogEntry for in-toto")
+	log.Info("[VSA] Calling CreateLogEntry for in-toto 0.0.2")
 	resp, err := rekorClient.Entries.CreateLogEntry(params)
 	if err != nil {
-		log.WithError(err).Error("[VSA] CreateLogEntry for in-toto failed")
-		return nil, fmt.Errorf("failed to create in-toto log entry: %w", err)
+		log.WithError(err).Error("[VSA] CreateLogEntry for in-toto 0.0.2 failed")
+		return nil, fmt.Errorf("failed to create in-toto 0.0.2 log entry: %w", err)
 	}
 
 	// Extract the created entry
@@ -233,71 +232,17 @@ func (r *RekorBackend) uploadIntotoEnvelope(ctx context.Context, rekorClient *ge
 	}
 
 	log.WithFields(log.Fields{
-		"entry_type": "in-toto",
-		"uuid":       logEntry.LogID,
-		"index":      logEntry.LogIndex,
-	}).Info("[VSA] Successfully uploaded in-toto entry")
-
-	return &logEntry, nil
-}
-
-// uploadDSSE uploads the envelope as a DSSE entry
-func (r *RekorBackend) uploadDSSE(ctx context.Context, rekorClient *gen_client.Rekor, envelopeContent []byte, pubKeyBytes []byte) (*models.LogEntryAnon, error) {
-	log.Info("[VSA] Creating artifact properties for DSSE entry")
-	// Create artifact properties for DSSE entry
-	artifactProps := types.ArtifactProperties{
-		ArtifactBytes:  envelopeContent,
-		PublicKeyBytes: [][]byte{pubKeyBytes},
-	}
-
-	// Create the proposed DSSE entry
-	log.Info("[VSA] Creating proposed DSSE entry")
-	log.WithFields(log.Fields{
-		"envelope_size":    len(envelopeContent),
-		"envelope_preview": string(envelopeContent[:min(len(envelopeContent), 200)]),
-		"pubkey_size":      len(pubKeyBytes),
-	}).Info("[VSA] DSSE envelope details for upload")
-
-	proposedEntry, err := types.NewProposedEntry(ctx, "dsse", "0.0.1", artifactProps)
-	if err != nil {
-		log.WithError(err).Error("[VSA] Failed to create proposed DSSE entry")
-		return nil, fmt.Errorf("failed to create proposed DSSE entry: %w", err)
-	}
-
-	// Create the upload parameters
-	log.Info("[VSA] Creating upload parameters")
-	params := entries.NewCreateLogEntryParams()
-	params.SetContext(ctx)
-	params.SetProposedEntry(proposedEntry)
-
-	// Upload to Rekor
-	log.Info("[VSA] Calling CreateLogEntry")
-	resp, err := rekorClient.Entries.CreateLogEntry(params)
-	if err != nil {
-		log.WithError(err).Error("[VSA] CreateLogEntry failed")
-		return nil, fmt.Errorf("failed to create DSSE log entry: %w", err)
-	}
-
-	// Extract the created entry
-	var logEntry models.LogEntryAnon
-	for _, entry := range resp.Payload {
-		logEntry = entry
-		break
-	}
-
-	log.WithFields(log.Fields{
-		"entry_type": "dsse",
-		"uuid":       logEntry.LogID,
-		"index":      logEntry.LogIndex,
-	}).Info("[VSA] Successfully uploaded DSSE entry")
+		"entry_type": "in-toto-0.0.2",
+		"uuid":       *logEntry.LogID,
+		"index":      *logEntry.LogIndex,
+	}).Info("[VSA] Successfully uploaded in-toto 0.0.2 entry")
 
 	return &logEntry, nil
 }
 
 // prepareDSSEForRekor prepares the DSSE envelope for Rekor by injecting public keys.
-// This envelope is used for both DSSE and in-toto uploads to ensure consistency between the two entries.
 // The payload hash is calculated from the decoded payload bytes, not the envelope JSON, to ensure
-// a stable join key between DSSE and in-toto entries.
+// a stable identifier for the VSA entry.
 func (r *RekorBackend) prepareDSSEForRekor(envelopeContent []byte, pubKeyBytes []byte) ([]byte, string, error) {
 	// Strongly-typed DSSE envelope to avoid map gymnastics
 	type dsseSig struct {
@@ -352,10 +297,30 @@ func (r *RekorBackend) prepareDSSEForRekor(envelopeContent []byte, pubKeyBytes [
 		}
 	}
 
+	// Log the DSSE envelope structure before re-marshaling
+	log.WithFields(log.Fields{
+		"payload_length":   len(env.Payload),
+		"payload_preview":  env.Payload[:min(100, len(env.Payload))],
+		"payload_type":     env.PayloadType,
+		"signatures_count": len(env.Signatures),
+		"payload_hash":     payloadHashHex,
+	}).Info("[VSA] DSSE envelope structure before re-marshaling")
+
 	// Re-marshal envelope **only** with publicKey additions (no payload/sig changes)
 	out, err := json.Marshal(env)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to marshal DSSE envelope with public keys: %w", err)
+	}
+
+	// Log the re-marshaled envelope to verify payload is preserved
+	var verifyEnv dsseEnvelope
+	if err := json.Unmarshal(out, &verifyEnv); err == nil {
+		log.WithFields(log.Fields{
+			"remarshaled_payload_length":   len(verifyEnv.Payload),
+			"remarshaled_payload_preview":  verifyEnv.Payload[:min(100, len(verifyEnv.Payload))],
+			"remarshaled_payload_type":     verifyEnv.PayloadType,
+			"remarshaled_signatures_count": len(verifyEnv.Signatures),
+		}).Info("[VSA] DSSE envelope structure after re-marshaling")
 	}
 
 	return out, payloadHashHex, nil

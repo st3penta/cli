@@ -18,13 +18,10 @@ package vsa
 
 import (
 	"context"
-	"encoding/base64"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/go-openapi/strfmt"
 	"github.com/sigstore/rekor/pkg/generated/models"
 	"github.com/stretchr/testify/assert"
 )
@@ -112,152 +109,6 @@ func TestNewRekorVSARetriever(t *testing.T) {
 	}
 }
 
-func TestRekorVSARetriever_RetrieveVSA(t *testing.T) {
-	tests := []struct {
-		name          string
-		imageDigest   string
-		mockEntries   []models.LogEntryAnon
-		mockError     error
-		expectedCount int
-		expectError   bool
-		expectedError string
-	}{
-		{
-			name:        "single VSA record found",
-			imageDigest: "sha256:abc123",
-			mockEntries: []models.LogEntryAnon{
-				{
-					LogIndex:       int64Ptr(1),
-					LogID:          stringPtr("test-log-id"),
-					IntegratedTime: int64Ptr(1234567890),
-					Body:           "test-body",
-					Attestation: &models.LogEntryAnonAttestation{
-						Data: strfmt.Base64("eyJwcmVkaWNhdGVUeXBlIjoiaHR0cHM6Ly9jb25mb3JtYS5kZXYvdmVyaWZpY2F0aW9uX3N1bW1hcnkvdjEiLCJzdWJqZWN0IjpbeyJuYW1lIjoicXVheS5pby90ZXN0L2ltYWdlIiwiZGlnZXN0Ijp7InNoYTI1NiI6ImFiYzEyMyJ9fV19"),
-					},
-				},
-			},
-			expectedCount: 1,
-			expectError:   false,
-		},
-		{
-			name:        "multiple VSA records found",
-			imageDigest: "sha256:abc123",
-			mockEntries: []models.LogEntryAnon{
-				{
-					LogIndex:       int64Ptr(1),
-					LogID:          stringPtr("test-log-id-1"),
-					IntegratedTime: int64Ptr(1234567890),
-					Body:           "test-body-1",
-					Attestation: &models.LogEntryAnonAttestation{
-						Data: strfmt.Base64("eyJwcmVkaWNhdGVUeXBlIjoiaHR0cHM6Ly9jb25mb3JtYS5kZXYvdmVyaWZpY2F0aW9uX3N1bW1hcnkvdjEiLCJzdWJqZWN0IjpbeyJuYW1lIjoicXVheS5pby90ZXN0L2ltYWdlIiwiZGlnZXN0Ijp7InNoYTI1NiI6ImFiYzEyMyJ9fV19"),
-					},
-				},
-				{
-					LogIndex:       int64Ptr(2),
-					LogID:          stringPtr("test-log-id-2"),
-					IntegratedTime: int64Ptr(1234567891),
-					Body:           "test-body-2",
-					Attestation: &models.LogEntryAnonAttestation{
-						Data: strfmt.Base64("eyJwcmVkaWNhdGVUeXBlIjoiaHR0cHM6Ly9jb25mb3JtYS5kZXYvdmVyaWZpY2F0aW9uX3N1bW1hcnkvdjEiLCJzdWJqZWN0IjpbeyJuYW1lIjoicXVheS5pby90ZXN0L2ltYWdlIiwiZGlnZXN0Ijp7InNoYTI1NiI6ImFiYzEyMyJ9fV19"),
-					},
-				},
-			},
-			expectedCount: 2,
-			expectError:   false,
-		},
-		{
-			name:          "no VSA records found",
-			imageDigest:   "sha256:abc123",
-			mockEntries:   []models.LogEntryAnon{},
-			expectedCount: 0,
-			expectError:   false,
-		},
-		{
-			name:          "empty image digest",
-			imageDigest:   "",
-			expectError:   true,
-			expectedError: "image digest cannot be empty",
-		},
-		{
-			name:          "invalid image digest format",
-			imageDigest:   "invalid-digest",
-			expectError:   true,
-			expectedError: "invalid image digest format",
-		},
-		{
-			name:          "Rekor search error",
-			imageDigest:   "sha256:abc123",
-			mockError:     errors.New("rekor unreachable"),
-			expectError:   true,
-			expectedError: "failed to search Rekor for image digest",
-		},
-		{
-			name:          "unsupported algorithm",
-			imageDigest:   "md5:abc123",
-			expectError:   true,
-			expectedError: "invalid image digest format",
-		},
-		{
-			name:          "invalid hex hash",
-			imageDigest:   "sha256:invalid-hex",
-			expectError:   true,
-			expectedError: "invalid image digest format",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockClient := &mockRekorClient{
-				searchEntries: tt.mockEntries,
-				searchError:   tt.mockError,
-			}
-
-			t.Logf("Creating retriever with mock client")
-			retriever := NewRekorVSARetrieverWithClient(mockClient, RetrievalOptions{
-				URL:     "https://rekor.example.com",
-				Timeout: 30 * time.Second,
-			})
-
-			// Debug: Check what the mock client has
-			t.Logf("Mock client has %d entries", len(tt.mockEntries))
-			for i, entry := range tt.mockEntries {
-				t.Logf("Entry %d: LogIndex=%v, LogID=%v, Body=%v, Attestation=%v",
-					i, entry.LogIndex, entry.LogID, entry.Body, entry.Attestation)
-				if entry.Attestation != nil && entry.Attestation.Data != nil {
-					decoded, err := base64.StdEncoding.DecodeString(string(entry.Attestation.Data))
-					t.Logf("Entry %d: Decoded attestation data: %s (err: %v)", i, string(decoded), err)
-				}
-			}
-
-			t.Logf("Calling RetrieveVSA with image digest: %s", tt.imageDigest)
-			records, err := retriever.RetrieveVSA(context.Background(), tt.imageDigest)
-
-			if tt.expectError {
-				assert.Error(t, err)
-				if tt.expectedError != "" {
-					assert.Contains(t, err.Error(), tt.expectedError)
-				}
-				assert.Nil(t, records)
-			} else {
-				assert.NoError(t, err)
-				t.Logf("Retrieved %d records", len(records))
-				assert.Len(t, records, tt.expectedCount)
-
-				// Verify record structure
-				for i, record := range records {
-					assert.NotZero(t, record.LogIndex)
-					assert.NotEmpty(t, record.LogID)
-					assert.NotZero(t, record.IntegratedTime)
-					assert.NotNil(t, record.Attestation)
-
-					// Verify the record contains the image digest
-					assert.True(t, isVSARecord(tt.mockEntries[i]))
-				}
-			}
-		})
-	}
-}
-
 func TestIsValidImageDigest(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -314,134 +165,6 @@ func TestIsValidImageDigest(t *testing.T) {
 	}
 }
 
-func TestIsVSARecord(t *testing.T) {
-	tests := []struct {
-		name     string
-		entry    models.LogEntryAnon
-		expected bool
-	}{
-		{
-			name: "valid VSA record with predicate type",
-			entry: models.LogEntryAnon{
-				Attestation: &models.LogEntryAnonAttestation{
-					Data: strfmt.Base64("eyJwcmVkaWNhdGVUeXBlIjoiaHR0cHM6Ly9jb25mb3JtYS5kZXYvdmVyaWZpY2F0aW9uX3N1bW1hcnkvdjEiLCJzdWJqZWN0IjpbeyJuYW1lIjoicXVheS5pby90ZXN0L2ltYWdlIiwiZGlnZXN0Ijp7InNoYTI1NiI6ImFiYzEyMyJ9fV19"),
-				},
-			},
-			expected: true,
-		},
-		{
-			name: "entry without attestation",
-			entry: models.LogEntryAnon{
-				Body: "sha256:abc123",
-			},
-			expected: false,
-		},
-		{
-			name: "entry with nil attestation data",
-			entry: models.LogEntryAnon{
-				Attestation: &models.LogEntryAnonAttestation{
-					Data: nil,
-				},
-			},
-			expected: false,
-		},
-		{
-			name: "entry with non-VSA attestation",
-			entry: models.LogEntryAnon{
-				Attestation: &models.LogEntryAnonAttestation{
-					Data: strfmt.Base64("eyJwcmVkaWNhdGVUeXBlIjoiaHR0cHM6Ly9leGFtcGxlLmNvbS9vdGhlci1hdHRlc3RhdGlvbiIsInN1YmplY3QiOlt7Im5hbWUiOiJxdWF5LmlvL3Rlc3QvaW1hZ2UiLCJkaWdlc3QiOnsic2hhMjU2IjoiZGVmNDU2In19XX0="),
-				},
-			},
-			expected: false,
-		},
-		{
-			name: "entry with malformed attestation data",
-			entry: models.LogEntryAnon{
-				Attestation: &models.LogEntryAnonAttestation{
-					Data: strfmt.Base64("aW52YWxpZC1iYXNlNjQ="),
-				},
-			},
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := isVSARecord(tt.entry)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestParseVSARecord(t *testing.T) {
-	retriever := &RekorVSARetriever{}
-
-	tests := []struct {
-		name        string
-		entry       models.LogEntryAnon
-		expected    VSARecord
-		expectError bool
-	}{
-		{
-			name: "complete entry",
-			entry: models.LogEntryAnon{
-				LogIndex:       int64Ptr(1),
-				LogID:          stringPtr("test-log-id"),
-				IntegratedTime: int64Ptr(1234567890),
-				Body:           "test-body",
-				Attestation: &models.LogEntryAnonAttestation{
-					Data: strfmt.Base64("dGVzdC1kYXRh"),
-				},
-				Verification: &models.LogEntryAnonVerification{
-					InclusionProof: &models.InclusionProof{},
-				},
-			},
-			expected: VSARecord{
-				LogIndex:       1,
-				LogID:          "test-log-id",
-				IntegratedTime: 1234567890,
-				Body:           "test-body",
-				Attestation: &models.LogEntryAnonAttestation{
-					Data: strfmt.Base64("dGVzdC1kYXRh"),
-				},
-				Verification: &models.LogEntryAnonVerification{
-					InclusionProof: &models.InclusionProof{},
-				},
-			},
-			expectError: false,
-		},
-		{
-			name: "entry with nil fields",
-			entry: models.LogEntryAnon{
-				LogIndex:       nil,
-				LogID:          nil,
-				IntegratedTime: nil,
-				Body:           nil,
-			},
-			expected: VSARecord{
-				LogIndex:       0,
-				LogID:          "",
-				IntegratedTime: 0,
-				Body:           "",
-			},
-			expectError: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := retriever.parseVSARecord(tt.entry)
-
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
-			}
-		})
-	}
-}
-
 func TestDefaultRetrievalOptions(t *testing.T) {
 	opts := DefaultRetrievalOptions()
 
@@ -467,10 +190,6 @@ func TestMockRekorClient(t *testing.T) {
 }
 
 // Helper functions for creating test data
-func int64Ptr(v int64) *int64 {
-	return &v
-}
-
 func stringPtr(v string) *string {
 	return &v
 }

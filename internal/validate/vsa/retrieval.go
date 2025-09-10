@@ -20,49 +20,14 @@ import (
 	"context"
 	"time"
 
-	"github.com/sigstore/rekor/pkg/generated/models"
+	ssldsse "github.com/secure-systems-lab/go-securesystemslib/dsse"
 )
 
-// VSARetriever defines the interface for retrieving VSA records from Rekor
+// VSARetriever defines the interface for retrieving VSA records from various sources
 type VSARetriever interface {
-	// RetrieveVSA retrieves VSA records for a given image digest
-	RetrieveVSA(ctx context.Context, imageDigest string) ([]VSARecord, error)
-	// FindByPayloadHash retrieves dual entries by payload hash
-	FindByPayloadHash(ctx context.Context, payloadHashHex string) (*DualEntryPair, error)
-	// GetPairedVSAWithSignatures retrieves a VSA with its corresponding signatures by payloadHash
-	// This ensures the signatures actually correspond to the VSA Statement being evaluated
-	GetPairedVSAWithSignatures(ctx context.Context, payloadHashHex string) (*PairedVSAWithSignatures, error)
-	// FindLatestMatchingPair finds the latest pair where intoto has attestation and DSSE matches
-	FindLatestMatchingPair(ctx context.Context, entries []models.LogEntryAnon) *DualEntryPair
-}
-
-// VSARecord represents a VSA record retrieved from Rekor
-type VSARecord struct {
-	LogIndex       int64                            `json:"logIndex"`
-	LogID          string                           `json:"logID"`
-	IntegratedTime int64                            `json:"integratedTime"`
-	UUID           string                           `json:"uuid"`
-	Body           string                           `json:"body"`
-	Attestation    *models.LogEntryAnonAttestation  `json:"attestation,omitempty"`
-	Verification   *models.LogEntryAnonVerification `json:"verification,omitempty"`
-}
-
-// DualEntryPair represents a pair of DSSE and in-toto entries for the same payload
-type DualEntryPair struct {
-	PayloadHash string
-	IntotoEntry *models.LogEntryAnon
-	DSSEEntry   *models.LogEntryAnon
-}
-
-// PairedVSAWithSignatures represents a VSA with its corresponding signatures
-// This ensures the signatures actually correspond to the VSA Statement being evaluated
-type PairedVSAWithSignatures struct {
-	PayloadHash   string                   `json:"payloadHash"`
-	VSAStatement  []byte                   `json:"vsaStatement"`
-	Signatures    []map[string]interface{} `json:"signatures"`
-	IntotoEntry   *models.LogEntryAnon     `json:"intotoEntry"`
-	DSSEEntry     *models.LogEntryAnon     `json:"dsseEntry"`
-	PredicateType string                   `json:"predicateType"`
+	// RetrieveVSA retrieves VSA data as a DSSE envelope for a given image digest
+	// This is the main method used by validation functions to get VSA data for signature verification
+	RetrieveVSA(ctx context.Context, imageDigest string) (*ssldsse.Envelope, error)
 }
 
 // RetrievalOptions configures VSA retrieval behavior
