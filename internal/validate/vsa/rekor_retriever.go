@@ -123,11 +123,6 @@ func (r *RekorVSARetriever) searchForImageDigest(ctx context.Context, imageDiges
 	return entries, nil
 }
 
-// GetAllEntriesForImageDigest returns all entries for an image digest without VSA filtering
-func (r *RekorVSARetriever) GetAllEntriesForImageDigest(ctx context.Context, imageDigest string) ([]models.LogEntryAnon, error) {
-	return r.searchForImageDigest(ctx, imageDigest)
-}
-
 // decodeBodyJSON decodes the base64-encoded body of a Rekor entry
 func (r *RekorVSARetriever) decodeBodyJSON(entry models.LogEntryAnon) (map[string]any, error) {
 	bodyStr, ok := entry.Body.(string)
@@ -166,17 +161,6 @@ func isValidImageDigest(digest string) bool {
 	}
 
 	// Validate hex format
-	_, err := hex.DecodeString(hash)
-	return err == nil
-}
-
-// IsValidHexHash validates that a string is a valid hex hash
-func (r *RekorVSARetriever) IsValidHexHash(hash string) bool {
-	if len(hash) == 0 {
-		return false
-	}
-
-	// Check if it's a valid hex string
 	_, err := hex.DecodeString(hash)
 	return err == nil
 }
@@ -257,46 +241,6 @@ func (r *RekorVSARetriever) classifyEntryKind(entry models.LogEntryAnon) string 
 	return "unknown"
 }
 
-// ExtractStatementFromIntoto extracts the Statement JSON from an in-toto entry
-func (r *RekorVSARetriever) ExtractStatementFromIntoto(entry *models.LogEntryAnon) ([]byte, error) {
-	if entry == nil {
-		return nil, fmt.Errorf("entry cannot be nil")
-	}
-
-	// Check if this is an in-toto entry
-	entryKind := r.classifyEntryKind(*entry)
-	if entryKind != "intoto" {
-		return nil, fmt.Errorf("entry is not an in-toto entry (kind: %s)", entryKind)
-	}
-
-	// Extract the DSSE envelope from the entry
-	envelopeBytes, err := r.extractDSSEEnvelopeFromEntry(entry)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract DSSE envelope from entry: %w", err)
-	}
-
-	// Parse the DSSE envelope
-	var envelope map[string]interface{}
-	if err := json.Unmarshal(envelopeBytes, &envelope); err != nil {
-		return nil, fmt.Errorf("failed to parse DSSE envelope: %w", err)
-	}
-
-	// Extract the payload
-	payloadBase64, ok := envelope["payload"].(string)
-	if !ok {
-		return nil, fmt.Errorf("payload not found in DSSE envelope")
-	}
-
-	// Decode the base64 payload
-	payloadBytes, err := base64.StdEncoding.DecodeString(payloadBase64)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode base64 payload: %w", err)
-	}
-
-	// The payload should contain the Statement JSON
-	return payloadBytes, nil
-}
-
 // extractDSSEEnvelopeFromEntry extracts the DSSE envelope from a Rekor entry
 func (r *RekorVSARetriever) extractDSSEEnvelopeFromEntry(entry *models.LogEntryAnon) ([]byte, error) {
 	// Determine entry type first
@@ -354,48 +298,6 @@ func (r *RekorVSARetriever) extractDSSEEnvelopeFromEntry(entry *models.LogEntryA
 	}
 
 	return nil, fmt.Errorf("could not extract DSSE envelope from entry")
-}
-
-// extractVSAStatement extracts the VSA Statement from an in-toto entry
-func (r *RekorVSARetriever) extractVSAStatement(entry models.LogEntryAnon) ([]byte, error) {
-	// Check if this is an in-toto 0.0.2 entry (single entry)
-	entryKind := r.classifyEntryKind(entry)
-	if entryKind == "intoto-v002" {
-		// For in-toto 0.0.2 entries, the payload is directly in the Attestation field
-		if entry.Attestation == nil || entry.Attestation.Data == nil {
-			return nil, fmt.Errorf("in-toto 0.0.2 entry does not contain attestation data")
-		}
-
-		// The attestation data contains the decoded payload (VSA statement)
-		log.Debugf("Extracting VSA statement from in-toto 0.0.2 entry attestation")
-		return entry.Attestation.Data, nil
-	}
-
-	// For dual entries (in-toto 0.0.1 + DSSE), use the existing logic
-	envelopeBytes, err := r.extractDSSEEnvelopeFromEntry(&entry)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract DSSE envelope: %w", err)
-	}
-
-	var envelope map[string]interface{}
-	if err := json.Unmarshal(envelopeBytes, &envelope); err != nil {
-		return nil, fmt.Errorf("failed to parse DSSE envelope: %w", err)
-	}
-
-	// Extract the payload
-	payloadBase64, ok := envelope["payload"].(string)
-	if !ok {
-		return nil, fmt.Errorf("payload not found in DSSE envelope")
-	}
-
-	// Decode the base64 payload
-	payloadBytes, err := base64.StdEncoding.DecodeString(payloadBase64)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode base64 payload: %w", err)
-	}
-
-	// The payload should contain the Statement JSON
-	return payloadBytes, nil
 }
 
 // RetrieveVSA retrieves VSA data as a DSSE envelope for a given image digest

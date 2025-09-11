@@ -19,7 +19,6 @@ package vsa
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -59,53 +58,6 @@ func (m *MockRekorClient) GetLogEntryByUUID(ctx context.Context, uuid string) (*
 		}
 	}
 	return nil, fmt.Errorf("entry not found")
-}
-
-func TestRekorVSARetriever_ExtractVSAStatement_IntotoV002(t *testing.T) {
-	// Create a mock in-toto 0.0.2 entry
-	// The payload contains a VSA statement
-	vsaStatement := `{"_type":"https://in-toto.io/Statement/v0.1","subject":[{"name":"test-image","hashes":{"sha256":"abc123"}}],"predicateType":"https://conforma.dev/verification_summary/v1","predicate":{"test":"data"}}`
-
-	entry := models.LogEntryAnon{
-		LogIndex: &[]int64{123}[0],
-		LogID:    &[]string{"intoto-v002-uuid"}[0],
-		Body:     base64.StdEncoding.EncodeToString([]byte(`{"IntotoObj": {"content": {"envelope": {"payloadType": "application/vnd.in-toto+json", "signatures": [{"sig": "dGVzdA=="}]}}}}`)),
-		Attestation: &models.LogEntryAnonAttestation{
-			Data: strfmt.Base64(vsaStatement), // The VSA statement is in the Attestation field
-		},
-	}
-
-	mockClient := &MockRekorClient{entries: []models.LogEntryAnon{entry}}
-	retriever := NewRekorVSARetrieverWithClient(mockClient, DefaultRetrievalOptions())
-
-	// Test successful extraction
-	statementBytes, err := retriever.extractVSAStatement(entry)
-	assert.NoError(t, err)
-	assert.NotNil(t, statementBytes)
-
-	// Verify the extracted statement
-	var statement map[string]interface{}
-	err = json.Unmarshal(statementBytes, &statement)
-	assert.NoError(t, err)
-	assert.Equal(t, "https://in-toto.io/Statement/v0.1", statement["_type"])
-	assert.Equal(t, "https://conforma.dev/verification_summary/v1", statement["predicateType"])
-}
-
-func TestRekorVSARetriever_ExtractVSAStatement_NoAttestation(t *testing.T) {
-	// Test case where entry has no Attestation field
-	entry := models.LogEntryAnon{
-		LogIndex: &[]int64{123}[0],
-		LogID:    &[]string{"intoto-v002-uuid"}[0],
-		Body:     base64.StdEncoding.EncodeToString([]byte(`{"IntotoObj": {"content": {"envelope": {"payloadType": "application/vnd.in-toto+json", "signatures": [{"sig": "dGVzdA=="}]}}}}`)),
-		// No Attestation field
-	}
-
-	mockClient := &MockRekorClient{entries: []models.LogEntryAnon{entry}}
-	retriever := NewRekorVSARetrieverWithClient(mockClient, DefaultRetrievalOptions())
-
-	_, err := retriever.extractVSAStatement(entry)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "in-toto 0.0.2 entry does not contain attestation data")
 }
 
 func TestRekorVSARetriever_ClassifyEntryKind(t *testing.T) {
@@ -159,30 +111,6 @@ func TestRekorVSARetriever_ClassifyEntryKind(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := retriever.classifyEntryKind(tt.entry)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestRekorVSARetriever_IsValidHexHash(t *testing.T) {
-	mockClient := &MockRekorClient{entries: []models.LogEntryAnon{}}
-	retriever := NewRekorVSARetrieverWithClient(mockClient, DefaultRetrievalOptions())
-
-	tests := []struct {
-		name     string
-		hash     string
-		expected bool
-	}{
-		{"valid hex", "abcdef1234567890", true},
-		{"valid hex with uppercase", "ABCDEF1234567890", true},
-		{"empty string", "", false},
-		{"invalid hex", "invalid-hex!", false},
-		{"partial hex", "abcd", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := retriever.IsValidHexHash(tt.hash)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
