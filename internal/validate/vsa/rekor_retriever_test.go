@@ -72,7 +72,7 @@ func TestRekorVSARetriever_ClassifyEntryKind(t *testing.T) {
 		{
 			name: "intoto 0.0.2 entry by body",
 			entry: models.LogEntryAnon{
-				Body: base64.StdEncoding.EncodeToString([]byte(`{"IntotoObj": {"content": {"envelope": {"payloadType": "application/vnd.in-toto+json", "signatures": [{"sig": "dGVzdA=="}]}}}}`)),
+				Body: base64.StdEncoding.EncodeToString([]byte(`{"spec": {"content": {"envelope": {"payloadType": "application/vnd.in-toto+json", "signatures": [{"sig": "dGVzdA=="}]}}}}`)),
 			},
 			expected: "intoto-v002",
 		},
@@ -123,7 +123,7 @@ func TestRekorVSARetriever_RetrieveVSA(t *testing.T) {
 
 	// Create in-toto 0.0.2 entry body
 	intotoV002Body := `{
-		"IntotoObj": {
+		"spec": {
 			"content": {
 				"envelope": {
 					"payloadType": "application/vnd.in-toto+json",
@@ -140,7 +140,7 @@ func TestRekorVSARetriever_RetrieveVSA(t *testing.T) {
 				LogID:    &[]string{"intoto-v002-uuid"}[0],
 				Body:     base64.StdEncoding.EncodeToString([]byte(intotoV002Body)),
 				Attestation: &models.LogEntryAnonAttestation{
-					Data: strfmt.Base64(vsaStatement),
+					Data: strfmt.Base64(base64.StdEncoding.EncodeToString([]byte(vsaStatement))),
 				},
 			},
 		},

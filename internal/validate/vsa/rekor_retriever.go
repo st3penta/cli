@@ -205,9 +205,9 @@ func (r *RekorVSARetriever) classifyEntryKind(entry models.LogEntryAnon) string 
 			}
 		}
 
-		// Check for IntotoObj structure (in-toto 0.0.2 entries)
-		if intotoObj, ok := body["IntotoObj"].(map[string]any); ok {
-			if content, ok := intotoObj["content"].(map[string]any); ok {
+		// Check for spec structure (in-toto 0.0.2 entries)
+		if spec, ok := body["spec"].(map[string]any); ok {
+			if content, ok := spec["content"].(map[string]any); ok {
 				if envelope, ok := content["envelope"].(map[string]any); ok {
 					// Check if this has both payloadType and signatures (0.0.2)
 					if _, hasPayloadType := envelope["payloadType"]; hasPayloadType {
@@ -310,14 +310,14 @@ func (r *RekorVSARetriever) buildDSSEEnvelopeFromIntotoV002(entry models.LogEntr
 	}
 
 	// Navigate to the in-toto 0.0.2 structure
-	intotoObj, ok := body["IntotoObj"].(map[string]interface{})
+	spec, ok := body["spec"].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("entry does not contain IntotoObj")
+		return nil, fmt.Errorf("entry does not contain spec")
 	}
 
-	content, ok := intotoObj["content"].(map[string]interface{})
+	content, ok := spec["content"].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("IntotoObj does not contain content")
+		return nil, fmt.Errorf("spec does not contain content")
 	}
 
 	envelopeData, ok := content["envelope"].(map[string]interface{})
@@ -338,8 +338,8 @@ func (r *RekorVSARetriever) buildDSSEEnvelopeFromIntotoV002(entry models.LogEntr
 	if payload, ok := envelopeData["payload"].(string); ok && payload != "" {
 		payloadB64 = payload
 	} else if entry.Attestation != nil && entry.Attestation.Data != nil {
-		// Fallback to Attestation.Data
-		payloadB64 = base64.StdEncoding.EncodeToString(entry.Attestation.Data)
+		// Fallback to Attestation.Data (already base64-encoded)
+		payloadB64 = string(entry.Attestation.Data)
 	} else {
 		return nil, fmt.Errorf("no payload found in envelope or attestation data")
 	}
@@ -454,7 +454,7 @@ func (rc *rekorClient) fetchLogEntriesParallel(ctx context.Context, uuids []stri
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
-			rc.worker(ctx, uuidChan, resultChan, errorChan, workerID)
+			rc.worker(ctx, uuidChan, resultChan, workerID)
 		}(i)
 	}
 
@@ -517,7 +517,7 @@ type fetchResult struct {
 }
 
 // worker processes UUIDs from the input channel and sends results to the output channel
-func (rc *rekorClient) worker(ctx context.Context, uuidChan <-chan string, resultChan chan<- fetchResult, errorChan chan<- error, workerID int) {
+func (rc *rekorClient) worker(ctx context.Context, uuidChan <-chan string, resultChan chan<- fetchResult, workerID int) {
 
 	for uuid := range uuidChan {
 		select {
