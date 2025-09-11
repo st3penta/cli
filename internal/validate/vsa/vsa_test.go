@@ -109,27 +109,26 @@ OURRVjNQMk9ndDFDaVFHeGg1VXhUZytGc3c9PSJ9
 func TestUploadVSAAttestation(t *testing.T) {
 	fakeAtt := &mockAttestation{}
 	imageRef := "quay.io/test/image:tag"
-	ctx := context.Background()
 
 	t.Run("calls provided uploader and returns result", func(t *testing.T) {
 		uploaderCalled := false
-		uploader := func(ctx context.Context, att oci.Signature, img string) (string, error) {
+		uploader := func(att oci.Signature, img string) (string, error) {
 			uploaderCalled = true
 			assert.Equal(t, fakeAtt, att)
 			assert.Equal(t, imageRef, img)
 			return "digest123", nil
 		}
-		result, err := uploader(ctx, fakeAtt, imageRef)
+		result, err := uploader(fakeAtt, imageRef)
 		assert.NoError(t, err)
 		assert.Equal(t, "digest123", result)
 		assert.True(t, uploaderCalled)
 	})
 
 	t.Run("propagates error from uploader", func(t *testing.T) {
-		uploader := func(ctx context.Context, att oci.Signature, img string) (string, error) {
+		uploader := func() (string, error) {
 			return "", assert.AnError
 		}
-		result, err := uploader(ctx, fakeAtt, imageRef)
+		result, err := uploader()
 		assert.Error(t, err)
 		assert.Equal(t, "", result)
 		assert.Contains(t, err.Error(), assert.AnError.Error())

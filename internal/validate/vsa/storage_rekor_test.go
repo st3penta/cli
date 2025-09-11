@@ -301,7 +301,7 @@ func TestRekorBackend_PrepareDSSEForRekor(t *testing.T) {
 	}
 }
 
-func TestRekorBackend_UploadBoth_Consistency(t *testing.T) {
+func TestRekorBackend_UploadSingle_Consistency(t *testing.T) {
 	// Create a test backend
 	backend := &RekorBackend{
 		serverURL: "https://rekor.test",
@@ -321,7 +321,7 @@ func TestRekorBackend_UploadBoth_Consistency(t *testing.T) {
 	// Mock public key
 	pubKeyBytes := []byte("-----BEGIN PUBLIC KEY-----\ntest-key\n-----END PUBLIC KEY-----")
 
-	// Test that prepareDSSEForRekor produces consistent output
+	// Test that prepareDSSEForRekor produces consistent output for single entry upload
 	preparedEnvelope1, payloadHash1, err := backend.prepareDSSEForRekor(envelopeContent, pubKeyBytes)
 	require.NoError(t, err)
 	require.NotEmpty(t, payloadHash1)
@@ -331,8 +331,8 @@ func TestRekorBackend_UploadBoth_Consistency(t *testing.T) {
 	require.NotEmpty(t, payloadHash2)
 
 	// Verify that the same input produces the same output (deterministic)
-	require.Equal(t, preparedEnvelope1, preparedEnvelope2, "Prepared envelopes should be identical")
-	require.Equal(t, payloadHash1, payloadHash2, "Payload hashes should be identical")
+	require.Equal(t, preparedEnvelope1, preparedEnvelope2, "Prepared envelopes should be identical for single entry")
+	require.Equal(t, payloadHash1, payloadHash2, "Payload hashes should be identical for single entry")
 
 	// Verify that the content contains the injected public key
 	require.Contains(t, string(preparedEnvelope1), "-----BEGIN PUBLIC KEY-----", "Prepared content should contain public key")
