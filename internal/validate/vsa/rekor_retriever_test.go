@@ -183,7 +183,7 @@ func TestRekorVSARetriever_RetrieveVSA_NoEntries(t *testing.T) {
 
 	_, err := retriever.RetrieveVSA(context.Background(), "sha256:abcdef123456")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no entries found for image digest")
+	assert.Contains(t, err.Error(), "no entries found in Rekor for image digest")
 }
 
 func TestRekorVSARetriever_FindLatestEntryByIntegratedTime(t *testing.T) {

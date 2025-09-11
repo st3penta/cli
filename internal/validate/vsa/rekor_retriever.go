@@ -112,7 +112,6 @@ func (r *RekorVSARetriever) searchForImageDigest(ctx context.Context, imageDiges
 	log.Debugf("Calling client.SearchIndex")
 	entries, err := r.client.SearchIndex(ctx, query)
 	if err != nil {
-		log.Debugf("SearchIndex returned error: %v", err)
 		return nil, fmt.Errorf("failed to search Rekor index: %w", err)
 	}
 
@@ -241,66 +240,7 @@ func (r *RekorVSARetriever) classifyEntryKind(entry models.LogEntryAnon) string 
 	return "unknown"
 }
 
-// extractDSSEEnvelopeFromEntry extracts the DSSE envelope from a Rekor entry
-func (r *RekorVSARetriever) extractDSSEEnvelopeFromEntry(entry *models.LogEntryAnon) ([]byte, error) {
-	// Determine entry type first
-	entryKind := r.classifyEntryKind(*entry)
-
-	// Try to extract from attestation data first
-	if entry.Attestation != nil && entry.Attestation.Data != nil {
-		attestationData, err := base64.StdEncoding.DecodeString(string(entry.Attestation.Data))
-		if err == nil {
-			// Check if this contains a DSSE envelope
-			var attestation map[string]interface{}
-			if err := json.Unmarshal(attestationData, &attestation); err == nil {
-				if _, hasPayload := attestation["payload"]; hasPayload {
-					// For intoto entries, payload is sufficient (signatures not required)
-					if entryKind == "intoto" {
-						return attestationData, nil
-					}
-					// For DSSE entries, require both payload and signatures
-					if _, hasSignatures := attestation["signatures"]; hasSignatures {
-						return attestationData, nil
-					}
-				}
-			}
-		}
-	}
-
-	// Try to extract from body field
-	if entry.Body != nil {
-		body, err := r.decodeBodyJSON(*entry)
-		if err == nil {
-			// Look for content.envelope structure
-			if content, ok := body["content"].(map[string]interface{}); ok {
-				if envelope, ok := content["envelope"].(map[string]interface{}); ok {
-					if _, hasPayload := envelope["payload"]; hasPayload {
-						// For intoto entries, payload is sufficient (signatures not required)
-						if entryKind == "intoto" {
-							// Return the envelope as JSON
-							envelopeBytes, err := json.Marshal(envelope)
-							if err == nil {
-								return envelopeBytes, nil
-							}
-						}
-						// For DSSE entries, require both payload and signatures
-						if _, hasSignatures := envelope["signatures"]; hasSignatures {
-							// Return the envelope as JSON
-							envelopeBytes, err := json.Marshal(envelope)
-							if err == nil {
-								return envelopeBytes, nil
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return nil, fmt.Errorf("could not extract DSSE envelope from entry")
-}
-
-// RetrieveVSA retrieves VSA data as a DSSE envelope for a given image digest
+// RetrieveVSA retrieves the latest VSA data as a DSSE envelope for a given image digest
 // This is the main method used by validation functions to get VSA data for signature verification
 func (r *RekorVSARetriever) RetrieveVSA(ctx context.Context, imageDigest string) (*ssldsse.Envelope, error) {
 	if imageDigest == "" {
@@ -324,11 +264,11 @@ func (r *RekorVSARetriever) RetrieveVSA(ctx context.Context, imageDigest string)
 	// Search for entries containing the image digest
 	entries, err := r.searchForImageDigest(ctx, imageDigest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to search for image digest: %w", err)
+		return nil, fmt.Errorf("failed to search Rekor for image digest: %w", err)
 	}
 
 	if len(entries) == 0 {
-		return nil, fmt.Errorf("no entries found for image digest: %s", imageDigest)
+		return nil, fmt.Errorf("no entries found in Rekor for image digest: %s", imageDigest)
 	}
 
 	// Find all in-toto 0.0.2 entries
@@ -410,6 +350,10 @@ func (r *RekorVSARetriever) buildDSSEEnvelopeFromIntotoV002(entry models.LogEntr
 		return nil, fmt.Errorf("envelope does not contain signatures")
 	}
 
+	if len(signaturesInterface) == 0 {
+		return nil, fmt.Errorf("envelope contains empty signatures array")
+	}
+
 	var signatures []ssldsse.Signature
 	for i, sigInterface := range signaturesInterface {
 		sigMap, ok := sigInterface.(map[string]interface{})
@@ -418,19 +362,25 @@ func (r *RekorVSARetriever) buildDSSEEnvelopeFromIntotoV002(entry models.LogEntr
 		}
 
 		sig := ssldsse.Signature{}
+
+		// Extract sig field (required) - only support standard field
 		if sigHex, ok := sigMap["sig"].(string); ok {
 			sig.Sig = sigHex
-		} else if sigHex, ok := sigMap["signature"].(string); ok {
-			sig.Sig = sigHex
 		} else {
-			continue
+			return nil, fmt.Errorf("signature %d missing required 'sig' field", i)
 		}
 
+		// Extract keyid field (optional)
 		if keyid, ok := sigMap["keyid"].(string); ok {
 			sig.KeyID = keyid
 		}
 
 		signatures = append(signatures, sig)
+	}
+
+	// Validate that we have at least one valid signature
+	if len(signatures) == 0 {
+		return nil, fmt.Errorf("no valid signatures found in envelope")
 	}
 
 	// Build the ssldsse.Envelope
