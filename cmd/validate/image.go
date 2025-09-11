@@ -350,6 +350,7 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 			}
 
 			showSuccesses, _ := cmd.Flags().GetBool("show-successes")
+			showWarnings, _ := cmd.Flags().GetBool("show-warnings")
 
 			// worker is responsible for processing one component at a time from the jobs channel,
 			// and for emitting a corresponding result for the component on the results channel.
@@ -453,11 +454,11 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 				data.output = append(data.output, fmt.Sprintf("%s=%s", applicationsnapshot.JSON, data.outputFile))
 			}
 
-			report, err := applicationsnapshot.NewReport(data.snapshot, components, data.policy, manyPolicyInput, showSuccesses, data.expansion)
+			report, err := applicationsnapshot.NewReport(data.snapshot, components, data.policy, manyPolicyInput, showSuccesses, showWarnings, data.expansion)
 			if err != nil {
 				return err
 			}
-			p := format.NewTargetParser(applicationsnapshot.JSON, format.Options{ShowSuccesses: showSuccesses}, cmd.OutOrStdout(), utils.FS(cmd.Context()))
+			p := format.NewTargetParser(applicationsnapshot.JSON, format.Options{ShowSuccesses: showSuccesses, ShowWarnings: showWarnings}, cmd.OutOrStdout(), utils.FS(cmd.Context()))
 			utils.SetColorEnabled(data.noColor, data.forceColor)
 			if err := report.WriteAll(data.output, p); err != nil {
 				return err

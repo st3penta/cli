@@ -48,18 +48,21 @@ func mockValidate(out *output.Output, err error) InputValidationFunc {
 }
 
 func setUpValidateInputCmd(validate InputValidationFunc, fs afero.Fs) (*cobra.Command, *bytes.Buffer) {
+	// Create the parent validate command to get the persistent flags
+	validateCmd := NewValidateCmd()
 	cmd := validateInputCmd(validate)
+	validateCmd.AddCommand(cmd)
 
 	// Create a fake client and context with a memory filesystem.
 	client := fake.FakeClient{}
 	ctx := utils.WithFS(context.Background(), fs)
 	ctx = oci.WithClient(ctx, &client)
-	cmd.SetContext(ctx)
+	validateCmd.SetContext(ctx)
 
 	var out bytes.Buffer
-	cmd.SetOut(&out)
+	validateCmd.SetOut(&out)
 
-	return cmd, &out
+	return validateCmd, &out
 }
 
 func Test_ValidateInputCmd_SuccessSingleFile(t *testing.T) {
@@ -306,4 +309,88 @@ func Test_ValidateInputCmd_EmptyPolicyFile(t *testing.T) {
 	err := cmd.Execute()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "file /policy.yaml is empty")
+}
+
+func Test_ValidateInputCmd_ShowWarningsFlag(t *testing.T) {
+	// Create a validator that returns warnings
+	warningValidator := func(_ context.Context, fpath string, _ policy.Policy, _ bool) (*output.Output, error) {
+		return &output.Output{
+			PolicyCheck: []evaluator.Outcome{
+				{
+					Warnings: []evaluator.Result{
+						{
+							Message: "This is a warning message",
+							Metadata: map[string]interface{}{
+								"code":  "warning.test",
+								"title": "Test Warning",
+							},
+						},
+					},
+				},
+			},
+		}, nil
+	}
+
+	cases := []struct {
+		name             string
+		args             []string
+		expectedWarnings bool
+	}{
+		{
+			name:             "default behavior (show-warnings=true)",
+			args:             []string{"input", "--file", "/file.yaml", "--policy", `{"publicKey": "testkey"}`},
+			expectedWarnings: true,
+		},
+		{
+			name:             "explicit show-warnings=true",
+			args:             []string{"input", "--file", "/file.yaml", "--policy", `{"publicKey": "testkey"}`, "--show-warnings=true"},
+			expectedWarnings: true,
+		},
+		{
+			name:             "show-warnings=false",
+			args:             []string{"input", "--file", "/file.yaml", "--policy", `{"publicKey": "testkey"}`, "--show-warnings=false"},
+			expectedWarnings: false,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fs := afero.NewMemMapFs()
+			require.NoError(t, afero.WriteFile(fs, "/file.yaml", []byte("some: data"), 0644))
+
+			cmd, buf := setUpValidateInputCmd(warningValidator, fs)
+			cmd.SetArgs(c.args)
+
+			utils.SetTestRekorPublicKey(t)
+			err := cmd.Execute()
+			assert.NoError(t, err)
+
+			// Parse the JSON output
+			var outJSON map[string]interface{}
+			err = json.Unmarshal(buf.Bytes(), &outJSON)
+			assert.NoError(t, err)
+
+			inputFiles, ok := outJSON["filepaths"].([]interface{})
+			if !ok {
+				t.Fatal("expected 'filepaths' key in output")
+			}
+			assert.Len(t, inputFiles, 1)
+			inputObj := inputFiles[0].(map[string]interface{})
+
+			// Check if warnings are present in the output
+			warnings, hasWarnings := inputObj["warnings"].([]interface{})
+			if c.expectedWarnings {
+				assert.True(t, hasWarnings, "Warnings should be present in output when show-warnings=true")
+				assert.Len(t, warnings, 1, "Should have one warning")
+				if len(warnings) > 0 {
+					warningObj := warnings[0].(map[string]interface{})
+					assert.Equal(t, "This is a warning message", warningObj["msg"])
+				}
+			} else {
+				// When show-warnings=false, warnings should not be in the JSON output
+				// (they're filtered out at the component level)
+				assert.False(t, hasWarnings, "Warnings should NOT be present in output when show-warnings=false")
+			}
+		})
+	}
 }

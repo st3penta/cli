@@ -52,7 +52,7 @@ func Test_ReportJson(t *testing.T) {
 
 	ctx := context.Background()
 	testPolicy := createTestPolicy(t, ctx)
-	report, err := NewReport("snappy", components, testPolicy, nil, true, nil)
+	report, err := NewReport("snappy", components, testPolicy, nil, true, true, nil)
 	assert.NoError(t, err)
 
 	testEffectiveTime := testPolicy.EffectiveTime().UTC().Format(time.RFC3339Nano)
@@ -110,7 +110,7 @@ func Test_ReportYaml(t *testing.T) {
 
 	ctx := context.Background()
 	testPolicy := createTestPolicy(t, ctx)
-	report, err := NewReport("snappy", components, testPolicy, nil, true, nil)
+	report, err := NewReport("snappy", components, testPolicy, nil, true, true, nil)
 	assert.NoError(t, err)
 
 	testEffectiveTime := testPolicy.EffectiveTime().UTC().Format(time.RFC3339Nano)
@@ -257,7 +257,7 @@ func Test_GenerateMarkdownSummary(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			ctx := context.Background()
-			report, err := NewReport(c.snapshot, c.components, createTestPolicy(t, ctx), nil, true, nil)
+			report, err := NewReport(c.snapshot, c.components, createTestPolicy(t, ctx), nil, true, true, nil)
 			assert.NoError(t, err)
 			report.created = time.Unix(0, 0).UTC()
 
@@ -504,7 +504,7 @@ func Test_ReportSummary(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(fmt.Sprintf("NewReport=%s", tc.name), func(t *testing.T) {
 			ctx := context.Background()
-			report, err := NewReport(tc.snapshot, []Component{tc.input}, createTestPolicy(t, ctx), nil, true, nil)
+			report, err := NewReport(tc.snapshot, []Component{tc.input}, createTestPolicy(t, ctx), nil, true, true, nil)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.want, report.toSummary())
 		})
@@ -641,7 +641,7 @@ func Test_ReportAppstudio(t *testing.T) {
 			assert.NoError(t, err)
 
 			ctx := context.Background()
-			report, err := NewReport(c.snapshot, c.components, createTestPolicy(t, ctx), nil, true, nil)
+			report, err := NewReport(c.snapshot, c.components, createTestPolicy(t, ctx), nil, true, true, nil)
 			assert.NoError(t, err)
 			assert.False(t, report.created.IsZero())
 			assert.Equal(t, c.success, report.Success)
@@ -789,7 +789,7 @@ func Test_ReportHACBS(t *testing.T) {
 			assert.NoError(t, err)
 
 			ctx := context.Background()
-			report, err := NewReport(c.snapshot, c.components, createTestPolicy(t, ctx), nil, true, nil)
+			report, err := NewReport(c.snapshot, c.components, createTestPolicy(t, ctx), nil, true, true, nil)
 			assert.NoError(t, err)
 			assert.False(t, report.created.IsZero())
 			assert.Equal(t, c.success, report.Success)
@@ -821,7 +821,7 @@ func Test_ReportPolicyInput(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	report, err := NewReport("snapshot", nil, createTestPolicy(t, ctx), policyInput, true, nil)
+	report, err := NewReport("snapshot", nil, createTestPolicy(t, ctx), policyInput, true, true, nil)
 	require.NoError(t, err)
 
 	p := format.NewTargetParser(JSON, format.Options{}, defaultWriter, fs)
@@ -891,6 +891,7 @@ func Test_TextReport(t *testing.T) {
 		{"nothing", Report{}},
 		{"bunch", Report{
 			ShowSuccesses: true,
+			ShowWarnings:  true,
 			Components: []Component{
 				{
 					SnapshotComponent: app.SnapshotComponent{
@@ -1031,6 +1032,7 @@ func Test_DocumentationLink_OnlySuccesses(t *testing.T) {
 func Test_DocumentationLink_OnlyWarnings(t *testing.T) {
 	// Test case: Only warnings - should show documentation link
 	r := Report{
+		ShowWarnings: true,
 		Components: []Component{
 			{
 				Warnings: []evaluator.Result{
@@ -1121,6 +1123,7 @@ func Test_DocumentationLink_MultipleComponents(t *testing.T) {
 	// Test case: Multiple components with mixed results - should show documentation link
 	r := Report{
 		ShowSuccesses: true,
+		ShowWarnings:  true,
 		Components: []Component{
 			{
 				// Component 1: Only successes
@@ -1173,4 +1176,195 @@ func Test_DocumentationLink_EmptyReport(t *testing.T) {
 	hasDocLink := strings.Contains(outputStr, "https://conforma.dev/docs/policy/")
 
 	assert.False(t, hasDocLink, "Documentation link should NOT appear for empty reports")
+}
+
+func Test_ShowWarningsFlag_TextOutput(t *testing.T) {
+	warnings := []evaluator.Result{
+		{
+			Metadata: map[string]interface{}{
+				"code": "warning.policy",
+			},
+			Message: "This is a warning message",
+		},
+	}
+
+	cases := []struct {
+		name           string
+		showWarnings   bool
+		expectedOutput string
+	}{
+		{
+			name:           "show-warnings=true (default)",
+			showWarnings:   true,
+			expectedOutput: "Warning",
+		},
+		{
+			name:           "show-warnings=false",
+			showWarnings:   false,
+			expectedOutput: "",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := Report{
+				ShowWarnings: c.showWarnings,
+				Components: []Component{
+					{
+						SnapshotComponent: app.SnapshotComponent{
+							ContainerImage: "registry.io/repository/component:tag",
+						},
+						Warnings: warnings,
+					},
+				},
+			}
+
+			output, err := generateTextReport(&r)
+			require.NoError(t, err)
+
+			outputStr := string(output)
+			if c.showWarnings {
+				assert.Contains(t, outputStr, "Warning", "Warning should be displayed when showWarnings=true")
+				assert.Contains(t, outputStr, "This is a warning message", "Warning message should be displayed when showWarnings=true")
+			} else {
+				// When showWarnings=false, the warnings should not appear in the Results section
+				// but the warning count will still be shown in the summary line
+				assert.NotContains(t, outputStr, "Results:", "Results section should not appear when showWarnings=false and no violations")
+				assert.NotContains(t, outputStr, "This is a warning message", "Warning message should NOT be displayed when showWarnings=false")
+			}
+		})
+	}
+}
+
+func Test_ShowWarningsFlag_WithSuccesses(t *testing.T) {
+	warnings := []evaluator.Result{
+		{
+			Metadata: map[string]interface{}{
+				"code": "warning.policy",
+			},
+			Message: "This is a warning message",
+		},
+	}
+
+	successes := []evaluator.Result{
+		{
+			Metadata: map[string]interface{}{
+				"code": "success.policy",
+			},
+			Message: "This is a success message",
+		},
+	}
+
+	cases := []struct {
+		name              string
+		showWarnings      bool
+		showSuccesses     bool
+		expectedWarnings  bool
+		expectedSuccesses bool
+	}{
+		{
+			name:              "both true",
+			showWarnings:      true,
+			showSuccesses:     true,
+			expectedWarnings:  true,
+			expectedSuccesses: true,
+		},
+		{
+			name:              "warnings true, successes false",
+			showWarnings:      true,
+			showSuccesses:     false,
+			expectedWarnings:  true,
+			expectedSuccesses: false,
+		},
+		{
+			name:              "warnings false, successes true",
+			showWarnings:      false,
+			showSuccesses:     true,
+			expectedWarnings:  false,
+			expectedSuccesses: true,
+		},
+		{
+			name:              "both false",
+			showWarnings:      false,
+			showSuccesses:     false,
+			expectedWarnings:  false,
+			expectedSuccesses: false,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := Report{
+				ShowWarnings:  c.showWarnings,
+				ShowSuccesses: c.showSuccesses,
+				Components: []Component{
+					{
+						SnapshotComponent: app.SnapshotComponent{
+							ContainerImage: "registry.io/repository/component:tag",
+						},
+						Warnings:     warnings,
+						Successes:    successes,
+						SuccessCount: 1,
+					},
+				},
+			}
+
+			output, err := generateTextReport(&r)
+			require.NoError(t, err)
+
+			outputStr := string(output)
+			if c.expectedWarnings {
+				assert.Contains(t, outputStr, "Warning", "Warning should be displayed when expected")
+				assert.Contains(t, outputStr, "This is a warning message", "Warning message should be displayed when expected")
+			} else {
+				assert.NotContains(t, outputStr, "This is a warning message", "Warning message should NOT be displayed when not expected")
+			}
+
+			if c.expectedSuccesses {
+				assert.Contains(t, outputStr, "Success", "Success should be displayed when expected")
+				assert.Contains(t, outputStr, "success.policy", "Success code should be displayed when expected")
+			} else {
+				assert.NotContains(t, outputStr, "success.policy", "Success code should NOT be displayed when not expected")
+			}
+		})
+	}
+}
+
+func Test_NewReport_ShowWarningsParameter(t *testing.T) {
+	ctx := context.Background()
+	testPolicy := createTestPolicy(t, ctx)
+	components := []Component{
+		{
+			SnapshotComponent: app.SnapshotComponent{
+				ContainerImage: "registry.io/repository/component:tag",
+			},
+			Warnings: []evaluator.Result{
+				{Message: "Test warning"},
+			},
+		},
+	}
+
+	// Test with showWarnings=true
+	report1, err := NewReport("test", components, testPolicy, nil, false, true, nil)
+	require.NoError(t, err)
+	assert.True(t, report1.ShowWarnings, "ShowWarnings should be true when passed as true")
+
+	// Test with showWarnings=false
+	report2, err := NewReport("test", components, testPolicy, nil, false, false, nil)
+	require.NoError(t, err)
+	assert.False(t, report2.ShowWarnings, "ShowWarnings should be false when passed as false")
+}
+
+func Test_ApplyOptions_ShowWarnings(t *testing.T) {
+	r := Report{
+		ShowWarnings: true,
+	}
+
+	opts := format.Options{
+		ShowWarnings: false,
+	}
+
+	r.applyOptions(opts)
+
+	assert.False(t, r.ShowWarnings, "ShowWarnings should be updated to false after applying options")
 }

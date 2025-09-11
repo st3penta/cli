@@ -43,5 +43,6 @@ func NewValidateCmd() *cobra.Command {
 		Short: "Validate conformance with the provided policies",
 	}
 	validateCmd.PersistentFlags().Bool("show-successes", false, "")
+	validateCmd.PersistentFlags().Bool("show-warnings", true, "")
 	return validateCmd
 }

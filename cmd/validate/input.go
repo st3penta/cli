@@ -117,6 +117,7 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 			}
 
 			showSuccesses, _ := cmd.Flags().GetBool("show-successes")
+			showWarnings, _ := cmd.Flags().GetBool("show-warnings")
 
 			// Set numWorkers to the value from our flag. The default is 5.
 			numWorkers := data.workers
@@ -146,7 +147,11 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 
 					if err == nil {
 						res.input.Violations = out.Violations()
-						res.input.Warnings = out.Warnings()
+
+						warnings := out.Warnings()
+						if showWarnings {
+							res.input.Warnings = warnings
+						}
 
 						successes := out.Successes()
 						res.input.SuccessCount = len(successes)
@@ -207,7 +212,7 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 				return err
 			}
 
-			p := format.NewTargetParser(input.JSON, format.Options{ShowSuccesses: showSuccesses}, cmd.OutOrStdout(), utils.FS(cmd.Context()))
+			p := format.NewTargetParser(input.JSON, format.Options{ShowSuccesses: showSuccesses, ShowWarnings: showWarnings}, cmd.OutOrStdout(), utils.FS(cmd.Context()))
 			if err := report.WriteAll(data.output, p); err != nil {
 				return err
 			}
