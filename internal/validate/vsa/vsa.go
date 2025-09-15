@@ -18,6 +18,7 @@ package vsa
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -26,6 +27,7 @@ import (
 
 	ecc "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
 	"github.com/google/go-containerregistry/pkg/name"
+	ssldsse "github.com/secure-systems-lab/go-securesystemslib/dsse"
 	"github.com/sigstore/cosign/v2/pkg/oci"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
@@ -247,6 +249,45 @@ func NewVSAChecker(rekorURL string, timeout time.Duration) *VSAChecker {
 	}
 }
 
+// extractPredicateFromEnvelope extracts the VSA predicate from a DSSE envelope
+func extractPredicateFromEnvelope(envelope *ssldsse.Envelope) (*Predicate, error) {
+	// Check if payload is already decoded or needs base64 decoding
+	var payloadBytes []byte
+	var err error
+
+	// Try to decode as base64 first
+	payloadBytes, err = base64.StdEncoding.DecodeString(envelope.Payload)
+	if err != nil {
+		// If base64 decoding fails, treat as raw JSON string
+		payloadBytes = []byte(envelope.Payload)
+	}
+
+	// Parse the payload as JSON to extract the predicate
+	var payload map[string]interface{}
+	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+		return nil, fmt.Errorf("failed to parse envelope payload: %w", err)
+	}
+
+	// Extract the predicate from the payload
+	predicateData, ok := payload["predicate"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("envelope payload does not contain predicate")
+	}
+
+	// Convert to Predicate struct
+	predicateBytes, err := json.Marshal(predicateData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal predicate data: %w", err)
+	}
+
+	var predicate Predicate
+	if err := json.Unmarshal(predicateBytes, &predicate); err != nil {
+		return nil, fmt.Errorf("failed to parse predicate: %w", err)
+	}
+
+	return &predicate, nil
+}
+
 // CheckExistingVSA looks up existing VSAs for an image in Rekor and determines if they're valid/expired
 func (c *VSAChecker) CheckExistingVSA(ctx context.Context, imageRef string, expirationThreshold time.Duration) (*VSALookupResult, error) {
 	result := &VSALookupResult{
@@ -273,44 +314,42 @@ func (c *VSAChecker) CheckExistingVSA(ctx context.Context, imageRef string, expi
 		return nil, fmt.Errorf("failed to create Rekor VSA retriever: %w", err)
 	}
 
-	// Retrieve VSA records for this image digest
-	vsaRecords, err := retriever.RetrieveVSA(ctx, digest)
+	// Retrieve VSA envelope for this image digest
+	envelope, err := retriever.RetrieveVSA(ctx, digest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve VSA records from Rekor: %w", err)
+		return nil, fmt.Errorf("failed to retrieve VSA envelope from Rekor: %w", err)
 	}
 
-	if len(vsaRecords) == 0 {
-		log.Debugf("No VSA records found for image %s", imageRef)
+	if envelope == nil {
+		log.Debugf("No VSA envelope found for image %s", imageRef)
 		return result, nil
 	}
 
-	// Find the most recent VSA and check if it's expired
-	var mostRecentRecord *VSARecord
-	var mostRecentTime time.Time
-
-	for _, record := range vsaRecords {
-		recordTime := time.Unix(record.IntegratedTime, 0)
-
-		if mostRecentRecord == nil || recordTime.After(mostRecentTime) {
-			mostRecentRecord = &record
-			mostRecentTime = recordTime
-		}
+	// Extract predicate from the envelope
+	predicate, err := extractPredicateFromEnvelope(envelope)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract predicate from VSA envelope: %w", err)
 	}
 
-	if mostRecentRecord != nil {
-		result.Found = true
-		result.Timestamp = mostRecentTime
-		result.Expired = IsVSAExpired(mostRecentTime, expirationThreshold)
-
-		log.WithFields(log.Fields{
-			"image":                imageRef,
-			"vsa_timestamp":        mostRecentTime,
-			"expiration_threshold": expirationThreshold,
-			"expired":              result.Expired,
-			"log_index":            mostRecentRecord.LogIndex,
-			"log_id":               mostRecentRecord.LogID,
-		}).Debug("Found the most recent VSA record")
+	// Parse timestamp from predicate
+	recordTime, err := time.Parse(time.RFC3339, predicate.Timestamp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse VSA timestamp: %w", err)
 	}
+
+	result.Found = true
+	result.Timestamp = recordTime
+	result.Expired = IsVSAExpired(recordTime, expirationThreshold)
+	result.VSA = predicate
+
+	log.WithFields(log.Fields{
+		"image":                imageRef,
+		"vsa_timestamp":        recordTime,
+		"expiration_threshold": expirationThreshold,
+		"expired":              result.Expired,
+		"verifier":             predicate.Verifier,
+		"policy_source":        predicate.PolicySource,
+	}).Debug("Found VSA envelope")
 
 	return result, nil
 }

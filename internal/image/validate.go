@@ -164,6 +164,7 @@ func ValidateImageWithVSACheck(ctx context.Context, comp app.SnapshotComponent, 
 				"image":                comp.ContainerImage,
 				"vsa_timestamp":        vsaResult.Timestamp,
 				"expiration_threshold": vsaExpiration,
+				"predicate":            vsaResult.VSA,
 			}).Info("Valid VSA found, skipping validation")
 
 			// Return nil to indicate validation was skipped due to valid VSA
