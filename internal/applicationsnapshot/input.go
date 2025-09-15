@@ -235,7 +235,7 @@ func imageIndexWorker(client oci.Client, component app.SnapshotComponent, compon
 
 	// Track expansion metadata
 	idxPinned := fmt.Sprintf("%s@%s", ref.Context().Name(), desc.Digest)
-	exp.IndexAliases[ref.Name()] = idxPinned
+	exp.SetIndexAlias(ref.Name(), idxPinned)
 
 	// Add the platform-specific image references (Image Manifests) to the list of components so
 	// each is validated as well as the multi-platform image reference (Image Index).
@@ -253,8 +253,8 @@ func imageIndexWorker(client oci.Client, component app.SnapshotComponent, compon
 
 		// Track parent-child relationships
 		childPinned := archComponent.ContainerImage
-		exp.ChildrenByIndex[idxPinned] = append(exp.ChildrenByIndex[idxPinned], childPinned)
-		exp.ParentByChild[childPinned] = idxPinned
+		exp.AddChildToIndex(idxPinned, childPinned)
+		exp.SetParentByChild(childPinned, idxPinned)
 	}
 }
 

@@ -358,17 +358,13 @@ func TestFilterReportForTargetRef(t *testing.T) {
 				{SnapshotComponent: appapi.SnapshotComponent{Name: "Unnamed-sha256:def456-arm64", ContainerImage: "quay.io/test/image@sha256:def456"}},
 				{SnapshotComponent: appapi.SnapshotComponent{Name: "OtherComponent", ContainerImage: "quay.io/other/image@sha256:other123"}},
 			},
-			expansion: &applicationsnapshot.ExpansionInfo{
-				ChildrenByIndex: map[string][]string{
-					"quay.io/test/image@sha256:index123": {
-						"quay.io/test/image@sha256:abc123",
-						"quay.io/test/image@sha256:def456",
-					},
-				},
-				IndexAliases: map[string]string{
-					"quay.io/test/image:latest": "quay.io/test/image@sha256:index123",
-				},
-			},
+			expansion: func() *applicationsnapshot.ExpansionInfo {
+				exp := applicationsnapshot.NewExpansionInfo()
+				exp.AddChildToIndex("quay.io/test/image@sha256:index123", "quay.io/test/image@sha256:abc123")
+				exp.AddChildToIndex("quay.io/test/image@sha256:index123", "quay.io/test/image@sha256:def456")
+				exp.SetIndexAlias("quay.io/test/image:latest", "quay.io/test/image@sha256:index123")
+				return exp
+			}(),
 			expectedCount:  3,
 			expectedImages: []string{"quay.io/test/image@sha256:index123", "quay.io/test/image@sha256:abc123", "quay.io/test/image@sha256:def456"},
 		},
@@ -381,14 +377,12 @@ func TestFilterReportForTargetRef(t *testing.T) {
 				{SnapshotComponent: appapi.SnapshotComponent{Name: "Unnamed-sha256:def456-arm64", ContainerImage: "quay.io/test/image@sha256:def456"}},
 				{SnapshotComponent: appapi.SnapshotComponent{Name: "OtherComponent", ContainerImage: "quay.io/other/image@sha256:other123"}},
 			},
-			expansion: &applicationsnapshot.ExpansionInfo{
-				ChildrenByIndex: map[string][]string{
-					"quay.io/test/image@sha256:index123": {
-						"quay.io/test/image@sha256:abc123",
-						"quay.io/test/image@sha256:def456",
-					},
-				},
-			},
+			expansion: func() *applicationsnapshot.ExpansionInfo {
+				exp := applicationsnapshot.NewExpansionInfo()
+				exp.AddChildToIndex("quay.io/test/image@sha256:index123", "quay.io/test/image@sha256:abc123")
+				exp.AddChildToIndex("quay.io/test/image@sha256:index123", "quay.io/test/image@sha256:def456")
+				return exp
+			}(),
 			expectedCount:  1,
 			expectedImages: []string{"quay.io/test/image@sha256:abc123"},
 		},
