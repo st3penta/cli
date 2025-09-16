@@ -304,6 +304,7 @@ time="${TIMESTAMP}" level=warning msg="invalid storage config 'invalid-backend@s
 ---
 
 [VSA expiration flag functionality:stderr - 1]
+time="${TIMESTAMP}" level=warning msg="Failed to check for existing VSA for image ${REGISTRY}/acceptance/vsa-expiration-image@sha256:${REGISTRY_acceptance/vsa-expiration-image:latest_DIGEST}: failed to retrieve VSA envelope: no entries found in Rekor for image digest: sha256:${REGISTRY_acceptance/vsa-expiration-image:latest_DIGEST}"
 
 ---
 
