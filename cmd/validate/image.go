@@ -373,10 +373,9 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 					// Use VSA-aware validation if VSA checking is enabled
 					var out *output.Output
 					var err error
-					rekorUrl := vsa.ExtractRekorURLFromVSAUploadFlags(data.vsaUpload)
-					if data.vsaExpiration > 0 && rekorUrl != "" {
-						// Check for VSA using Rekor URL from --vsa-upload flag
-						out, err = image.ValidateImageWithVSACheck(ctx, comp, data.spec, data.policy, evaluators, data.info, data.vsaExpiration, rekorUrl)
+					if data.vsaExpiration > 0 {
+						vsaChecker := vsa.CreateVSACheckerFromUploadFlags(data.vsaUpload)
+						out, err = image.ValidateImageWithVSACheck(ctx, comp, data.spec, data.policy, evaluators, data.info, vsaChecker, data.vsaExpiration)
 					} else {
 						// Use original validation when VSA checking is disabled
 						out, err = validate(ctx, comp, data.spec, data.policy, evaluators, data.info)

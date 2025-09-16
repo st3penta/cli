@@ -143,40 +143,31 @@ func ValidateImage(ctx context.Context, comp app.SnapshotComponent, snap *app.Sn
 }
 
 // ValidateImageWithVSACheck executes validation with VSA expiration checking.
-// If a valid, unexpired VSA exists in Rekor, validation is skipped.
-func ValidateImageWithVSACheck(ctx context.Context, comp app.SnapshotComponent, snap *app.SnapshotSpec, p policy.Policy, evaluators []evaluator.Evaluator, detailed bool, vsaExpiration time.Duration, rekorURL string) (*output.Output, error) {
+// If a valid, unexpired VSA exists, validation is skipped.
+func ValidateImageWithVSACheck(ctx context.Context, comp app.SnapshotComponent, snap *app.SnapshotSpec, p policy.Policy, evaluators []evaluator.Evaluator, detailed bool, vsaChecker *vsa.VSAChecker, vsaExpiration time.Duration) (*output.Output, error) {
 	if trace.IsEnabled() {
 		region := trace.StartRegion(ctx, "ec:validate-image-with-vsa-check")
 		defer region.End()
 		trace.Logf(ctx, "", "image=%q vsa-expiration=%v", comp.ContainerImage, vsaExpiration)
 	}
 
-	// Step 1: Check for existing VSA if expiration checking is enabled
-	if vsaExpiration > 0 && rekorURL != "" {
-		checker := vsa.NewVSAChecker(rekorURL, 30*time.Second)
-
-		vsaResult, err := checker.CheckExistingVSA(ctx, comp.ContainerImage, vsaExpiration)
+	// Step 1: Check for existing VSA if checker is available
+	if vsaChecker != nil {
+		isValid, err := vsaChecker.IsValidVSA(ctx, comp.ContainerImage, vsaExpiration)
 		if err != nil {
 			log.Warnf("Failed to check for existing VSA for image %s: %v", comp.ContainerImage, err)
 			// Continue with validation on VSA lookup failure
-		} else if vsaResult.Found && !vsaResult.Expired {
+		} else if isValid {
 			log.WithFields(log.Fields{
 				"image":                comp.ContainerImage,
-				"vsa_timestamp":        vsaResult.Timestamp,
 				"expiration_threshold": vsaExpiration,
-				"predicate":            vsaResult.VSA,
 			}).Info("Valid VSA found, skipping validation")
 
 			// Return nil to indicate validation was skipped due to valid VSA
 			return nil, nil
-		} else if vsaResult.Found && vsaResult.Expired {
-			log.WithFields(log.Fields{
-				"image":                comp.ContainerImage,
-				"vsa_timestamp":        vsaResult.Timestamp,
-				"expiration_threshold": vsaExpiration,
-			}).Info("VSA found but expired, proceeding with validation")
+		} else {
+			log.Debugf("No valid VSA found for image %s, proceeding with validation", comp.ContainerImage)
 		}
-		// If no VSA found, continue with normal validation
 	}
 
 	// Step 2: Perform normal validation

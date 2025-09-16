@@ -23,12 +23,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	ecc "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
 	"github.com/google/go-containerregistry/pkg/name"
 	ssldsse "github.com/secure-systems-lab/go-securesystemslib/dsse"
-	"github.com/sigstore/cosign/v2/pkg/oci"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 
@@ -202,28 +202,6 @@ func (w *Writer) WritePredicate(predicate *Predicate) (string, error) {
 	return filepath, nil
 }
 
-// AttestationUploader is a function that uploads an attestation and returns a result string or error
-// This allows pluggable upload logic (OCI, Rekor, None, or custom)
-type AttestationUploader func(ctx context.Context, att oci.Signature, location string) (string, error)
-
-// Built-in uploaders
-func OCIUploader(ctx context.Context, att oci.Signature, location string) (string, error) {
-	log.Infof("Uploading VSA attestation to OCI registry for %s", location)
-	// TODO: Implement OCI upload logic here
-	return "", fmt.Errorf("OCI upload not implemented")
-}
-
-func RekorUploader(ctx context.Context, att oci.Signature, location string) (string, error) {
-	log.Infof("Uploading VSA attestation to Rekor for %s", location)
-	// TODO: Implement Rekor upload logic here
-	return "", fmt.Errorf("rekor upload not implemented")
-}
-
-func NoopUploader(ctx context.Context, att oci.Signature, location string) (string, error) {
-	log.Infof("Upload type is 'none'; skipping upload for %s", location)
-	return "", nil
-}
-
 // VSALookupResult represents the result of looking up an existing VSA
 type VSALookupResult struct {
 	Found     bool
@@ -232,20 +210,15 @@ type VSALookupResult struct {
 	Timestamp time.Time
 }
 
-// VSAChecker handles checking for existing VSAs in Rekor
+// VSAChecker handles checking for existing VSAs using any VSARetriever
 type VSAChecker struct {
-	RekorURL string
-	Timeout  time.Duration
+	retriever VSARetriever
 }
 
-// NewVSAChecker creates a new VSA checker
-func NewVSAChecker(rekorURL string, timeout time.Duration) *VSAChecker {
-	if timeout == 0 {
-		timeout = 30 * time.Second
-	}
+// NewVSAChecker creates a new VSA checker with a VSARetriever
+func NewVSAChecker(retriever VSARetriever) *VSAChecker {
 	return &VSAChecker{
-		RekorURL: rekorURL,
-		Timeout:  timeout,
+		retriever: retriever,
 	}
 }
 
@@ -288,7 +261,7 @@ func extractPredicateFromEnvelope(envelope *ssldsse.Envelope) (*Predicate, error
 	return &predicate, nil
 }
 
-// CheckExistingVSA looks up existing VSAs for an image in Rekor and determines if they're valid/expired
+// CheckExistingVSA looks up existing VSAs for an image and determines if they're valid/expired
 func (c *VSAChecker) CheckExistingVSA(ctx context.Context, imageRef string, expirationThreshold time.Duration) (*VSALookupResult, error) {
 	result := &VSALookupResult{
 		Found:   false,
@@ -297,27 +270,21 @@ func (c *VSAChecker) CheckExistingVSA(ctx context.Context, imageRef string, expi
 
 	log.Debugf("Checking for existing VSA for image %s with expiration threshold %v", imageRef, expirationThreshold)
 
+	// Check if retriever is available
+	if c.retriever == nil {
+		return nil, fmt.Errorf("VSA retriever not available")
+	}
+
 	// Extract digest from image reference
 	digest, err := c.extractDigestFromImageRef(imageRef)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract digest from image reference %s: %w", imageRef, err)
 	}
 
-	// Create Rekor VSA retriever
-	retrieverOpts := RetrievalOptions{
-		URL:     c.RekorURL,
-		Timeout: c.Timeout,
-	}
-
-	retriever, err := NewRekorVSARetriever(retrieverOpts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Rekor VSA retriever: %w", err)
-	}
-
 	// Retrieve VSA envelope for this image digest
-	envelope, err := retriever.RetrieveVSA(ctx, digest)
+	envelope, err := c.retriever.RetrieveVSA(ctx, digest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve VSA envelope from Rekor: %w", err)
+		return nil, fmt.Errorf("failed to retrieve VSA envelope: %w", err)
 	}
 
 	if envelope == nil {
@@ -354,6 +321,22 @@ func (c *VSAChecker) CheckExistingVSA(ctx context.Context, imageRef string, expi
 	return result, nil
 }
 
+// IsValidVSA checks if a VSA exists and is not expired for the given image
+// Returns true if validation should be skipped, false if validation should proceed
+func (c *VSAChecker) IsValidVSA(ctx context.Context, imageRef string, expirationThreshold time.Duration) (bool, error) {
+	if c.retriever == nil {
+		return false, fmt.Errorf("VSA retriever not available")
+	}
+
+	result, err := c.CheckExistingVSA(ctx, imageRef, expirationThreshold)
+	if err != nil {
+		return false, err
+	}
+
+	// Return true if VSA exists and is not expired (validation should be skipped)
+	return result.Found && !result.Expired, nil
+}
+
 // extractDigestFromImageRef extracts the digest from an image reference
 // It accepts digest-based references (registry/image@sha256:...) and rejects tag-based references
 func (c *VSAChecker) extractDigestFromImageRef(imageRef string) (string, error) {
@@ -383,4 +366,57 @@ func IsVSAExpired(vsaTimestamp time.Time, expirationThreshold time.Duration) boo
 	}
 	cutoffTime := time.Now().Add(-expirationThreshold)
 	return vsaTimestamp.Before(cutoffTime)
+}
+
+// CreateVSACheckerFromUploadFlags creates a VSA checker based on available upload flags
+// Returns nil if no suitable retriever can be created
+func CreateVSACheckerFromUploadFlags(vsaUpload []string) *VSAChecker {
+	// Try to create a retriever from the upload flags
+	retriever := CreateRetrieverFromUploadFlags(vsaUpload)
+	if retriever == nil {
+		log.Debugf("No suitable VSA retriever found in upload flags, VSA checking disabled")
+		return nil
+	}
+
+	return NewVSAChecker(retriever)
+}
+
+// CreateRetrieverFromUploadFlags creates a VSA retriever based on upload flags
+// Currently supports Rekor, but can be extended for other retrievers
+func CreateRetrieverFromUploadFlags(vsaUpload []string) VSARetriever {
+	for _, uploadFlag := range vsaUpload {
+		config, err := ParseStorageFlag(uploadFlag)
+		if err != nil {
+			log.Debugf("Failed to parse VSA upload flag '%s': %v", uploadFlag, err)
+			continue
+		}
+
+		// Create retriever based on backend type
+		switch strings.ToLower(config.Backend) {
+		case "rekor":
+			rekorURL := config.BaseURL
+			if rekorURL == "" {
+				// Use default if no URL specified
+				rekorURL = "https://rekor.sigstore.dev"
+			}
+
+			retrieverOpts := RetrievalOptions{
+				URL:     rekorURL,
+				Timeout: 30 * time.Second,
+			}
+
+			retriever, err := NewRekorVSARetriever(retrieverOpts)
+			if err != nil {
+				log.Debugf("Failed to create Rekor VSA retriever: %v", err)
+				continue
+			}
+
+			log.Debugf("Created Rekor VSA retriever: %s", rekorURL)
+			return retriever
+		default:
+			log.Debugf("No VSA retriever available for backend: %s", config.Backend)
+		}
+	}
+
+	return nil
 }
