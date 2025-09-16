@@ -72,7 +72,7 @@ func normalizeIndexRef(ref string, exp *applicationsnapshot.ExpansionInfo) strin
 	if exp == nil {
 		return ref
 	}
-	if pinned, ok := exp.IndexAliases[ref]; ok {
+	if pinned, ok := exp.GetIndexAlias(ref); ok {
 		return pinned
 	}
 	return ref
@@ -94,7 +94,7 @@ func FilterReportForTargetRef(report applicationsnapshot.Report, targetRef strin
 
 	include := map[string]struct{}{}
 	if exp != nil {
-		if imgs, ok := exp.ChildrenByIndex[targetRef]; ok {
+		if imgs, ok := exp.GetChildrenByIndex(targetRef); ok {
 			// This is an image index, include the index and all its children
 			include[targetRef] = struct{}{}
 			for _, c := range imgs {
