@@ -151,26 +151,24 @@ func ValidateImageWithVSACheck(ctx context.Context, comp app.SnapshotComponent, 
 		trace.Logf(ctx, "", "image=%q vsa-expiration=%v", comp.ContainerImage, vsaExpiration)
 	}
 
-	// Step 1: Check for existing VSA if checker is available
-	if vsaChecker != nil {
-		isValid, err := vsaChecker.IsValidVSA(ctx, comp.ContainerImage, vsaExpiration)
-		if err != nil {
-			log.Warnf("Failed to check for existing VSA for image %s: %v", comp.ContainerImage, err)
-			// Continue with validation on VSA lookup failure
-		} else if isValid {
-			log.WithFields(log.Fields{
-				"image":                comp.ContainerImage,
-				"expiration_threshold": vsaExpiration,
-			}).Info("Valid VSA found, skipping validation")
+	// Check for existing valid VSA
+	isValid, err := vsaChecker.IsValidVSA(ctx, comp.ContainerImage, vsaExpiration)
+	if err != nil {
+		log.Warnf("Failed to check for existing VSA for image %s: %v", comp.ContainerImage, err)
+		// Continue with validation on VSA lookup failure
+	} else if isValid {
+		log.WithFields(log.Fields{
+			"image":                comp.ContainerImage,
+			"expiration_threshold": vsaExpiration,
+		}).Info("Valid VSA found, skipping validation")
 
-			// Return nil to indicate validation was skipped due to valid VSA
-			return nil, nil
-		} else {
-			log.Debugf("No valid VSA found for image %s, proceeding with validation", comp.ContainerImage)
-		}
+		// Return nil to indicate validation was skipped due to valid VSA
+		return nil, nil
+	} else {
+		log.Debugf("No valid VSA found for image %s, proceeding with validation", comp.ContainerImage)
 	}
 
-	// Step 2: Perform normal validation
+	// Perform normal validation, if no valid VSA is found
 	log.Debugf("Performing full validation for image %s", comp.ContainerImage)
 	return ValidateImage(ctx, comp, snap, p, evaluators, detailed)
 }

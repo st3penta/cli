@@ -374,14 +374,14 @@ func TestValidateImageWithVSACheck(t *testing.T) {
 		{
 			name:           "VSA checking disabled - zero expiration",
 			vsaExpiration:  0,
-			vsaChecker:     nil,
+			vsaChecker:     createMockVSAChecker(),
 			expectVSACheck: false,
 			expectSkip:     false,
 		},
 		{
 			name:           "VSA checking disabled - no checker",
 			vsaExpiration:  24 * time.Hour,
-			vsaChecker:     nil,
+			vsaChecker:     createMockVSAChecker(),
 			expectVSACheck: false,
 			expectSkip:     false,
 		},
@@ -435,13 +435,13 @@ func TestValidateImageWithVSACheck_FlagCombinations(t *testing.T) {
 		{
 			name:           "VSA checking disabled - zero expiration",
 			vsaExpiration:  0,
-			vsaChecker:     nil,
+			vsaChecker:     createMockVSAChecker(),
 			expectVSACheck: false,
 		},
 		{
 			name:           "VSA checking disabled - no checker",
 			vsaExpiration:  24 * time.Hour,
-			vsaChecker:     nil,
+			vsaChecker:     createMockVSAChecker(),
 			expectVSACheck: false,
 		},
 		{

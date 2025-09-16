@@ -370,12 +370,17 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 
 					log.Debugf("Worker %d got a component %q", id, comp.ContainerImage)
 
-					// Use VSA-aware validation if VSA checking is enabled
+					// Use VSA-aware validation if VSA checking is enabled and a retriever is available
 					var out *output.Output
 					var err error
 					if data.vsaExpiration > 0 {
 						vsaChecker := vsa.CreateVSACheckerFromUploadFlags(data.vsaUpload)
-						out, err = image.ValidateImageWithVSACheck(ctx, comp, data.spec, data.policy, evaluators, data.info, vsaChecker, data.vsaExpiration)
+						if vsaChecker != nil {
+							out, err = image.ValidateImageWithVSACheck(ctx, comp, data.spec, data.policy, evaluators, data.info, vsaChecker, data.vsaExpiration)
+						} else {
+							// Fall back to normal validation if no VSA retriever is available
+							out, err = validate(ctx, comp, data.spec, data.policy, evaluators, data.info)
+						}
 					} else {
 						// Use original validation when VSA checking is disabled
 						out, err = validate(ctx, comp, data.spec, data.policy, evaluators, data.info)
