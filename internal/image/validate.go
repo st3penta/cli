@@ -32,6 +32,7 @@ import (
 	"github.com/conforma/cli/internal/evaluator"
 	"github.com/conforma/cli/internal/output"
 	"github.com/conforma/cli/internal/policy"
+	"github.com/conforma/cli/internal/validate/vsa"
 )
 
 // ValidateImage executes the required method calls to evaluate a given policy
@@ -139,6 +140,37 @@ func ValidateImage(ctx context.Context, comp app.SnapshotComponent, snap *app.Sn
 	out.SetPolicyCheck(allResults)
 
 	return out, nil
+}
+
+// ValidateImageWithVSACheck executes validation with VSA expiration checking.
+// If a valid, unexpired VSA exists, validation is skipped.
+func ValidateImageWithVSACheck(ctx context.Context, comp app.SnapshotComponent, snap *app.SnapshotSpec, p policy.Policy, evaluators []evaluator.Evaluator, detailed bool, vsaChecker *vsa.VSAChecker, vsaExpiration time.Duration) (*output.Output, error) {
+	if trace.IsEnabled() {
+		region := trace.StartRegion(ctx, "ec:validate-image-with-vsa-check")
+		defer region.End()
+		trace.Logf(ctx, "", "image=%q vsa-expiration=%v", comp.ContainerImage, vsaExpiration)
+	}
+
+	// Check for existing valid VSA
+	isValid, err := vsaChecker.IsValidVSA(ctx, comp.ContainerImage, vsaExpiration)
+	if err != nil {
+		log.Warnf("Failed to check for existing VSA for image %s: %v", comp.ContainerImage, err)
+		// Continue with validation on VSA lookup failure
+	} else if isValid {
+		log.WithFields(log.Fields{
+			"image":                comp.ContainerImage,
+			"expiration_threshold": vsaExpiration,
+		}).Info("Valid VSA found, skipping validation")
+
+		// Return nil to indicate validation was skipped due to valid VSA
+		return nil, nil
+	} else {
+		log.Debugf("No valid VSA found for image %s, proceeding with validation", comp.ContainerImage)
+	}
+
+	// Perform normal validation, if no valid VSA is found
+	log.Debugf("Performing full validation for image %s", comp.ContainerImage)
+	return ValidateImage(ctx, comp, snap, p, evaluators, detailed)
 }
 
 func resolveAndSetImageUrl(ctx context.Context, url string, asi *application_snapshot_image.ApplicationSnapshotImage) (string, error) {

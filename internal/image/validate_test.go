@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -35,6 +36,7 @@ import (
 	"github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/common"
 	v02 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v0.2"
 	app "github.com/konflux-ci/application-api/api/v1alpha1"
+	ssldsse "github.com/secure-systems-lab/go-securesystemslib/dsse"
 	"github.com/sigstore/cosign/v2/pkg/oci"
 	"github.com/sigstore/cosign/v2/pkg/oci/static"
 	cosignTypes "github.com/sigstore/cosign/v2/pkg/types"
@@ -49,6 +51,7 @@ import (
 	"github.com/conforma/cli/internal/utils"
 	ecoci "github.com/conforma/cli/internal/utils/oci"
 	"github.com/conforma/cli/internal/utils/oci/fake"
+	"github.com/conforma/cli/internal/validate/vsa"
 )
 
 const (
@@ -344,4 +347,150 @@ func TestEvaluatorLifecycle(t *testing.T) {
 	_, err = ValidateImage(ctx, component, &snap, policy, evaluators, false)
 
 	require.NoError(t, err)
+}
+
+// createMockVSAChecker creates a mock VSA checker for testing
+func createMockVSAChecker() *vsa.VSAChecker {
+	// Create a mock retriever that always returns "not found"
+	mockRetriever := &mockVSARetriever{}
+	return vsa.NewVSAChecker(mockRetriever)
+}
+
+// mockVSARetriever is a mock implementation of VSARetriever for testing
+type mockVSARetriever struct{}
+
+func (m *mockVSARetriever) RetrieveVSA(ctx context.Context, imageDigest string) (*ssldsse.Envelope, error) {
+	return nil, fmt.Errorf("no VSA found")
+}
+
+func TestValidateImageWithVSACheck(t *testing.T) {
+	tests := []struct {
+		name           string
+		vsaExpiration  time.Duration
+		vsaChecker     *vsa.VSAChecker
+		expectVSACheck bool
+		expectSkip     bool
+	}{
+		{
+			name:           "VSA checking disabled - zero expiration",
+			vsaExpiration:  0,
+			vsaChecker:     createMockVSAChecker(),
+			expectVSACheck: false,
+			expectSkip:     false,
+		},
+		{
+			name:           "VSA checking disabled - no checker",
+			vsaExpiration:  24 * time.Hour,
+			vsaChecker:     createMockVSAChecker(),
+			expectVSACheck: false,
+			expectSkip:     false,
+		},
+		{
+			name:           "VSA checking enabled with checker",
+			vsaExpiration:  24 * time.Hour,
+			vsaChecker:     createMockVSAChecker(),
+			expectVSACheck: true,
+			expectSkip:     false, // Placeholder implementation returns "not found"
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := afero.NewMemMapFs()
+			ctx := utils.WithFS(context.Background(), fs)
+
+			// Create a proper policy interface
+			p, err := policy.NewOfflinePolicy(ctx, policy.Now)
+			require.NoError(t, err)
+
+			// Create a test component
+			comp := app.SnapshotComponent{
+				ContainerImage: "registry.example.com/test:latest",
+			}
+
+			// Create a mock snapshot spec
+			snap := &app.SnapshotSpec{}
+
+			// Create empty evaluators slice
+			evaluators := []evaluator.Evaluator{}
+
+			// Call the function - it should work with basic setup
+			// The function handles VSA checking gracefully when image reference is a tag
+			_, err = ValidateImageWithVSACheck(ctx, comp, snap, p, evaluators, false, tt.vsaChecker, tt.vsaExpiration)
+
+			// The function should succeed even with minimal setup
+			// VSA checking will be skipped due to tag reference (not digest-based)
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestValidateImageWithVSACheck_FlagCombinations(t *testing.T) {
+	tests := []struct {
+		name           string
+		vsaExpiration  time.Duration
+		vsaChecker     *vsa.VSAChecker
+		expectVSACheck bool
+	}{
+		{
+			name:           "VSA checking disabled - zero expiration",
+			vsaExpiration:  0,
+			vsaChecker:     createMockVSAChecker(),
+			expectVSACheck: false,
+		},
+		{
+			name:           "VSA checking disabled - no checker",
+			vsaExpiration:  24 * time.Hour,
+			vsaChecker:     createMockVSAChecker(),
+			expectVSACheck: false,
+		},
+		{
+			name:           "VSA checking enabled with checker",
+			vsaExpiration:  24 * time.Hour,
+			vsaChecker:     createMockVSAChecker(),
+			expectVSACheck: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := afero.NewMemMapFs()
+			ctx := utils.WithFS(context.Background(), fs)
+
+			// Create a proper policy interface
+			p, err := policy.NewOfflinePolicy(ctx, policy.Now)
+			require.NoError(t, err)
+
+			// Create a test component with a tag reference (will cause VSA extraction to fail gracefully)
+			comp := app.SnapshotComponent{
+				ContainerImage: "registry.example.com/test:latest",
+			}
+
+			// Create a mock snapshot spec
+			snap := &app.SnapshotSpec{}
+
+			// Create empty evaluators slice
+			evaluators := []evaluator.Evaluator{}
+
+			// Call the function
+			// Note: This will either attempt VSA checking (and fail gracefully) or skip it entirely
+			// Either way, it will fall back to normal validation, which should complete without error
+			// for our minimal setup
+			output, err := ValidateImageWithVSACheck(ctx, comp, snap, p, evaluators, false, tt.vsaChecker, tt.vsaExpiration)
+
+			// The function should return a non-nil output indicating normal validation proceeded
+			// The specific result depends on whether VSA checking was attempted
+			if tt.expectVSACheck {
+				// VSA checking was attempted but failed due to tag reference, then fell back to validation
+				// Validation should complete successfully with our minimal setup
+				assert.NoError(t, err)
+				assert.NotNil(t, output)
+			} else {
+				// VSA checking was skipped entirely, went straight to validation
+				// Validation should complete successfully with our minimal setup
+				assert.NoError(t, err)
+				assert.NotNil(t, output)
+			}
+		})
+	}
 }

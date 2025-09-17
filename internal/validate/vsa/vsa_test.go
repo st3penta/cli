@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"io"
 	"testing"
 	"time"
@@ -28,6 +29,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	v1types "github.com/google/go-containerregistry/pkg/v1/types"
 	appapi "github.com/konflux-ci/application-api/api/v1alpha1"
+	ssldsse "github.com/secure-systems-lab/go-securesystemslib/dsse"
 	"github.com/sigstore/cosign/v2/pkg/cosign/bundle"
 	"github.com/sigstore/cosign/v2/pkg/oci"
 	"github.com/spf13/afero"
@@ -135,26 +137,6 @@ func TestUploadVSAAttestation(t *testing.T) {
 	})
 }
 
-func TestNoopUploader(t *testing.T) {
-	result, err := NoopUploader(context.Background(), &mockAttestation{}, "img")
-	assert.NoError(t, err)
-	assert.Equal(t, "", result)
-}
-
-func TestOCIUploader(t *testing.T) {
-	result, err := OCIUploader(context.Background(), &mockAttestation{}, "img")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "OCI upload not implemented")
-	assert.Equal(t, "", result)
-}
-
-func TestRekorUploader(t *testing.T) {
-	result, err := RekorUploader(context.Background(), &mockAttestation{}, "img")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "rekor upload not implemented")
-	assert.Equal(t, "", result)
-}
-
 type mockAttestation struct{}
 
 func (m *mockAttestation) Digest() (v1.Hash, error)                            { return v1.Hash{}, nil }
@@ -181,6 +163,13 @@ func (m *mockAttestation) Uncompressed() (io.ReadCloser, error)                {
 func (m *mockAttestation) Size() (int64, error)                                { return 0, nil }
 func (m *mockAttestation) DiffID() (v1.Hash, error)                            { return v1.Hash{}, nil }
 func (m *mockAttestation) MediaType() (v1types.MediaType, error)               { return v1types.MediaType(""), nil }
+
+// mockVSARetriever is a mock implementation of VSARetriever for testing
+type mockVSARetriever struct{}
+
+func (m *mockVSARetriever) RetrieveVSA(ctx context.Context, imageDigest string) (*ssldsse.Envelope, error) {
+	return nil, fmt.Errorf("no VSA found")
+}
 
 func TestWritePredicate(t *testing.T) {
 	// Set up test filesystem
@@ -430,6 +419,210 @@ func TestFilterReportForTargetRef(t *testing.T) {
 
 			for _, expectedImage := range tt.expectedImages {
 				assert.Contains(t, imageRefs, expectedImage)
+			}
+		})
+	}
+}
+
+func TestIsVSAExpired(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name                string
+		vsaTimestamp        time.Time
+		expirationThreshold time.Duration
+		expected            bool
+	}{
+		{
+			name:                "VSA within threshold - not expired",
+			vsaTimestamp:        now.Add(-1 * time.Hour), // 1 hour ago
+			expirationThreshold: 24 * time.Hour,          // 24 hour threshold
+			expected:            false,
+		},
+		{
+			name:                "VSA beyond threshold - expired",
+			vsaTimestamp:        now.Add(-25 * time.Hour), // 25 hours ago
+			expirationThreshold: 24 * time.Hour,           // 24 hour threshold
+			expected:            true,
+		},
+		{
+			name:                "VSA exactly at threshold boundary - expired",
+			vsaTimestamp:        now.Add(-24 * time.Hour), // exactly 24 hours ago
+			expirationThreshold: 24 * time.Hour,           // 24 hour threshold
+			expected:            true,                     // Should be expired at exactly the boundary
+		},
+		{
+			name:                "Zero expiration threshold - not expired",
+			vsaTimestamp:        now.Add(-1000 * time.Hour), // very old
+			expirationThreshold: 0,                          // no expiration
+			expected:            false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsVSAExpired(tt.vsaTimestamp, tt.expirationThreshold)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestNewVSAChecker(t *testing.T) {
+	tests := []struct {
+		name      string
+		retriever VSARetriever
+		expectNil bool
+	}{
+		{
+			name:      "with retriever",
+			retriever: &mockVSARetriever{},
+			expectNil: false,
+		},
+		{
+			name:      "with nil retriever",
+			retriever: nil,
+			expectNil: false, // NewVSAChecker accepts nil retriever
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			checker := NewVSAChecker(tt.retriever)
+			if tt.expectNil {
+				assert.Nil(t, checker)
+			} else {
+				assert.NotNil(t, checker)
+			}
+		})
+	}
+}
+
+func TestVSAChecker_CheckExistingVSA_ErrorCases(t *testing.T) {
+	checker := NewVSAChecker(&mockVSARetriever{})
+	ctx := context.Background()
+
+	tests := []struct {
+		name        string
+		imageRef    string
+		expiration  time.Duration
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "tag reference should fail",
+			imageRef:    "registry.example.com/test:latest",
+			expiration:  24 * time.Hour,
+			expectError: true,
+			errorMsg:    "failed to extract digest from image reference",
+		},
+		{
+			name:        "empty image reference",
+			imageRef:    "",
+			expiration:  24 * time.Hour,
+			expectError: true,
+			errorMsg:    "failed to extract digest from image reference",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := checker.CheckExistingVSA(ctx, tt.imageRef, tt.expiration)
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorMsg)
+				assert.Nil(t, result)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+			}
+		})
+	}
+}
+
+func TestCreateRetrieverFromUploadFlags(t *testing.T) {
+	tests := []struct {
+		name      string
+		vsaUpload []string
+		expectNil bool
+	}{
+		{
+			name:      "rekor backend with custom URL",
+			vsaUpload: []string{"rekor@https://custom-rekor.example.com"},
+			expectNil: false,
+		},
+		{
+			name:      "rekor backend without URL",
+			vsaUpload: []string{"rekor"},
+			expectNil: false,
+		},
+		{
+			name:      "no rekor backend - only local",
+			vsaUpload: []string{"local@/tmp/vsa"},
+			expectNil: true,
+		},
+		{
+			name:      "multiple backends with rekor",
+			vsaUpload: []string{"local@/tmp/vsa", "rekor@https://test-rekor.dev"},
+			expectNil: false,
+		},
+		{
+			name:      "empty vsa upload flags",
+			vsaUpload: []string{},
+			expectNil: true,
+		},
+		{
+			name:      "invalid flags are ignored",
+			vsaUpload: []string{"invalid-format", "rekor@https://valid.rekor.com"},
+			expectNil: false,
+		},
+		{
+			name:      "case insensitive rekor backend",
+			vsaUpload: []string{"REKOR@https://uppercase.rekor.com"},
+			expectNil: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			retriever := CreateRetrieverFromUploadFlags(tt.vsaUpload)
+			if tt.expectNil {
+				assert.Nil(t, retriever)
+			} else {
+				assert.NotNil(t, retriever)
+			}
+		})
+	}
+}
+
+func TestCreateVSACheckerFromUploadFlags(t *testing.T) {
+	tests := []struct {
+		name      string
+		vsaUpload []string
+		expectNil bool
+	}{
+		{
+			name:      "rekor backend with custom URL",
+			vsaUpload: []string{"rekor@https://custom-rekor.example.com"},
+			expectNil: false,
+		},
+		{
+			name:      "no rekor backend - only local",
+			vsaUpload: []string{"local@/tmp/vsa"},
+			expectNil: true,
+		},
+		{
+			name:      "empty vsa upload flags",
+			vsaUpload: []string{},
+			expectNil: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			checker := CreateVSACheckerFromUploadFlags(tt.vsaUpload)
+			if tt.expectNil {
+				assert.Nil(t, checker)
+			} else {
+				assert.NotNil(t, checker)
 			}
 		})
 	}
