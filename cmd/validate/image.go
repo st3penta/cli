@@ -69,6 +69,7 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 		outputFile                  string
 		policy                      policy.Policy
 		policyConfiguration         string
+		policySource                string
 		publicKey                   string
 		rekorURL                    string
 		snapshot                    string
@@ -220,6 +221,9 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 				data.spec = s
 				data.expansion = exp
 			}
+
+			// Store policy source before resolution
+			data.policySource = data.policyConfiguration
 
 			policyConfiguration, err := validate_utils.GetPolicyConfig(ctx, data.policyConfiguration)
 			if err != nil {
@@ -500,7 +504,7 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 				}
 
 				// Create VSA service
-				vsaService := vsa.NewServiceWithFS(signer, utils.FS(cmd.Context()))
+				vsaService := vsa.NewServiceWithFS(signer, utils.FS(cmd.Context()), data.policySource, data.policy)
 
 				// Define helper functions for getting git URL and digest
 				getGitURL := func(comp applicationsnapshot.Component) string {

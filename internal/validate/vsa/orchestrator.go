@@ -19,10 +19,25 @@ package vsa
 import (
 	"context"
 	"fmt"
+
+	"github.com/conforma/cli/internal/applicationsnapshot"
 )
 
-// GenerateAndWriteVSA generates a VSA predicate and writes it to a file, returning the written path.
-func GenerateAndWriteVSA[T any](ctx context.Context, generator PredicateGenerator[T], writer PredicateWriter[T]) (string, error) {
+// GenerateAndWritePredicate generates a Predicate and writes it to a file, returning the written path.
+func GenerateAndWritePredicate(ctx context.Context, generator *Generator, writer *Writer) (string, error) {
+	pred, err := generator.GeneratePredicate(ctx)
+	if err != nil {
+		return "", err
+	}
+	writtenPath, err := writer.WritePredicate(pred)
+	if err != nil {
+		return "", err
+	}
+	return writtenPath, nil
+}
+
+// GenerateAndWriteSnapshotPredicate generates a snapshot Predicate and writes it to a file, returning the written path.
+func GenerateAndWriteSnapshotPredicate(ctx context.Context, generator *applicationsnapshot.SnapshotPredicateGenerator, writer *applicationsnapshot.SnapshotPredicateWriter) (string, error) {
 	pred, err := generator.GeneratePredicate(ctx)
 	if err != nil {
 		return "", err

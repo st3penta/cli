@@ -22,35 +22,69 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
+	ecc "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 )
 
-// SnapshotVSAWriter handles writing application snapshot VSA predicates to files
-type SnapshotVSAWriter struct {
+// SnapshotComponentDetail represents detailed information about a component in the snapshot summary
+type SnapshotComponentDetail struct {
+	Name           string `json:"name"`
+	ContainerImage string `json:"containerImage"`
+	Success        bool   `json:"success"`
+	Violations     int    `json:"violations"`
+	Warnings       int    `json:"warnings"`
+	Successes      int    `json:"successes"`
+}
+
+// SnapshotSummary represents the summary information for a snapshot predicate
+type SnapshotSummary struct {
+	Snapshot         string                    `json:"snapshot"`
+	Components       int                       `json:"components"`
+	Success          bool                      `json:"success"`
+	Key              string                    `json:"key"`
+	EcVersion        string                    `json:"ec_version"`
+	ComponentDetails []SnapshotComponentDetail `json:"component_details"`
+	Violations       int                       `json:"Violations"`
+	Warnings         int                       `json:"Warnings"`
+}
+
+// SnapshotPredicate represents a predicate for an entire application snapshot
+type SnapshotPredicate struct {
+	Policy    ecc.EnterpriseContractPolicySpec `json:"policy"`
+	ImageRefs []string                         `json:"imageRefs"`
+	Timestamp string                           `json:"timestamp"`
+	Status    string                           `json:"status"`
+	Verifier  string                           `json:"verifier"`
+	Summary   SnapshotSummary                  `json:"summary"`
+}
+
+// SnapshotPredicateWriter handles writing application snapshot predicates to files
+type SnapshotPredicateWriter struct {
 	FS            afero.Fs    // defaults to afero.NewOsFs()
-	TempDirPrefix string      // defaults to "snapshot-vsa-"
+	TempDirPrefix string      // defaults to "snapshot-predicate-"
 	FilePerm      os.FileMode // defaults to 0600
 }
 
-// NewSnapshotVSAWriter creates a new application snapshot VSA file writer
-func NewSnapshotVSAWriter() *SnapshotVSAWriter {
-	return &SnapshotVSAWriter{
+// NewSnapshotPredicateWriter creates a new application snapshot predicate file writer
+func NewSnapshotPredicateWriter() *SnapshotPredicateWriter {
+	return &SnapshotPredicateWriter{
 		FS:            afero.NewOsFs(),
-		TempDirPrefix: "snapshot-vsa-",
+		TempDirPrefix: "snapshot-predicate-",
 		FilePerm:      0o600,
 	}
 }
 
-// WritePredicate writes the Report as a VSA predicate to a file
-func (s *SnapshotVSAWriter) WritePredicate(report Report) (string, error) {
+// WritePredicate writes the SnapshotPredicate as a JSON file to a temp directory and returns the path
+func (s *SnapshotPredicateWriter) WritePredicate(predicate *SnapshotPredicate) (string, error) {
 	log.Infof("Writing application snapshot VSA")
 
 	// Serialize with indent
-	data, err := json.MarshalIndent(report, "", "  ")
+	data, err := json.MarshalIndent(predicate, "", "  ")
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal application snapshot VSA: %w", err)
+		return "", fmt.Errorf("failed to marshal application snapshot VSA predicate: %w", err)
 	}
 
 	// Create temp directory
@@ -59,32 +93,144 @@ func (s *SnapshotVSAWriter) WritePredicate(report Report) (string, error) {
 		return "", fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
-	// Write to file
+	// Write to file with same naming convention as old VSA
 	filename := "application-snapshot-vsa.json"
 	filepath := filepath.Join(tempDir, filename)
 	err = afero.WriteFile(s.FS, filepath, data, s.FilePerm)
 	if err != nil {
-		return "", fmt.Errorf("failed to write application snapshot VSA to file: %w", err)
+		return "", fmt.Errorf("failed to write application snapshot VSA predicate to file: %w", err)
 	}
 
 	log.Infof("Application snapshot VSA written to: %s", filepath)
 	return filepath, nil
 }
 
-type SnapshotVSAGenerator struct {
+// SnapshotPredicateGenerator generates predicates for application snapshots
+type SnapshotPredicateGenerator struct {
 	Report Report
 }
 
-// NewSnapshotVSAGenerator creates a new VSA predicate generator for application snapshots
-func NewSnapshotVSAGenerator(report Report) *SnapshotVSAGenerator {
-	return &SnapshotVSAGenerator{
+// NewSnapshotPredicateGenerator creates a new predicate generator for application snapshots
+func NewSnapshotPredicateGenerator(report Report) *SnapshotPredicateGenerator {
+	return &SnapshotPredicateGenerator{
 		Report: report,
 	}
 }
 
-// GeneratePredicate creates a VSA predicate for the entire application snapshot
-func (s *SnapshotVSAGenerator) GeneratePredicate(ctx context.Context) (Report, error) {
-	log.Infof("Generating application snapshot VSA predicate with %d components", len(s.Report.Components))
+// GeneratePredicate creates a predicate for the entire application snapshot
+func (s *SnapshotPredicateGenerator) GeneratePredicate(ctx context.Context) (*SnapshotPredicate, error) {
+	log.Infof("Generating application snapshot EC predicate with %d components", len(s.Report.Components))
 
-	return s.Report, nil
+	// Collect all image references from all components
+	imageRefs := s.getAllImageRefs()
+
+	// Determine overall status
+	status := "failed"
+	if s.Report.Success {
+		status = "passed"
+	}
+
+	// Add detailed component breakdown and calculate totals
+	components := make([]SnapshotComponentDetail, 0, len(s.Report.Components))
+	totalViolations := 0
+	totalWarnings := 0
+
+	for _, comp := range s.Report.Components {
+		compViolations := len(comp.Violations)
+		compWarnings := len(comp.Warnings)
+
+		compDetails := SnapshotComponentDetail{
+			Name:           comp.Name,
+			ContainerImage: comp.ContainerImage,
+			Success:        comp.Success,
+			Violations:     compViolations,
+			Warnings:       compWarnings,
+			Successes:      len(comp.Successes),
+		}
+		components = append(components, compDetails)
+
+		// Add to totals
+		totalViolations += compViolations
+		totalWarnings += compWarnings
+	}
+
+	// Create summary with component information
+	summary := SnapshotSummary{
+		Snapshot:         s.Report.Snapshot,
+		Components:       len(s.Report.Components),
+		Success:          s.Report.Success,
+		Key:              s.Report.Key,
+		EcVersion:        s.Report.EcVersion,
+		ComponentDetails: components,
+		Violations:       totalViolations,
+		Warnings:         totalWarnings,
+	}
+
+	return &SnapshotPredicate{
+		Policy:    s.Report.Policy, // This contains the resolved policy with pinned URLs
+		ImageRefs: imageRefs,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Status:    status,
+		Verifier:  "conforma",
+		Summary:   summary,
+	}, nil
+}
+
+// getAllImageRefs returns all image references from all components including expansion info
+func (s *SnapshotPredicateGenerator) getAllImageRefs() []string {
+	var allImageRefs []string
+
+	for _, comp := range s.Report.Components {
+		// Add the main component image reference
+		allImageRefs = append(allImageRefs, comp.ContainerImage)
+
+		// If we have expansion info, add the index and all architecture-specific images
+		if s.Report.Expansion != nil {
+			// Get the normalized index reference
+			normalizedRef := normalizeIndexRef(comp.ContainerImage, s.Report.Expansion)
+
+			// Add the index reference if it's different from the component image
+			if normalizedRef != comp.ContainerImage {
+				allImageRefs = append(allImageRefs, normalizedRef)
+			}
+
+			// Get all child images for this index
+			if children, ok := s.Report.Expansion.GetChildrenByIndex(normalizedRef); ok {
+				allImageRefs = append(allImageRefs, children...)
+			}
+		}
+	}
+
+	// Remove duplicates and return
+	return removeDuplicateStrings(allImageRefs)
+}
+
+// normalizeIndexRef normalizes an image reference to its pinned digest form if it's an index
+func normalizeIndexRef(ref string, exp *ExpansionInfo) string {
+	if exp == nil {
+		return ref
+	}
+	if pinned, ok := exp.GetIndexAlias(ref); ok {
+		return pinned
+	}
+	return ref
+}
+
+// removeDuplicateStrings removes duplicate strings from a slice
+func removeDuplicateStrings(slice []string) []string {
+	if len(slice) == 0 {
+		return []string{}
+	}
+
+	keys := make(map[string]bool)
+	var result []string
+
+	for _, item := range slice {
+		if !keys[item] {
+			keys[item] = true
+			result = append(result, item)
+		}
+	}
+
+	return result
 }

@@ -224,7 +224,7 @@ func (r *Report) toFormat(format string) (data []byte, err error) {
 }
 
 func (r *Report) toVSA() ([]byte, error) {
-	generator := NewSnapshotVSAGenerator(*r)
+	generator := NewSnapshotPredicateGenerator(*r)
 	predicate, err := generator.GeneratePredicate(context.Background())
 	if err != nil {
 		return []byte{}, err
