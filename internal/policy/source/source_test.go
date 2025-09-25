@@ -21,6 +21,7 @@ package source
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -631,6 +632,84 @@ func TestDownloadCacheWorkdirMismatch(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, destination1, destination2)
+}
+
+// TestConcurrentPolicyCachingRaceCondition reproduces the "file exists" error
+// that occurs when multiple workers simultaneously try to create symlinks from
+// cached policy downloads to their individual work directories
+func TestConcurrentPolicyCachingRaceCondition(t *testing.T) {
+	t.Cleanup(func() {
+		downloadCache = sync.Map{}
+	})
+
+	tmp := t.TempDir()
+
+	source := &mockPolicySource{&mock.Mock{}}
+	source.On("PolicyUrl").Return("policy-url")
+	source.On("Subdir").Return("subdir")
+
+	// Simulate a pre-cached policy download in a shared location
+	// This represents the first worker that successfully downloaded the policy
+	sharedCacheDir := filepath.Join(tmp, "shared-cache")
+	cachedPolicyPath := uniqueDestination(sharedCacheDir, "subdir", source.PolicyUrl())
+	require.NoError(t, os.MkdirAll(cachedPolicyPath, 0755))
+
+	// Create test policy files
+	policyFile := filepath.Join(cachedPolicyPath, "policy.rego")
+	require.NoError(t, os.WriteFile(policyFile, []byte("package test"), 0600))
+
+	// Pre-populate the cache with the shared policy location
+	downloadCache.Store("policy-url", func() (string, cacheContent) {
+		return cachedPolicyPath, cacheContent{}
+	})
+
+	// ALL workers use the same work directory - this forces them to compete
+	// for the exact same symlink destination path, triggering the race condition
+	sharedWorkDir := filepath.Join(tmp, "shared-worker-dir")
+
+	// Setup concurrent workers that will try to create the SAME symlink
+	numWorkers := 50
+	results := make(chan error, numWorkers)
+
+	// Synchronization barrier to maximize race condition probability
+	startSignal := make(chan struct{})
+
+	for i := 0; i < numWorkers; i++ {
+		go func(workerID int) {
+			// Wait for all workers to be ready
+			<-startSignal
+
+			// All workers use the SAME work directory - this creates the race condition
+			_, _, err := getPolicyThroughCache(
+				context.Background(),
+				source,
+				sharedWorkDir, // Same workDir for all workers = same destination path
+				func(sourceURL, destDir string) (metadata.Metadata, error) {
+					// Should not be called since policy is already cached
+					return nil, fmt.Errorf("unexpected download call for worker %d", workerID)
+				},
+			)
+
+			results <- err
+		}(i)
+	}
+
+	// Release all workers simultaneously to trigger race condition
+	close(startSignal)
+
+	// Collect errors
+	var errors []error
+	for i := 0; i < numWorkers; i++ {
+		if err := <-results; err != nil {
+			errors = append(errors, err)
+		}
+	}
+
+	// The test should succeed (no errors) when the race condition is fixed
+	// Any errors indicate a concurrency bug
+	if len(errors) > 0 {
+		t.Errorf("Concurrent policy caching failed with %d errors: %v", len(errors), errors)
+	}
 }
 
 func TestLogMetadata(t *testing.T) {
