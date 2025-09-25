@@ -63,14 +63,19 @@ OURRVjNQMk9ndDFDaVFHeGg1VXhUZytGc3c9PSJ9
 
 	// Create test predicate
 	pred := &Predicate{
-		ImageRef:     "quay.io/test/image:tag",
-		Timestamp:    time.Now().UTC().Format(time.RFC3339),
-		Verifier:     "Conforma",
-		PolicySource: "mock-policy",
-		Component: map[string]interface{}{
-			"name":           "test-component",
-			"containerImage": "quay.io/test/image:tag",
-			"source":         map[string]interface{}{"git": "repo"},
+		Policy: ecapi.EnterpriseContractPolicySpec{
+			Name: "mock-policy",
+		},
+		ImageRefs: []string{"quay.io/test/image:tag"},
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Status:    "passed",
+		Verifier:  "Conforma",
+		Summary: VSASummary{
+			Component: ComponentSummary{
+				Name:           "test-component",
+				ContainerImage: "quay.io/test/image:tag",
+				Source:         map[string]interface{}{"git": "repo"},
+			},
 		},
 	}
 
@@ -165,27 +170,25 @@ func (m *mockAttestation) Size() (int64, error)                                {
 func (m *mockAttestation) DiffID() (v1.Hash, error)                            { return v1.Hash{}, nil }
 func (m *mockAttestation) MediaType() (v1types.MediaType, error)               { return v1types.MediaType(""), nil }
 
-// mockVSARetriever is a mock implementation of VSARetriever for testing
-type mockVSARetriever struct{}
-
-func (m *mockVSARetriever) RetrieveVSA(ctx context.Context, imageDigest string) (*ssldsse.Envelope, error) {
-	return nil, fmt.Errorf("no VSA found")
-}
-
 func TestWritePredicate(t *testing.T) {
 	// Set up test filesystem
 	FS := afero.NewMemMapFs()
 
 	// Create test predicate
 	pred := &Predicate{
-		ImageRef:     "test-image:tag",
-		Timestamp:    "2024-03-21T12:00:00Z",
-		Verifier:     "ec-cli",
-		PolicySource: "test-policy",
-		Component: map[string]interface{}{
-			"name":           "test-component",
-			"containerImage": "test-image:tag",
-			"source":         nil,
+		Policy: ecapi.EnterpriseContractPolicySpec{
+			Name: "test-policy",
+		},
+		ImageRefs: []string{"test-image:tag"},
+		Timestamp: "2024-03-21T12:00:00Z",
+		Status:    "passed",
+		Verifier:  "conforma",
+		Summary: VSASummary{
+			Component: ComponentSummary{
+				Name:           "test-component",
+				ContainerImage: "test-image:tag",
+				Source:         nil,
+			},
 		},
 	}
 	writer := Writer{
@@ -210,11 +213,12 @@ func TestWritePredicate(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify fields
-	assert.Equal(t, pred.ImageRef, output.ImageRef)
+	assert.Equal(t, pred.Policy, output.Policy)
+	assert.Equal(t, pred.ImageRefs, output.ImageRefs)
 	assert.Equal(t, pred.Timestamp, output.Timestamp)
+	assert.Equal(t, pred.Status, output.Status)
 	assert.Equal(t, pred.Verifier, output.Verifier)
-	assert.Equal(t, pred.PolicySource, output.PolicySource)
-	assert.Equal(t, pred.Component, output.Component)
+	assert.Equal(t, pred.Summary, output.Summary)
 }
 
 func TestGeneratePredicate(t *testing.T) {
@@ -294,135 +298,28 @@ func TestGeneratePredicate(t *testing.T) {
 	}
 
 	// Create generator and generate predicate
-	generator := NewGenerator(report, comp)
+	generator := NewGenerator(report, comp, "https://github.com/test/policy", nil)
 	pred, err := generator.GeneratePredicate(context.Background())
 	require.NoError(t, err)
 
 	// Verify predicate fields
-	assert.Equal(t, comp.ContainerImage, pred.ImageRef)
+	assert.Equal(t, report.Policy, pred.Policy)
+	assert.Equal(t, "https://github.com/test/policy", pred.PolicySource)
+	assert.Contains(t, pred.ImageRefs, comp.ContainerImage)
 	assert.NotEmpty(t, pred.Timestamp)
-	assert.Equal(t, "ec-cli", pred.Verifier)
-	assert.Equal(t, report.Policy.Name, pred.PolicySource)
-	assert.Equal(t, comp.Name, pred.Component["name"])
-	assert.Equal(t, comp.ContainerImage, pred.Component["containerImage"])
-	assert.Equal(t, comp.Source, pred.Component["source"])
+	assert.Equal(t, "conforma", pred.Verifier)
+	assert.Equal(t, "passed", pred.Status)
+	assert.NotNil(t, pred.Summary)
 
-	// Verify Results field contains filtered report
-	assert.NotNil(t, pred.Results)
-	assert.Equal(t, report.Snapshot, pred.Results.Snapshot)
-	assert.Equal(t, report.Key, pred.Results.Key)
-	assert.Equal(t, report.Policy, pred.Results.Policy)
-	assert.Equal(t, report.EcVersion, pred.Results.EcVersion)
-	assert.Equal(t, report.EffectiveTime, pred.Results.EffectiveTime)
+	// Verify summary contains component information
+	assert.Equal(t, comp.Name, pred.Summary.Component.Name)
+	assert.Equal(t, comp.ContainerImage, pred.Summary.Component.ContainerImage)
+	assert.Equal(t, comp.Source, pred.Summary.Component.Source)
 
-	// Verify filtered components include only the target component, not variants or other components
-	filteredComponents := pred.Results.Components
-	assert.Len(t, filteredComponents, 1) // only test-component
-
-	componentNames := make([]string, len(filteredComponents))
-	for i, comp := range filteredComponents {
-		componentNames[i] = comp.Name
-	}
-
-	assert.Contains(t, componentNames, "test-component")
-	assert.NotContains(t, componentNames, "test-component-sha256:abc123-amd64")
-	assert.NotContains(t, componentNames, "test-component-sha256:def456-arm64")
-	assert.NotContains(t, componentNames, "other-component")
-}
-
-func TestFilterReportForTargetRef(t *testing.T) {
-	tests := []struct {
-		name           string
-		targetRef      string
-		components     []applicationsnapshot.Component
-		expansion      *applicationsnapshot.ExpansionInfo
-		expectedCount  int
-		expectedImages []string
-	}{
-		{
-			name:      "image index with variants - includes all",
-			targetRef: "quay.io/test/image@sha256:index123",
-			components: []applicationsnapshot.Component{
-				{SnapshotComponent: appapi.SnapshotComponent{Name: "Unnamed", ContainerImage: "quay.io/test/image@sha256:index123"}},
-				{SnapshotComponent: appapi.SnapshotComponent{Name: "Unnamed-sha256:abc123-amd64", ContainerImage: "quay.io/test/image@sha256:abc123"}},
-				{SnapshotComponent: appapi.SnapshotComponent{Name: "Unnamed-sha256:def456-arm64", ContainerImage: "quay.io/test/image@sha256:def456"}},
-				{SnapshotComponent: appapi.SnapshotComponent{Name: "OtherComponent", ContainerImage: "quay.io/other/image@sha256:other123"}},
-			},
-			expansion: func() *applicationsnapshot.ExpansionInfo {
-				exp := applicationsnapshot.NewExpansionInfo()
-				exp.AddChildToIndex("quay.io/test/image@sha256:index123", "quay.io/test/image@sha256:abc123")
-				exp.AddChildToIndex("quay.io/test/image@sha256:index123", "quay.io/test/image@sha256:def456")
-				exp.SetIndexAlias("quay.io/test/image:latest", "quay.io/test/image@sha256:index123")
-				return exp
-			}(),
-			expectedCount:  3,
-			expectedImages: []string{"quay.io/test/image@sha256:index123", "quay.io/test/image@sha256:abc123", "quay.io/test/image@sha256:def456"},
-		},
-		{
-			name:      "single-arch image - includes only itself",
-			targetRef: "quay.io/test/image@sha256:abc123",
-			components: []applicationsnapshot.Component{
-				{SnapshotComponent: appapi.SnapshotComponent{Name: "Unnamed", ContainerImage: "quay.io/test/image@sha256:index123"}},
-				{SnapshotComponent: appapi.SnapshotComponent{Name: "Unnamed-sha256:abc123-amd64", ContainerImage: "quay.io/test/image@sha256:abc123"}},
-				{SnapshotComponent: appapi.SnapshotComponent{Name: "Unnamed-sha256:def456-arm64", ContainerImage: "quay.io/test/image@sha256:def456"}},
-				{SnapshotComponent: appapi.SnapshotComponent{Name: "OtherComponent", ContainerImage: "quay.io/other/image@sha256:other123"}},
-			},
-			expansion: func() *applicationsnapshot.ExpansionInfo {
-				exp := applicationsnapshot.NewExpansionInfo()
-				exp.AddChildToIndex("quay.io/test/image@sha256:index123", "quay.io/test/image@sha256:abc123")
-				exp.AddChildToIndex("quay.io/test/image@sha256:index123", "quay.io/test/image@sha256:def456")
-				return exp
-			}(),
-			expectedCount:  1,
-			expectedImages: []string{"quay.io/test/image@sha256:abc123"},
-		},
-		{
-			name:      "no expansion info - includes only target",
-			targetRef: "quay.io/test/image@sha256:abc123",
-			components: []applicationsnapshot.Component{
-				{SnapshotComponent: appapi.SnapshotComponent{Name: "TestComponent", ContainerImage: "quay.io/test/image@sha256:abc123"}},
-				{SnapshotComponent: appapi.SnapshotComponent{Name: "OtherComponent", ContainerImage: "quay.io/other/image@sha256:other123"}},
-			},
-			expansion:      nil,
-			expectedCount:  1,
-			expectedImages: []string{"quay.io/test/image@sha256:abc123"},
-		},
-		{
-			name:      "target not found",
-			targetRef: "quay.io/test/image@sha256:nonexistent",
-			components: []applicationsnapshot.Component{
-				{SnapshotComponent: appapi.SnapshotComponent{Name: "TestComponent", ContainerImage: "quay.io/test/image@sha256:abc123"}},
-				{SnapshotComponent: appapi.SnapshotComponent{Name: "OtherComponent", ContainerImage: "quay.io/other/image@sha256:other123"}},
-			},
-			expansion:      nil,
-			expectedCount:  0,
-			expectedImages: []string{},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			report := applicationsnapshot.Report{
-				Components: tt.components,
-				Expansion:  tt.expansion,
-				Policy:     ecapi.EnterpriseContractPolicySpec{Name: "test-policy"},
-				EcVersion:  "1.0.0",
-			}
-
-			filteredReport := FilterReportForTargetRef(report, tt.targetRef)
-
-			assert.Len(t, filteredReport.Components, tt.expectedCount)
-
-			imageRefs := make([]string, len(filteredReport.Components))
-			for i, comp := range filteredReport.Components {
-				imageRefs[i] = comp.ContainerImage
-			}
-
-			for _, expectedImage := range tt.expectedImages {
-				assert.Contains(t, imageRefs, expectedImage)
-			}
-		})
-	}
+	// Verify summary contains violations, warnings, and successes counts
+	assert.Equal(t, len(comp.Violations), pred.Summary.Violations)
+	assert.Equal(t, len(comp.Warnings), pred.Summary.Warnings)
+	assert.Equal(t, len(comp.Successes), pred.Summary.Successes)
 }
 
 func TestIsVSAExpired(t *testing.T) {
@@ -465,6 +362,13 @@ func TestIsVSAExpired(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+// mockVSARetriever is a mock implementation of VSARetriever for testing
+type mockVSARetriever struct{}
+
+func (m *mockVSARetriever) RetrieveVSA(ctx context.Context, identifier string) (*ssldsse.Envelope, error) {
+	return nil, fmt.Errorf("no VSA found")
 }
 
 func TestNewVSAChecker(t *testing.T) {
@@ -658,7 +562,7 @@ func TestNewGenerator(t *testing.T) {
 	}
 
 	// Test NewGenerator
-	generator := NewGenerator(report, component)
+	generator := NewGenerator(report, component, "https://github.com/test/policy", nil)
 
 	// Verify the generator is created correctly
 	assert.NotNil(t, generator)
@@ -776,13 +680,15 @@ func TestWriterWithCustomSettings(t *testing.T) {
 
 	// Create test predicate
 	pred := &Predicate{
-		ImageRef:     "test-image:tag",
+		ImageRefs:    []string{"test-image:tag"},
 		Timestamp:    "2024-03-21T12:00:00Z",
 		Verifier:     "ec-cli",
 		PolicySource: "test-policy",
-		Component: map[string]interface{}{
-			"name":           "test-component",
-			"containerImage": "test-image:tag",
+		Summary: VSASummary{
+			Component: ComponentSummary{
+				Name:           "test-component",
+				ContainerImage: "test-image:tag",
+			},
 		},
 	}
 
@@ -811,11 +717,13 @@ func TestWriterErrorHandling(t *testing.T) {
 		}
 
 		pred := &Predicate{
-			ImageRef:  "test-image:tag",
+			ImageRefs: []string{"test-image:tag"},
 			Timestamp: "2024-03-21T12:00:00Z",
 			Verifier:  "ec-cli",
-			Component: map[string]interface{}{
-				"name": "test-component",
+			Summary: VSASummary{
+				Component: ComponentSummary{
+					Name: "test-component",
+				},
 			},
 		}
 
@@ -834,8 +742,10 @@ func TestWriterErrorHandling(t *testing.T) {
 
 		// Create predicate with data that can't be marshaled
 		pred := &Predicate{
-			Component: map[string]interface{}{
-				"invalid": make(chan int), // channels can't be marshaled to JSON
+			Summary: VSASummary{
+				Component: ComponentSummary{
+					Source: make(chan int), // channels can't be marshaled to JSON
+				},
 			},
 		}
 

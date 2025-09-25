@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	ecc "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
+	ecapi "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
 	ssldsse "github.com/secure-systems-lab/go-securesystemslib/dsse"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
@@ -34,39 +34,63 @@ import (
 	"github.com/conforma/cli/internal/applicationsnapshot"
 )
 
-// Predicate represents a Verification Summary Attestation (VSA) predicate.
+// ComponentSummary represents the summary information for a single component
+type ComponentSummary struct {
+	Name           string      `json:"name"`
+	ContainerImage string      `json:"containerImage"`
+	Source         interface{} `json:"source"`
+}
+
+// ComponentDetail represents detailed information about a component in the summary
+type ComponentDetail struct {
+	Name       string `json:"Name"`
+	ImageRef   string `json:"ImageRef"`
+	Violations int    `json:"Violations"`
+	Warnings   int    `json:"Warnings"`
+	Successes  int    `json:"Successes"`
+}
+
+// VSASummary represents the summary information for a VSA predicate
+type VSASummary struct {
+	Violations int               `json:"violations"`
+	Warnings   int               `json:"warnings"`
+	Successes  int               `json:"successes"`
+	Components []ComponentDetail `json:"Components"`
+	Component  ComponentSummary  `json:"component"`
+}
+
 type Predicate struct {
-	ImageRef     string                 `json:"imageRef"`
-	Timestamp    string                 `json:"timestamp"`
-	Verifier     string                 `json:"verifier"`
-	PolicySource string                 `json:"policySource"`
-	Component    map[string]interface{} `json:"component"`
-	Results      *FilteredReport        `json:"results,omitempty"` // Filtered report containing the target and its children if it's a manifest
+	Policy       ecapi.EnterpriseContractPolicySpec `json:"policy"`
+	PolicySource string                             `json:"policySource"`
+	ImageRefs    []string                           `json:"imageRefs"`
+	Timestamp    string                             `json:"timestamp"`
+	Status       string                             `json:"status"`
+	Verifier     string                             `json:"verifier"`
+	Summary      VSASummary                         `json:"summary"`
+	PublicKey    string                             `json:"publicKey"`
 }
 
 // Generator handles VSA predicate generation
 type Generator struct {
-	Report    applicationsnapshot.Report
-	Component applicationsnapshot.Component
+	Report       applicationsnapshot.Report
+	Component    applicationsnapshot.Component
+	PolicySource string
+	Policy       PublicKeyProvider
+}
+
+// PublicKeyProvider defines the interface for accessing public key information
+type PublicKeyProvider interface {
+	PublicKeyPEM() ([]byte, error)
 }
 
 // NewGenerator creates a new VSA predicate generator
-func NewGenerator(report applicationsnapshot.Report, comp applicationsnapshot.Component) *Generator {
+func NewGenerator(report applicationsnapshot.Report, comp applicationsnapshot.Component, policySource string, policy PublicKeyProvider) *Generator {
 	return &Generator{
-		Report:    report,
-		Component: comp,
+		Report:       report,
+		Component:    comp,
+		PolicySource: policySource,
+		Policy:       policy,
 	}
-}
-
-// FilteredReport represents a filtered version of the application snapshot report
-// that contains the target component and its architecture variants if it's a manifest.
-type FilteredReport struct {
-	Snapshot      string                           `json:"snapshot"`
-	Components    []applicationsnapshot.Component  `json:"components"`
-	Key           string                           `json:"key"`
-	Policy        ecc.EnterpriseContractPolicySpec `json:"policy"`
-	EcVersion     string                           `json:"ec-version"`
-	EffectiveTime time.Time                        `json:"effective-time"`
 }
 
 // normalizeIndexRef normalizes an image reference to its pinned digest form if it's an index
@@ -80,81 +104,173 @@ func normalizeIndexRef(ref string, exp *applicationsnapshot.ExpansionInfo) strin
 	return ref
 }
 
-// FilterReportForTargetRef filters the report based on the target image reference.
-// If the target is an image index (manifest), it includes the index and all its child manifests.
-// If the target is a single-arch image, it includes only that image.
-//
-// Parameters:
-//   - report: The complete application snapshot report
-//   - targetRef: The container image reference to filter for
-//
-// Returns:
-//   - A FilteredReport containing the target and its children if it's a manifest
-func FilterReportForTargetRef(report applicationsnapshot.Report, targetRef string) *FilteredReport {
-	exp := report.Expansion
-	targetRef = normalizeIndexRef(targetRef, exp)
+// GeneratePredicate creates a Predicate for a validated image/component.
+func (g *Generator) GeneratePredicate(ctx context.Context) (*Predicate, error) {
+	log.Infof("Generating EC predicate for image: %s", g.Component.ContainerImage)
 
-	include := map[string]struct{}{}
-	if exp != nil {
-		if imgs, ok := exp.GetChildrenByIndex(targetRef); ok {
-			// This is an image index, include the index and all its children
-			include[targetRef] = struct{}{}
-			for _, c := range imgs {
-				include[c] = struct{}{}
-			}
+	// Get all image references including the index and architecture-specific images
+	imageRefs := g.getAllImageRefs()
+
+	// Determine the overall status based on component success
+	status := "failed"
+	if g.Component.Success {
+		status = "passed"
+	}
+
+	// Create detailed summary with architecture breakdown
+	summary := g.createDetailedSummary()
+
+	// Get the public key from the policy
+	publicKey := ""
+	if g.Policy != nil {
+		if publicKeyBytes, err := g.Policy.PublicKeyPEM(); err != nil {
+			log.Warnf("Failed to get public key from policy: %v", err)
 		} else {
-			// This is a single-arch image, include only itself
-			include[targetRef] = struct{}{}
-		}
-	} else {
-		// No expansion info available, include only the target
-		include[targetRef] = struct{}{}
-	}
-
-	comps := make([]applicationsnapshot.Component, 0, len(report.Components))
-	for _, c := range report.Components {
-		if _, ok := include[c.ContainerImage]; ok {
-			comps = append(comps, c)
+			publicKey = string(publicKeyBytes)
 		}
 	}
 
-	return &FilteredReport{
-		Snapshot:      report.Snapshot,
-		Components:    comps,
-		Key:           report.Key,
-		Policy:        report.Policy,
-		EcVersion:     report.EcVersion,
-		EffectiveTime: report.EffectiveTime,
+	return &Predicate{
+		Policy:       g.Report.Policy, // This contains the resolved policy with pinned URLs
+		PolicySource: g.PolicySource,  // This contains the original policy location
+		ImageRefs:    imageRefs,
+		Timestamp:    time.Now().UTC().Format(time.RFC3339),
+		Status:       status,
+		Verifier:     "conforma",
+		Summary:      summary,
+		PublicKey:    publicKey,
+	}, nil
+}
+
+// createDetailedSummary creates a detailed summary with architecture breakdown
+func (g *Generator) createDetailedSummary() VSASummary {
+	// Start with main component
+	mainViolations := len(g.Component.Violations)
+	mainWarnings := len(g.Component.Warnings)
+	mainSuccesses := len(g.Component.Successes)
+
+	// Initialize totals with main component
+	totalViolations := mainViolations
+	totalWarnings := mainWarnings
+	totalSuccesses := mainSuccesses
+
+	// Create components list with detailed breakdown
+	components := []ComponentDetail{
+		{
+			Name:       g.Component.Name,
+			ImageRef:   g.Component.ContainerImage,
+			Violations: mainViolations,
+			Warnings:   mainWarnings,
+			Successes:  mainSuccesses,
+		},
+	}
+
+	// If we have expansion info, add architecture-specific details
+	if g.Report.Expansion != nil {
+		// Get all child manifests for the main component
+		mainImageRef := g.Component.ContainerImage
+		if children, ok := g.Report.Expansion.GetChildrenByIndex(mainImageRef); ok {
+			for _, childRef := range children {
+				// Skip if this is the main component itself (shouldn't happen, but be safe)
+				if childRef == g.Component.ContainerImage {
+					continue
+				}
+
+				// Find the actual child component in the report to get its real data
+				var childComponent *applicationsnapshot.Component
+				for _, comp := range g.Report.Components {
+					if comp.ContainerImage == childRef {
+						childComponent = &comp
+						break
+					}
+				}
+
+				// Use actual child component data if found, otherwise use zeros
+				var archViolations, archWarnings, archSuccesses int
+				var childName string
+				if childComponent != nil {
+					archViolations = len(childComponent.Violations)
+					archWarnings = len(childComponent.Warnings)
+					archSuccesses = len(childComponent.Successes)
+					childName = childComponent.Name
+				} else {
+					// If child component not found in report, use a default name
+					childName = fmt.Sprintf("%s-%s", g.Component.Name, childRef)
+				}
+
+				components = append(components, ComponentDetail{
+					Name:       childName,
+					ImageRef:   childRef,
+					Violations: archViolations,
+					Warnings:   archWarnings,
+					Successes:  archSuccesses,
+				})
+
+				// Add to totals
+				totalViolations += archViolations
+				totalWarnings += archWarnings
+				totalSuccesses += archSuccesses
+			}
+		}
+	}
+
+	return VSASummary{
+		Violations: totalViolations,
+		Warnings:   totalWarnings,
+		Successes:  totalSuccesses,
+		Components: components,
+		Component: ComponentSummary{
+			Name:           g.Component.Name,
+			ContainerImage: g.Component.ContainerImage,
+			Source:         g.Component.Source,
+		},
 	}
 }
 
-// GeneratePredicate creates a Predicate for a validated image/component.
-func (g *Generator) GeneratePredicate(ctx context.Context) (*Predicate, error) {
-	log.Infof("Generating VSA predicate for image: %s", g.Component.ContainerImage)
+// getAllImageRefs returns all image references including the index and architecture-specific images
+func (g *Generator) getAllImageRefs() []string {
+	var imageRefs []string
 
-	// Compose the component info as a map
-	componentInfo := map[string]interface{}{
-		"name":           g.Component.Name,
-		"containerImage": g.Component.ContainerImage,
-		"source":         g.Component.Source,
+	// Add the main component image reference
+	imageRefs = append(imageRefs, g.Component.ContainerImage)
+
+	// If we have expansion info, add the index and all architecture-specific images
+	if g.Report.Expansion != nil {
+		// Get the normalized index reference
+		normalizedRef := normalizeIndexRef(g.Component.ContainerImage, g.Report.Expansion)
+
+		// Add the index reference if it's different from the component image
+		if normalizedRef != g.Component.ContainerImage {
+			imageRefs = append(imageRefs, normalizedRef)
+		}
+
+		// Get all child images for this index
+		if children, ok := g.Report.Expansion.GetChildrenByIndex(normalizedRef); ok {
+			imageRefs = append(imageRefs, children...)
+		}
 	}
 
-	policySource := ""
-	if g.Report.Policy.Name != "" {
-		policySource = g.Report.Policy.Name
+	// Remove duplicates and return
+	return removeDuplicateStrings(imageRefs)
+}
+
+// removeDuplicateStrings removes duplicate strings from a slice
+func removeDuplicateStrings(slice []string) []string {
+	if len(slice) == 0 {
+		return []string{}
 	}
 
-	// Filter the report to include the target component and its architecture variants if it's a manifest
-	filteredReport := FilterReportForTargetRef(g.Report, g.Component.ContainerImage)
+	keys := make(map[string]bool)
+	var result []string
 
-	return &Predicate{
-		ImageRef:     g.Component.ContainerImage,
-		Timestamp:    time.Now().UTC().Format(time.RFC3339),
-		Verifier:     "ec-cli",
-		PolicySource: policySource,
-		Component:    componentInfo,
-		Results:      filteredReport,
-	}, nil
+	for _, item := range slice {
+		if !keys[item] {
+			keys[item] = true
+			result = append(result, item)
+		}
+	}
+
+	return result
 }
 
 // Writer handles VSA file writing
@@ -175,7 +291,7 @@ func NewWriter() *Writer {
 
 // WritePredicate writes the Predicate as a JSON file to a temp directory and returns the path.
 func (w *Writer) WritePredicate(predicate *Predicate) (string, error) {
-	log.Infof("Writing VSA for image: %s", predicate.ImageRef)
+	log.Infof("Writing VSA for images: %v", predicate.ImageRefs)
 
 	// Serialize with indent
 	data, err := json.MarshalIndent(predicate, "", "  ")
@@ -189,8 +305,12 @@ func (w *Writer) WritePredicate(predicate *Predicate) (string, error) {
 		return "", fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
-	// Write to file
-	filename := fmt.Sprintf("vsa-%s.json", predicate.Component["name"])
+	// Write to file with same naming convention as old VSA
+	componentName := "unknown"
+	if predicate.Summary.Component.Name != "" {
+		componentName = predicate.Summary.Component.Name
+	}
+	filename := fmt.Sprintf("vsa-%s.json", componentName)
 	filepath := filepath.Join(tempDir, filename)
 	err = afero.WriteFile(w.FS, filepath, data, w.FilePerm)
 	if err != nil {
@@ -309,7 +429,6 @@ func (c *VSAChecker) CheckExistingVSA(ctx context.Context, imageRef string, expi
 		"expiration_threshold": expirationThreshold,
 		"expired":              result.Expired,
 		"verifier":             predicate.Verifier,
-		"policy_source":        predicate.PolicySource,
 	}).Debug("Found VSA envelope")
 
 	return result, nil

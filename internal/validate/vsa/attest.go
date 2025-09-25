@@ -22,18 +22,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/sigstore/cosign/v2/pkg/cosign"
-	att "github.com/sigstore/cosign/v2/pkg/cosign/attestation"
 	cosigntypes "github.com/sigstore/cosign/v2/pkg/types"
 	"github.com/sigstore/sigstore/pkg/signature"
 	"github.com/sigstore/sigstore/pkg/signature/dsse"
 	sigopts "github.com/sigstore/sigstore/pkg/signature/options"
 	"github.com/spf13/afero"
+)
+
+// Predicate type URL
+const (
+	PredicateType = "https://conforma.dev/verification_summary/v1"
 )
 
 // LoadPrivateKey is aliased to allow easy testing.
@@ -73,11 +77,11 @@ func NewSigner(keyPath string, fs afero.Fs) (*Signer, error) {
 	}, nil
 }
 
-// Add a constructor with sensible defaults
+// NewAttestor creates an Attestor with sensible defaults
 func NewAttestor(predicatePath, repo, digest string, signer *Signer) (*Attestor, error) {
 	return &Attestor{
 		PredicatePath: predicatePath,
-		PredicateType: "https://conforma.dev/verification_summary/v1",
+		PredicateType: PredicateType,
 		Digest:        digest,
 		Repo:          repo,
 		Signer:        signer,
@@ -100,17 +104,38 @@ func (a Attestor) AttestPredicate(ctx context.Context) ([]byte, error) {
 	defer predFile.Close()
 
 	//-------------------------------------------------------------------- 2. make the in‑toto statement
-	stmt, err := att.GenerateStatement(att.GenerateOpts{
-		Predicate: predFile,
-		Type:      a.PredicateType,
-		Digest:    strings.TrimPrefix(a.TargetDigest(), "sha256:"),
-		Repo:      a.Repo,
-		Time:      time.Now, // keeps tests deterministic
-	})
-	if err != nil {
-		return nil, fmt.Errorf("wrap predicate: %w", err)
+	// For custom predicate types, we need to manually construct the in-toto statement
+	// since att.GenerateStatement doesn't handle custom types properly
+	stmt := map[string]interface{}{
+		"_type":         "https://in-toto.io/Statement/v0.1",
+		"predicateType": a.PredicateType,
+		"subject": []map[string]interface{}{
+			{
+				"name":   a.Repo,
+				"digest": map[string]string{"sha256": strings.TrimPrefix(a.TargetDigest(), "sha256:")},
+			},
+		},
 	}
-	payload, _ := json.Marshal(stmt) // canonicalised by dsse later
+
+	// Read the predicate content
+	predContent, err := io.ReadAll(predFile)
+	if err != nil {
+		return nil, fmt.Errorf("read predicate: %w", err)
+	}
+
+	// Parse the predicate JSON
+	var predicate map[string]interface{}
+	if err := json.Unmarshal(predContent, &predicate); err != nil {
+		return nil, fmt.Errorf("parse predicate: %w", err)
+	}
+
+	// Add the predicate to the statement
+	stmt["predicate"] = predicate
+
+	payload, err := json.Marshal(stmt)
+	if err != nil {
+		return nil, fmt.Errorf("marshal statement: %w", err)
+	}
 
 	//-------------------------------------------------------------------- 3. sign -> DSSE envelope
 	env, err := a.Signer.WrapSigner.SignMessage(bytes.NewReader(payload), sigopts.WithContext(ctx))

@@ -107,7 +107,7 @@ func TestNewServiceWithFS(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service := NewServiceWithFS(tt.signer, tt.fs)
+			service := NewServiceWithFS(tt.signer, tt.fs, "https://github.com/test/policy", nil)
 
 			if tt.expectNonNil {
 				assert.NotNil(t, service, "NewServiceWithFS should return non-nil service")
@@ -164,7 +164,7 @@ func TestService_ProcessComponentVSA(t *testing.T) {
 
 	// Create test signer
 	signer := testSigner("/test.key", fs)
-	service := NewServiceWithFS(signer, fs)
+	service := NewServiceWithFS(signer, fs, "https://github.com/test/policy", nil)
 
 	// Test successful processing
 	envelopePath, err := service.ProcessComponentVSA(ctx, report, comp, "https://github.com/test/repo", "sha256:testdigest")
@@ -195,7 +195,7 @@ func TestService_ProcessSnapshotVSA(t *testing.T) {
 
 	// Create test signer
 	signer := testSigner("/test.key", fs)
-	service := NewServiceWithFS(signer, fs)
+	service := NewServiceWithFS(signer, fs, "https://github.com/test/policy", nil)
 
 	// Test successful processing
 	envelopePath, err := service.ProcessSnapshotVSA(ctx, report)
@@ -233,7 +233,7 @@ func TestService_ProcessAllVSAs(t *testing.T) {
 
 	// Create test signer
 	signer := testSigner("/test.key", fs)
-	service := NewServiceWithFS(signer, fs)
+	service := NewServiceWithFS(signer, fs, "https://github.com/test/policy", nil)
 
 	// Define helper functions
 	getGitURL := func(comp applicationsnapshot.Component) string {
@@ -292,7 +292,7 @@ func TestService_ProcessAllVSAs_WithErrors(t *testing.T) {
 
 	// Create test signer
 	signer := testSigner("/test.key", fs)
-	service := NewServiceWithFS(signer, fs)
+	service := NewServiceWithFS(signer, fs, "https://github.com/test/policy", nil)
 
 	// Define helper functions that return errors
 	getGitURL := func(comp applicationsnapshot.Component) string {
@@ -348,7 +348,7 @@ func TestService_ProcessAllVSAs_PartialSuccess(t *testing.T) {
 
 	// Create test signer
 	signer := testSigner("/test.key", fs)
-	service := NewServiceWithFS(signer, fs)
+	service := NewServiceWithFS(signer, fs, "https://github.com/test/policy", nil)
 
 	// Define helper functions - fail for specific component
 	getGitURL := func(comp applicationsnapshot.Component) string {
