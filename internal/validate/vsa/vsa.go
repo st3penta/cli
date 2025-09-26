@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	ecapi "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
+	ecapi "github.com/conforma/crds/api/v1alpha1"
 	ssldsse "github.com/secure-systems-lab/go-securesystemslib/dsse"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/afero"

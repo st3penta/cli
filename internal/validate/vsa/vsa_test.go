@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	ecapi "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
+	ecapi "github.com/conforma/crds/api/v1alpha1"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	v1types "github.com/google/go-containerregistry/pkg/v1/types"
 	appapi "github.com/konflux-ci/application-api/api/v1alpha1"

@@ -29,7 +29,7 @@ package evaluator
 import (
 	"testing"
 
-	ecc "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
+	ecc "github.com/conforma/crds/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/conforma/cli/internal/policy"

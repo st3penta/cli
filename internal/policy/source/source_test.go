@@ -28,11 +28,11 @@ import (
 	"sync"
 	"testing"
 
+	ecc "github.com/conforma/crds/api/v1alpha1"
 	fileMetadata "github.com/conforma/go-gather/gather/file"
 	gitMetadata "github.com/conforma/go-gather/gather/git"
 	ociMetadata "github.com/conforma/go-gather/gather/oci"
 	"github.com/conforma/go-gather/metadata"
-	ecc "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
