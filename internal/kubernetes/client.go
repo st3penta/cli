@@ -20,7 +20,7 @@ import (
 	"context"
 	"errors"
 
-	ecc "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
+	ecc "github.com/conforma/crds/api/v1alpha1"
 	app "github.com/konflux-ci/application-api/api/v1alpha1"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"

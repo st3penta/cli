@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	ecc "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
+	ecc "github.com/conforma/crds/api/v1alpha1"
 	"github.com/open-policy-agent/conftest/output"
 	conftest "github.com/open-policy-agent/conftest/policy"
 	"github.com/open-policy-agent/conftest/runner"

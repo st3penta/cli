@@ -39,7 +39,7 @@ import (
 	"testing"
 	"time"
 
-	ecc "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
+	ecc "github.com/conforma/crds/api/v1alpha1"
 	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/open-policy-agent/opa/v1/ast"
 	"github.com/spf13/afero"

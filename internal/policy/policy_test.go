@@ -28,9 +28,9 @@ import (
 	"time"
 
 	hd "github.com/MakeNowJust/heredoc"
+	ecc "github.com/conforma/crds/api/v1alpha1"
 	fileMetadata "github.com/conforma/go-gather/gather/file"
 	"github.com/conforma/go-gather/metadata"
-	ecc "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
 	"github.com/sigstore/cosign/v2/pkg/cosign"
 	cosignSig "github.com/sigstore/cosign/v2/pkg/signature"
 	sigstoreSig "github.com/sigstore/sigstore/pkg/signature"

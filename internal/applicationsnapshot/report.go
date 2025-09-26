@@ -26,7 +26,7 @@ import (
 	"fmt"
 	"time"
 
-	ecc "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
+	ecc "github.com/conforma/crds/api/v1alpha1"
 	app "github.com/konflux-ci/application-api/api/v1alpha1"
 	"sigs.k8s.io/yaml"
 

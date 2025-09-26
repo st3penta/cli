@@ -60,7 +60,7 @@ func TestComputeInfo(t *testing.T) {
 				},
 			},
 			Deps: []*dbg.Module{
-				{Path: "github.com/enterprise-contract/enterprise-contract-controller/api", Version: "v1"},
+				{Path: "github.com/conforma/crds/api", Version: "v1"},
 				{Path: "github.com/open-policy-agent/opa", Version: "v2"},
 				{Path: "github.com/open-policy-agent/conftest", Version: "v3"},
 				{Path: "github.com/sigstore/cosign/v2", Version: "v4"},

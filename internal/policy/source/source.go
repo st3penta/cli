@@ -31,11 +31,11 @@ import (
 	"runtime/trace"
 	"sync"
 
+	ecc "github.com/conforma/crds/api/v1alpha1"
 	fileMetadata "github.com/conforma/go-gather/gather/file"
 	gitMetadata "github.com/conforma/go-gather/gather/git"
 	ociMetadata "github.com/conforma/go-gather/gather/oci"
 	"github.com/conforma/go-gather/metadata"
-	ecc "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 

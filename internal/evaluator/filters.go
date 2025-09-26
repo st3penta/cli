@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	ecc "github.com/enterprise-contract/enterprise-contract-controller/api/v1alpha1"
+	ecc "github.com/conforma/crds/api/v1alpha1"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/conforma/cli/internal/opa/rule"
