@@ -31,6 +31,7 @@ import (
 	"github.com/gkampitakis/go-snaps/snaps"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/types"
+	"github.com/in-toto/in-toto-golang/in_toto"
 	"github.com/sigstore/cosign/v2/pkg/cosign/bundle"
 	ct "github.com/sigstore/cosign/v2/pkg/types"
 	"github.com/stretchr/testify/assert"
@@ -364,4 +365,79 @@ func encode(payload string) string {
 
 func buffy(data string) io.ReadCloser {
 	return io.NopCloser(bytes.NewBufferString(data))
+}
+
+func TestSLSAProvenance_Subject(t *testing.T) {
+	mockSubject1 := in_toto.Subject{
+		Name: "registry.io/example/image@sha256:abc123",
+		Digest: map[string]string{
+			"sha256": "abc123def456",
+		},
+	}
+	mockSubject2 := in_toto.Subject{
+		Name: "registry.io/example/artifact@sha256:def456",
+		Digest: map[string]string{
+			"sha256": "def456abc123",
+			"sha512": "fea789bcd012",
+		},
+	}
+
+	tests := []struct {
+		name      string
+		statement in_toto.ProvenanceStatementSLSA02
+		expected  []in_toto.Subject
+		wantPanic bool
+	}{
+		{
+			name: "returns single subject successfully",
+			statement: in_toto.ProvenanceStatementSLSA02{
+				StatementHeader: in_toto.StatementHeader{
+					Subject: []in_toto.Subject{mockSubject1},
+				},
+			},
+			expected: []in_toto.Subject{mockSubject1},
+		},
+		{
+			name: "returns multiple subjects successfully",
+			statement: in_toto.ProvenanceStatementSLSA02{
+				StatementHeader: in_toto.StatementHeader{
+					Subject: []in_toto.Subject{mockSubject1, mockSubject2},
+				},
+			},
+			expected: []in_toto.Subject{mockSubject1, mockSubject2},
+		},
+		{
+			name: "returns empty slice when no subjects",
+			statement: in_toto.ProvenanceStatementSLSA02{
+				StatementHeader: in_toto.StatementHeader{
+					Subject: []in_toto.Subject{},
+				},
+			},
+			expected: []in_toto.Subject{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.wantPanic {
+				defer func() {
+					if r := recover(); r == nil {
+						t.Errorf("expected panic but none occurred")
+					}
+				}()
+			}
+
+			slsa := slsaProvenance{statement: tt.statement}
+			result := slsa.Subject()
+
+			if !tt.wantPanic {
+				assert.Equal(t, tt.expected, result)
+				// Verify that the returned slice is independent of the original
+				if len(result) > 0 && len(tt.expected) > 0 {
+					assert.Equal(t, tt.expected[0].Name, result[0].Name)
+					assert.Equal(t, tt.expected[0].Digest, result[0].Digest)
+				}
+			}
+		})
+	}
 }
