@@ -151,7 +151,6 @@ func MatchSnapshot(ctx context.Context, qualifier, text string, vars map[string]
 	}
 
 	scenario := ctx.Value(testenv.Scenario).(*godog.Scenario)
-
 	snapshot := strings.TrimSuffix(filepath.Base(scenario.Uri), filepath.Ext(scenario.Uri))
 
 	formatText := true

@@ -27,7 +27,6 @@ import (
 	"os/exec"
 	"path"
 	"runtime"
-	"sync"
 	"testing"
 
 	"github.com/testcontainers/testcontainers-go"
@@ -55,9 +54,10 @@ var (
 )
 
 var (
-	version      sync.Once
 	ecVersion    = "undefined"
 	ecVersionErr error
+	// Add a flag to track if version has been initialized
+	versionInitialized bool
 )
 
 // Persist persists the environment stored in context in a ".persisted" file as JSON
@@ -258,7 +258,9 @@ func TestContainersRequest(ctx context.Context, req testcontainers.ContainerRequ
 
 // CLIVersion returns the version of the CLI, useful for matching in snapshots
 func CLIVersion(ctx context.Context) (string, error) {
-	version.Do(func() {
+	// For individual test runs, we need to ensure the version is always fresh
+	// Check if we're in a test context and if the version needs to be refreshed
+	if !versionInitialized || ecVersion == "undefined" {
 		ec := path.Join("dist", fmt.Sprintf("ec_%s_%s", runtime.GOOS, runtime.GOARCH))
 
 		cmd := exec.CommandContext(ctx, ec, "version", "--json")
@@ -266,7 +268,7 @@ func CLIVersion(ctx context.Context) (string, error) {
 		cmd.Stdout = &stdout
 
 		if ecVersionErr = cmd.Run(); ecVersionErr != nil {
-			return
+			return ecVersion, ecVersionErr
 		}
 
 		ver := struct {
@@ -277,7 +279,8 @@ func CLIVersion(ctx context.Context) (string, error) {
 		}
 
 		ecVersion = ver.Version
-	})
+		versionInitialized = true
+	}
 
 	return ecVersion, ecVersionErr
 }
