@@ -20,7 +20,7 @@ ec validate image --policy '{
 ----
 
 The configuration can be provided as a reference to a
-xref:ecc:ROOT:reference.adoc[EnterpriseContractPolicy] Kubernetes custom
+xref:cli:ROOT:reference.adoc[EnterpriseContractPolicy] Kubernetes custom
 resource by either name (e.g. "my-policy") in the current namespace, or by
 providing namespace and the name separaded by slash (`/`) character, such as in
 this example:
