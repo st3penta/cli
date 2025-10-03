@@ -27,11 +27,18 @@ import (
 	"io"
 	"math/big"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sigstore/cosign/v2/pkg/types"
 	"github.com/sigstore/sigstore/pkg/signature"
 	"github.com/spf13/afero"
+	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/conforma/cli/internal/utils"
 )
 
 // testSigner creates a mock signer for testing that bypasses expensive crypto operations
@@ -130,8 +137,10 @@ func TestNewSigner(t *testing.T) {
 			tmp := t.TempDir()
 			fs, keyPath := tc.prepare(tmp)
 
+			ctx := context.Background()
+
 			if tc.expectErr {
-				_, err := NewSigner(keyPath, fs)
+				_, err := NewSigner(ctx, keyPath, fs)
 				if err == nil {
 					t.Fatalf("expected error, got nil")
 				}
@@ -146,7 +155,7 @@ func TestNewSigner(t *testing.T) {
 				return &fakeSigner{}, nil
 			}
 
-			signer, err := NewSigner(keyPath, fs)
+			signer, err := NewSigner(ctx, keyPath, fs)
 
 			// For success cases, verify all fields are properly set
 			if err != nil {
@@ -354,5 +363,113 @@ func TestWriteEnvelope(t *testing.T) {
 	}
 	if !filepath.IsAbs(out) {
 		t.Errorf("expected abs path, got %q", out)
+	}
+}
+
+func TestNewSigner_Comprehensive(t *testing.T) {
+	t.Setenv("COSIGN_PASSWORD", "")
+
+	// Mock the loadPrivateKey function for success cases to avoid expensive decryption
+	originalLoadPrivateKey := LoadPrivateKey
+	defer func() { LoadPrivateKey = originalLoadPrivateKey }()
+
+	LoadPrivateKey = func(keyBytes, password []byte) (signature.SignerVerifier, error) {
+		return &fakeSigner{}, nil
+	}
+
+	tests := []struct {
+		name      string
+		keyRef    string
+		setup     func(fs afero.Fs, ctx context.Context)
+		expectErr bool
+		errMsg    string
+	}{
+		{
+			name:   "file path success",
+			keyRef: "/path/to/key.pem",
+			setup: func(fs afero.Fs, ctx context.Context) {
+				err := afero.WriteFile(fs, "/path/to/key.pem", []byte("test key content"), 0600)
+				if err != nil {
+					t.Fatalf("WriteFile: %v", err)
+				}
+			},
+			expectErr: false,
+		},
+		{
+			name:   "k8s secret success",
+			keyRef: "k8s://test-namespace/test-secret/private-key",
+			setup: func(fs afero.Fs, ctx context.Context) {
+				// This will be handled in the test loop
+			},
+			expectErr: false,
+		},
+		{
+			name:      "file not found",
+			keyRef:    "/nonexistent/key.pem",
+			setup:     func(fs afero.Fs, ctx context.Context) {},
+			expectErr: true,
+			errMsg:    "resolve private key",
+		},
+		{
+			name:      "invalid k8s format",
+			keyRef:    "k8s://invalid-format",
+			setup:     func(fs afero.Fs, ctx context.Context) {},
+			expectErr: true,
+			errMsg:    "invalid k8s key reference format",
+		},
+		{
+			name:      "invalid k8s format - missing parts",
+			keyRef:    "k8s://namespace",
+			setup:     func(fs afero.Fs, ctx context.Context) {},
+			expectErr: true,
+			errMsg:    "invalid k8s key reference format",
+		},
+		{
+			name:      "invalid k8s format - empty parts",
+			keyRef:    "k8s://namespace//key-field",
+			setup:     func(fs afero.Fs, ctx context.Context) {},
+			expectErr: true,
+			errMsg:    "namespace and secret name must be specified",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := afero.NewMemMapFs()
+			ctx := context.Background()
+
+			// Setup Kubernetes client for k8s tests
+			if strings.HasPrefix(tt.keyRef, "k8s://") && !tt.expectErr {
+				client := fake.NewSimpleClientset(&v1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-secret",
+						Namespace: "test-namespace",
+					},
+					Data: map[string][]byte{
+						"private-key": []byte("test private key content"),
+					},
+				})
+				ctx = context.WithValue(ctx, utils.K8sClientKey, client)
+			}
+
+			tt.setup(fs, ctx)
+
+			signer, err := NewSigner(ctx, tt.keyRef, fs)
+
+			if tt.expectErr {
+				assert.Error(t, err)
+				if tt.errMsg != "" {
+					assert.Contains(t, err.Error(), tt.errMsg)
+				}
+				assert.Nil(t, signer)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, signer)
+				assert.Equal(t, tt.keyRef, signer.KeyPath)
+				assert.Equal(t, fs, signer.FS)
+				assert.NotNil(t, signer.WrapSigner)
+				assert.NotNil(t, signer.SignerVerifier)
+			}
+		})
 	}
 }

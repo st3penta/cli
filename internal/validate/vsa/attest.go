@@ -33,6 +33,8 @@ import (
 	"github.com/sigstore/sigstore/pkg/signature/dsse"
 	sigopts "github.com/sigstore/sigstore/pkg/signature/options"
 	"github.com/spf13/afero"
+
+	"github.com/conforma/cli/internal/utils"
 )
 
 // Predicate type URL
@@ -58,19 +60,21 @@ type Signer struct {
 	SignerVerifier signature.SignerVerifier // Store the original signer for public key access
 }
 
-func NewSigner(keyPath string, fs afero.Fs) (*Signer, error) {
-	keyBytes, err := afero.ReadFile(fs, keyPath)
+// NewSigner creates a new signer that can resolve keys from both files and Kubernetes secrets
+func NewSigner(ctx context.Context, keyRef string, fs afero.Fs) (*Signer, error) {
+	keyBytes, err := utils.PrivateKeyFromKeyRef(ctx, keyRef, fs)
 	if err != nil {
-		return nil, fmt.Errorf("read key %q: %w", keyPath, err)
+		return nil, fmt.Errorf("resolve private key %q: %w", keyRef, err)
 	}
 
+	// TODO maybe: Consider another env var for the key password
 	signerVerifier, err := LoadPrivateKey(keyBytes, []byte(os.Getenv("COSIGN_PASSWORD")))
 	if err != nil {
 		return nil, fmt.Errorf("load private key: %w", err)
 	}
 
 	return &Signer{
-		KeyPath:        keyPath,
+		KeyPath:        keyRef,
 		FS:             fs,
 		WrapSigner:     dsse.WrapSigner(signerVerifier, cosigntypes.IntotoPayloadType),
 		SignerVerifier: signerVerifier,

@@ -595,7 +595,8 @@ OURRVjNQMk9ndDFDaVFHeGg1VXhUZytGc3c9PSJ9
 	require.NoError(t, err)
 
 	t.Run("successful signer creation", func(t *testing.T) {
-		signer, err := NewSigner(keyPath, fs)
+		ctx := context.Background()
+		signer, err := NewSigner(ctx, keyPath, fs)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, signer)
@@ -606,19 +607,21 @@ OURRVjNQMk9ndDFDaVFHeGg1VXhUZytGc3c9PSJ9
 	})
 
 	t.Run("missing key file", func(t *testing.T) {
-		signer, err := NewSigner("/nonexistent.key", fs)
+		ctx := context.Background()
+		signer, err := NewSigner(ctx, "/nonexistent.key", fs)
 
 		assert.Error(t, err)
 		assert.Nil(t, signer)
-		assert.Contains(t, err.Error(), "read key")
+		assert.Contains(t, err.Error(), "resolve private key")
 	})
 
 	t.Run("invalid key content", func(t *testing.T) {
+		ctx := context.Background()
 		invalidKeyPath := "/invalid.key"
 		err := afero.WriteFile(fs, invalidKeyPath, []byte("invalid key content"), 0600)
 		require.NoError(t, err)
 
-		signer, err := NewSigner(invalidKeyPath, fs)
+		signer, err := NewSigner(ctx, invalidKeyPath, fs)
 
 		assert.Error(t, err)
 		assert.Nil(t, signer)
@@ -648,7 +651,8 @@ OURRVjNQMk9ndDFDaVFHeGg1VXhUZytGc3c9PSJ9
 	err := afero.WriteFile(fs, keyPath, []byte(testKey), 0600)
 	require.NoError(t, err)
 
-	signer, err := NewSigner(keyPath, fs)
+	ctx := context.Background()
+	signer, err := NewSigner(ctx, keyPath, fs)
 	require.NoError(t, err)
 
 	t.Run("successful attestor creation", func(t *testing.T) {
