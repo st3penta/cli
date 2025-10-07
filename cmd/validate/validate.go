@@ -35,6 +35,7 @@ func init() {
 	ValidateCmd.AddCommand(validateImageCmd(image.ValidateImage))
 	ValidateCmd.AddCommand(validateInputCmd(input.ValidateInput))
 	ValidateCmd.AddCommand(ValidatePolicyCmd(policy.ValidatePolicy))
+	ValidateCmd.AddCommand(NewValidateVSACmd())
 }
 
 func NewValidateCmd() *cobra.Command {

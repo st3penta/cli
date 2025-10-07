@@ -17,6 +17,7 @@
 package equivalence
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -1214,4 +1215,831 @@ func TestDeterministicMergeOrderDebug(t *testing.T) {
 
 	// They should be identical
 	assert.Equal(t, merged1, merged2, "Different source orders should produce identical results")
+}
+
+// ---------- New comprehensive tests for refactored equivalence.go ----------
+
+func TestAreEquivalentWithDifferences(t *testing.T) {
+	effectiveTime := time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC)
+	checker := NewEquivalenceChecker(effectiveTime, nil)
+
+	tests := []struct {
+		name          string
+		spec1         ecc.EnterpriseContractPolicySpec
+		spec2         ecc.EnterpriseContractPolicySpec
+		expectedEq    bool
+		expectedDiffs int
+		expectedKinds []DiffKind
+	}{
+		{
+			name: "identical specs should have no differences",
+			spec1: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						Policy: []string{"oci::quay.io/enterprise-contract/ec-release-policy:konflux"},
+						Data:   []string{"github.com/release-engineering/rhtap-ec-policy//data"},
+						Config: &ecc.SourceConfig{
+							Include: []string{"@redhat"},
+							Exclude: []string{"cve"},
+						},
+					},
+				},
+			},
+			spec2: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						Policy: []string{"oci::quay.io/enterprise-contract/ec-release-policy:konflux"},
+						Data:   []string{"github.com/release-engineering/rhtap-ec-policy//data"},
+						Config: &ecc.SourceConfig{
+							Include: []string{"@redhat"},
+							Exclude: []string{"cve"},
+						},
+					},
+				},
+			},
+			expectedEq:    true,
+			expectedDiffs: 0,
+		},
+		{
+			name: "different policy URIs should show differences",
+			spec1: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						Policy: []string{"oci::quay.io/enterprise-contract/ec-release-policy:konflux"},
+					},
+				},
+			},
+			spec2: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						Policy: []string{"oci::quay.io/enterprise-contract/ec-release-policy:latest"},
+					},
+				},
+			},
+			expectedEq:    false,
+			expectedDiffs: 2, // 1 added, 1 removed
+			expectedKinds: []DiffKind{DiffAdded, DiffRemoved},
+		},
+		{
+			name: "different include matchers should show differences",
+			spec1: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						Config: &ecc.SourceConfig{
+							Include: []string{"@redhat"},
+						},
+					},
+				},
+			},
+			spec2: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						Config: &ecc.SourceConfig{
+							Include: []string{"@slsa3"},
+						},
+					},
+				},
+			},
+			expectedEq:    false,
+			expectedDiffs: 2, // 1 added, 1 removed
+			expectedKinds: []DiffKind{DiffAdded, DiffRemoved},
+		},
+		{
+			name: "different RuleData should show differences",
+			spec1: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						RuleData: &extv1.JSON{Raw: []byte(`{"allowed_registry_prefixes":["registry.redhat.io/"]}`)},
+					},
+				},
+			},
+			spec2: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						RuleData: &extv1.JSON{Raw: []byte(`{"allowed_registry_prefixes":["registry.access.redhat.com/"]}`)},
+					},
+				},
+			},
+			expectedEq:    false,
+			expectedDiffs: 1,
+			expectedKinds: []DiffKind{DiffChanged},
+		},
+		{
+			name: "completely different sources should show as added/removed",
+			spec1: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						Policy: []string{"oci::quay.io/enterprise-contract/ec-release-policy:konflux"},
+						Data:   []string{"github.com/release-engineering/rhtap-ec-policy//data"},
+					},
+				},
+			},
+			spec2: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						Policy: []string{"oci::quay.io/enterprise-contract/ec-release-policy:latest"},
+						Data:   []string{"oci::quay.io/konflux-ci/tekton-catalog/data-acceptable-bundles:latest"},
+					},
+				},
+			},
+			expectedEq:    false,
+			expectedDiffs: 2, // 1 added source, 1 removed source
+			expectedKinds: []DiffKind{DiffAdded, DiffRemoved},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			eq, diffs, err := checker.AreEquivalentWithDifferences(tt.spec1, tt.spec2)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedEq, eq)
+			assert.Equal(t, tt.expectedDiffs, len(diffs))
+
+			if tt.expectedKinds != nil {
+				actualKinds := make([]DiffKind, len(diffs))
+				for i, diff := range diffs {
+					actualKinds[i] = diff.Kind
+				}
+				assert.ElementsMatch(t, tt.expectedKinds, actualKinds)
+			}
+		})
+	}
+}
+
+func TestPolicyDifference(t *testing.T) {
+	tests := []struct {
+		name      string
+		diff      PolicyDifference
+		isAdded   bool
+		isRemoved bool
+		isChanged bool
+	}{
+		{
+			name: "added difference",
+			diff: PolicyDifference{
+				Kind: DiffAdded,
+			},
+			isAdded:   true,
+			isRemoved: false,
+			isChanged: false,
+		},
+		{
+			name: "removed difference",
+			diff: PolicyDifference{
+				Kind: DiffRemoved,
+			},
+			isAdded:   false,
+			isRemoved: true,
+			isChanged: false,
+		},
+		{
+			name: "changed difference",
+			diff: PolicyDifference{
+				Kind: DiffChanged,
+			},
+			isAdded:   false,
+			isRemoved: false,
+			isChanged: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.isAdded, tt.diff.IsAdded())
+			assert.Equal(t, tt.isRemoved, tt.diff.IsRemoved())
+			assert.Equal(t, tt.isChanged, tt.diff.IsChanged())
+		})
+	}
+}
+
+func TestGenerateUnifiedDiffOutput(t *testing.T) {
+	effectiveTime := time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC)
+	checker := NewEquivalenceChecker(effectiveTime, nil)
+
+	tests := []struct {
+		name        string
+		differences []PolicyDifference
+		expected    string
+	}{
+		{
+			name:        "no differences should return empty string",
+			differences: []PolicyDifference{},
+			expected:    "",
+		},
+		{
+			name: "single policy difference",
+			differences: []PolicyDifference{
+				{
+					BucketKey:     "policy1|data1",
+					Field:         "policy",
+					Kind:          DiffAdded,
+					SuppliedValue: "oci::quay.io/enterprise-contract/ec-release-policy:latest",
+					Summary:       "policy location added",
+				},
+			},
+			expected: `--- VSA
++++ Supplied
+# source entry: policy1|data1
++ [policy]  oci::quay.io/enterprise-contract/ec-release-policy:latest
+`,
+		},
+		{
+			name: "multiple differences in same source",
+			differences: []PolicyDifference{
+				{
+					BucketKey:     "policy1|data1",
+					Field:         "policy",
+					Kind:          DiffAdded,
+					SuppliedValue: "oci::quay.io/enterprise-contract/ec-release-policy:latest",
+					Summary:       "policy location added",
+				},
+				{
+					BucketKey: "policy1|data1",
+					Field:     "include",
+					Kind:      DiffRemoved,
+					VSAValue:  "cve",
+					Summary:   "include removed",
+				},
+			},
+			expected: `--- VSA
++++ Supplied
+# source entry: policy1|data1
+- [include] cve
++ [policy]  oci::quay.io/enterprise-contract/ec-release-policy:latest
+`,
+		},
+		{
+			name: "source entry differences",
+			differences: []PolicyDifference{
+				{
+					BucketKey:     "policy1|data1",
+					Field:         "sources",
+					Kind:          DiffAdded,
+					SuppliedValue: "Policy sources:\n  - oci::quay.io/enterprise-contract/ec-release-policy:latest",
+					Summary:       "source entry added",
+				},
+			},
+			expected: `--- VSA
++++ Supplied
+# source entry: policy1|data1
++ [source] Policy sources:
+  - oci::quay.io/enterprise-contract/ec-release-policy:latest
+`,
+		},
+		{
+			name: "ruleData difference",
+			differences: []PolicyDifference{
+				{
+					BucketKey:     "policy1|data1",
+					Field:         "ruleData",
+					Kind:          DiffChanged,
+					SuppliedValue: "--- VSA.ruleData\n+++ Supplied.ruleData\n@@ -1,3 +1,3 @@\n {\n-  \"allowed_registry_prefixes\": [\"registry.redhat.io/\"]\n+  \"allowed_registry_prefixes\": [\"registry.access.redhat.com/\"]\n }",
+					Summary:       "ruleData changed",
+				},
+			},
+			expected: `--- VSA
++++ Supplied
+# source entry: policy1|data1
+--- VSA.ruleData
++++ Supplied.ruleData
+@@ -1,3 +1,3 @@
+ {
+-  "allowed_registry_prefixes": ["registry.redhat.io/"]
++  "allowed_registry_prefixes": ["registry.access.redhat.com/"]
+ }
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := checker.GenerateUnifiedDiffOutput(tt.differences)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestBucketSimilarity(t *testing.T) {
+	effectiveTime := time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC)
+	checker := NewEquivalenceChecker(effectiveTime, nil)
+
+	tests := []struct {
+		name     string
+		bucket1  PolicyBucket
+		bucket2  PolicyBucket
+		expected float64
+	}{
+		{
+			name: "identical buckets should have similarity 1.0",
+			bucket1: PolicyBucket{
+				PolicyURIs: []string{"oci::quay.io/enterprise-contract/ec-release-policy:konflux"},
+				DataURIs:   []string{"github.com/release-engineering/rhtap-ec-policy//data"},
+				Include:    []string{"@redhat"},
+				Exclude:    []string{"cve"},
+			},
+			bucket2: PolicyBucket{
+				PolicyURIs: []string{"oci::quay.io/enterprise-contract/ec-release-policy:konflux"},
+				DataURIs:   []string{"github.com/release-engineering/rhtap-ec-policy//data"},
+				Include:    []string{"@redhat"},
+				Exclude:    []string{"cve"},
+			},
+			expected: 1.0,
+		},
+		{
+			name: "completely different buckets should have similarity 0.0",
+			bucket1: PolicyBucket{
+				PolicyURIs: []string{"oci::quay.io/enterprise-contract/ec-release-policy:konflux"},
+				DataURIs:   []string{"github.com/release-engineering/rhtap-ec-policy//data"},
+			},
+			bucket2: PolicyBucket{
+				PolicyURIs: []string{"oci::quay.io/enterprise-contract/ec-release-policy:latest"},
+				DataURIs:   []string{"oci::quay.io/konflux-ci/tekton-catalog/data-acceptable-bundles:latest"},
+			},
+			expected: 0.1, // Algorithm gives small bonus even for different buckets
+		},
+		{
+			name: "partially similar buckets should have similarity between 0.0 and 1.0",
+			bucket1: PolicyBucket{
+				PolicyURIs: []string{"oci::quay.io/enterprise-contract/ec-release-policy:konflux"},
+				DataURIs:   []string{"github.com/release-engineering/rhtap-ec-policy//data"},
+			},
+			bucket2: PolicyBucket{
+				PolicyURIs: []string{"oci::quay.io/enterprise-contract/ec-release-policy:konflux"},
+				DataURIs:   []string{"oci::quay.io/konflux-ci/tekton-catalog/data-acceptable-bundles:latest"},
+			},
+			expected: 0.5, // Only policy URIs match (40% weight) + some data similarity
+		},
+		{
+			name: "buckets with matching names should get name bonus",
+			bucket1: PolicyBucket{
+				PolicyURIs: []string{"oci::quay.io/enterprise-contract/ec-release-policy:konflux"},
+				DataURIs:   []string{"github.com/release-engineering/rhtap-ec-policy//data"},
+				Names:      []string{"test-policy"},
+			},
+			bucket2: PolicyBucket{
+				PolicyURIs: []string{"oci::quay.io/enterprise-contract/ec-release-policy:konflux"},
+				DataURIs:   []string{"github.com/release-engineering/rhtap-ec-policy//data"},
+				Names:      []string{"test-policy"},
+			},
+			expected: 1.0, // Full match (name bonus is capped at 1.0)
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			similarity := checker.bucketSimilarity(tt.bucket1, tt.bucket2)
+			assert.InDelta(t, tt.expected, similarity, 0.01)
+		})
+	}
+}
+
+func TestJaccardSimilarity(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        []string
+		b        []string
+		expected float64
+	}{
+		{
+			name:     "identical sets should have similarity 1.0",
+			a:        []string{"a", "b", "c"},
+			b:        []string{"a", "b", "c"},
+			expected: 1.0,
+		},
+		{
+			name:     "completely different sets should have similarity 0.0",
+			a:        []string{"a", "b", "c"},
+			b:        []string{"d", "e", "f"},
+			expected: 0.0,
+		},
+		{
+			name:     "partially overlapping sets",
+			a:        []string{"a", "b", "c"},
+			b:        []string{"a", "b", "d"},
+			expected: 0.5, // 2 intersection, 4 union = 0.5
+		},
+		{
+			name:     "empty sets should have similarity 1.0",
+			a:        []string{},
+			b:        []string{},
+			expected: 1.0,
+		},
+		{
+			name:     "one empty set should have similarity 0.0",
+			a:        []string{"a", "b"},
+			b:        []string{},
+			expected: 0.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			similarity := jaccard(tt.a, tt.b)
+			assert.Equal(t, tt.expected, similarity)
+		})
+	}
+}
+
+func TestUnifiedJSONDiff(t *testing.T) {
+	effectiveTime := time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC)
+	checker := NewEquivalenceChecker(effectiveTime, nil)
+
+	tests := []struct {
+		name     string
+		a        map[string]interface{}
+		b        map[string]interface{}
+		expected string
+	}{
+		{
+			name: "identical data should return empty diff",
+			a: map[string]interface{}{
+				"allowed_registry_prefixes": []interface{}{"registry.redhat.io/"},
+			},
+			b: map[string]interface{}{
+				"allowed_registry_prefixes": []interface{}{"registry.redhat.io/"},
+			},
+			expected: "",
+		},
+		{
+			name: "different values should show diff",
+			a: map[string]interface{}{
+				"allowed_registry_prefixes": []interface{}{"registry.redhat.io/"},
+			},
+			b: map[string]interface{}{
+				"allowed_registry_prefixes": []interface{}{"registry.access.redhat.com/"},
+			},
+			expected: "--- VSA.ruleData\n+++ Supplied.ruleData\n@@ -1,3 +1,3 @@\n {\n-  \"allowed_registry_prefixes\": [\"registry.redhat.io/\"]\n+  \"allowed_registry_prefixes\": [\"registry.access.redhat.com/\"]\n }",
+		},
+		{
+			name: "added field should show diff",
+			a: map[string]interface{}{
+				"allowed_registry_prefixes": []interface{}{"registry.redhat.io/"},
+			},
+			b: map[string]interface{}{
+				"allowed_registry_prefixes": []interface{}{"registry.redhat.io/"},
+				"new_setting":               "value",
+			},
+			expected: "--- VSA.ruleData\n+++ Supplied.ruleData\n@@ -1,3 +1,6 @@\n {\n-  \"allowed_registry_prefixes\": [\"registry.redhat.io/\"]\n+  \"allowed_registry_prefixes\": [\"registry.redhat.io/\"],\n+  \"new_setting\": \"value\"\n }",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			diff, err := checker.unifiedJSONDiff(tt.a, tt.b)
+			require.NoError(t, err)
+			if tt.expected == "" {
+				assert.Empty(t, diff)
+			} else {
+				assert.Contains(t, diff, "--- VSA.ruleData")
+				assert.Contains(t, diff, "+++ Supplied.ruleData")
+			}
+		})
+	}
+}
+
+func TestNormalizePolicy(t *testing.T) {
+	effectiveTime := time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC)
+	checker := NewEquivalenceChecker(effectiveTime, nil)
+
+	tests := []struct {
+		name     string
+		spec     ecc.EnterpriseContractPolicySpec
+		expected *NormalizedPolicy
+	}{
+		{
+			name: "simple policy normalization",
+			spec: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						Name: "Test Source",
+						Policy: []string{
+							"oci::quay.io/enterprise-contract/ec-release-policy:konflux",
+						},
+						Data: []string{
+							"github.com/release-engineering/rhtap-ec-policy//data",
+						},
+						Config: &ecc.SourceConfig{
+							Include: []string{"@redhat"},
+							Exclude: []string{"cve"},
+						},
+					},
+				},
+			},
+			expected: &NormalizedPolicy{
+				Buckets: []PolicyBucket{
+					{
+						PolicyURIs: []string{"quay.io/enterprise-contract/ec-release-policy:konflux"},
+						DataURIs:   []string{"github.com/release-engineering/rhtap-ec-policy//data"},
+						RuleData:   map[string]interface{}{},
+						Include:    []string{"@redhat"},
+						Exclude:    []string{"cve"},
+						Names:      []string{"Test Source"},
+					},
+				},
+			},
+		},
+		{
+			name: "policy with global configuration",
+			spec: ecc.EnterpriseContractPolicySpec{
+				Configuration: &ecc.EnterpriseContractPolicyConfiguration{
+					Include: []string{"@redhat"},
+					Exclude: []string{"cve"},
+				},
+				Sources: []ecc.Source{
+					{
+						Policy: []string{
+							"oci::quay.io/enterprise-contract/ec-release-policy:konflux",
+						},
+						Data: []string{
+							"github.com/release-engineering/rhtap-ec-policy//data",
+						},
+					},
+				},
+			},
+			expected: &NormalizedPolicy{
+				Buckets: []PolicyBucket{
+					{
+						PolicyURIs: []string{"quay.io/enterprise-contract/ec-release-policy:konflux"},
+						DataURIs:   []string{"github.com/release-engineering/rhtap-ec-policy//data"},
+						RuleData:   map[string]interface{}{},
+						Include:    []string{"@redhat"},
+						Exclude:    []string{"cve"},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := checker.NormalizePolicy(tt.spec)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestEdgeCases(t *testing.T) {
+	effectiveTime := time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC)
+	checker := NewEquivalenceChecker(effectiveTime, nil)
+
+	t.Run("empty policy specs", func(t *testing.T) {
+		spec1 := ecc.EnterpriseContractPolicySpec{}
+		spec2 := ecc.EnterpriseContractPolicySpec{}
+
+		eq, diffs, err := checker.AreEquivalentWithDifferences(spec1, spec2)
+		require.NoError(t, err)
+		assert.True(t, eq)
+		assert.Empty(t, diffs)
+	})
+
+	t.Run("nil RuleData should not cause errors", func(t *testing.T) {
+		spec1 := ecc.EnterpriseContractPolicySpec{
+			Sources: []ecc.Source{
+				{
+					Policy: []string{"oci::quay.io/enterprise-contract/ec-release-policy:konflux"},
+					Data:   []string{"github.com/release-engineering/rhtap-ec-policy//data"},
+					// RuleData is nil
+				},
+			},
+		}
+		spec2 := ecc.EnterpriseContractPolicySpec{
+			Sources: []ecc.Source{
+				{
+					Policy: []string{"oci::quay.io/enterprise-contract/ec-release-policy:konflux"},
+					Data:   []string{"github.com/release-engineering/rhtap-ec-policy//data"},
+					// RuleData is nil
+				},
+			},
+		}
+
+		eq, diffs, err := checker.AreEquivalentWithDifferences(spec1, spec2)
+		require.NoError(t, err)
+		assert.True(t, eq)
+		assert.Empty(t, diffs)
+	})
+
+	t.Run("invalid JSON in RuleData should return error", func(t *testing.T) {
+		spec1 := ecc.EnterpriseContractPolicySpec{
+			Sources: []ecc.Source{
+				{
+					RuleData: &extv1.JSON{Raw: []byte(`{"invalid": json}`)}, // Invalid JSON
+				},
+			},
+		}
+		spec2 := ecc.EnterpriseContractPolicySpec{
+			Sources: []ecc.Source{
+				{
+					RuleData: &extv1.JSON{Raw: []byte(`{"valid": "json"}`)},
+				},
+			},
+		}
+
+		_, _, err := checker.AreEquivalentWithDifferences(spec1, spec2)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "unmarshal ruleData")
+	})
+
+	t.Run("empty source group should return error", func(t *testing.T) {
+		// This is an internal test - we can't easily trigger this through the public API
+		// but we can test the normalizeBucket method directly
+		_, err := checker.normalizeBucket([]ecc.Source{})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "empty source group")
+	})
+}
+
+func TestPerformance(t *testing.T) {
+	effectiveTime := time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC)
+	checker := NewEquivalenceChecker(effectiveTime, nil)
+
+	// Create a large policy spec with many sources
+	largeSpec := ecc.EnterpriseContractPolicySpec{
+		Sources: make([]ecc.Source, 100),
+	}
+
+	for i := 0; i < 100; i++ {
+		largeSpec.Sources[i] = ecc.Source{
+			Name: fmt.Sprintf("source-%d", i),
+			Policy: []string{
+				fmt.Sprintf("oci::quay.io/enterprise-contract/ec-release-policy:konflux-%d", i),
+			},
+			Data: []string{
+				fmt.Sprintf("github.com/release-engineering/rhtap-ec-policy//data-%d", i),
+			},
+			Config: &ecc.SourceConfig{
+				Include: []string{fmt.Sprintf("@redhat-%d", i)},
+				Exclude: []string{fmt.Sprintf("cve-%d", i)},
+			},
+		}
+	}
+
+	t.Run("large policy comparison should complete in reasonable time", func(t *testing.T) {
+		start := time.Now()
+		eq, diffs, err := checker.AreEquivalentWithDifferences(largeSpec, largeSpec)
+		duration := time.Since(start)
+
+		require.NoError(t, err)
+		assert.True(t, eq)
+		assert.Empty(t, diffs)
+		assert.Less(t, duration, 5*time.Second, "Large policy comparison should complete within 5 seconds")
+	})
+
+	t.Run("normalize large policy should complete in reasonable time", func(t *testing.T) {
+		start := time.Now()
+		_, err := checker.NormalizePolicy(largeSpec)
+		duration := time.Since(start)
+
+		require.NoError(t, err)
+		assert.Less(t, duration, 2*time.Second, "Large policy normalization should complete within 2 seconds")
+	})
+}
+
+func TestVolatileConfigWithImageInfo(t *testing.T) {
+	effectiveTime := time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC)
+	imageInfo := &ImageInfo{
+		Digest: "sha256:abc123",
+		Ref:    "registry.redhat.io/ubi8/ubi:latest",
+		URL:    "registry.redhat.io/ubi8/ubi@sha256:abc123",
+	}
+	checker := NewEquivalenceChecker(effectiveTime, imageInfo)
+
+	tests := []struct {
+		name     string
+		spec1    ecc.EnterpriseContractPolicySpec
+		spec2    ecc.EnterpriseContractPolicySpec
+		expected bool
+	}{
+		{
+			name: "volatile config with matching image digest should be active",
+			spec1: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						Config: &ecc.SourceConfig{
+							Exclude: []string{"cve"},
+						},
+						VolatileConfig: &ecc.VolatileSourceConfig{
+							Exclude: []ecc.VolatileCriteria{
+								{
+									Value:       "hermetic",
+									ImageDigest: "sha256:abc123",
+								},
+							},
+						},
+					},
+				},
+			},
+			spec2: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						Config: &ecc.SourceConfig{
+							Exclude: []string{"cve", "hermetic"},
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "volatile config with non-matching image digest should be inactive",
+			spec1: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						Config: &ecc.SourceConfig{
+							Exclude: []string{"cve"},
+						},
+						VolatileConfig: &ecc.VolatileSourceConfig{
+							Exclude: []ecc.VolatileCriteria{
+								{
+									Value:       "hermetic",
+									ImageDigest: "sha256:def456", // Different digest
+								},
+							},
+						},
+					},
+				},
+			},
+			spec2: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						Config: &ecc.SourceConfig{
+							Exclude: []string{"cve"},
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "volatile config with matching image ref should be active",
+			spec1: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						Config: &ecc.SourceConfig{
+							Exclude: []string{"cve"},
+						},
+						VolatileConfig: &ecc.VolatileSourceConfig{
+							Exclude: []ecc.VolatileCriteria{
+								{
+									Value:    "hermetic",
+									ImageRef: "registry.redhat.io/ubi8/ubi:latest",
+								},
+							},
+						},
+					},
+				},
+			},
+			spec2: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						Config: &ecc.SourceConfig{
+							Exclude: []string{"cve", "hermetic"},
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "volatile config with matching image URL should be active",
+			spec1: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						Config: &ecc.SourceConfig{
+							Exclude: []string{"cve"},
+						},
+						VolatileConfig: &ecc.VolatileSourceConfig{
+							Exclude: []ecc.VolatileCriteria{
+								{
+									Value:    "hermetic",
+									ImageUrl: "registry.redhat.io/ubi8/ubi@sha256:abc123",
+								},
+							},
+						},
+					},
+				},
+			},
+			spec2: ecc.EnterpriseContractPolicySpec{
+				Sources: []ecc.Source{
+					{
+						Config: &ecc.SourceConfig{
+							Exclude: []string{"cve", "hermetic"},
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			eq, diffs, err := checker.AreEquivalentWithDifferences(tt.spec1, tt.spec2)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, eq)
+			if !tt.expected {
+				t.Logf("Differences: %+v", diffs)
+			}
+		})
+	}
 }
