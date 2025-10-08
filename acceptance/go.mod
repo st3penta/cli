@@ -4,10 +4,10 @@ go 1.24.4
 
 require (
 	cuelang.org/go v0.11.1
+	github.com/conforma/crds/api v0.1.0
 	github.com/cucumber/godog v0.15.0
 	github.com/cyberphone/json-canonicalization v0.0.0-20231217050601-ba74d44ecf5f
 	github.com/doiit/picocolors v1.0.1
-	github.com/conforma/crds/api v0.1.0
 	github.com/evanphx/json-patch/v5 v5.9.0
 	github.com/gkampitakis/go-snaps v0.5.7
 	github.com/go-git/go-billy/v5 v5.6.0
