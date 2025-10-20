@@ -228,7 +228,7 @@ func Test_TrackBundleCommand(t *testing.T) {
 				if c.expectInEffectDays != 0 {
 					assert.Equal(t, c.expectInEffectDays, inEffectDays)
 				} else {
-					assert.Equal(t, 30, inEffectDays)
+					assert.Equal(t, 60, inEffectDays)
 				}
 				return []byte(testOutput), nil
 			}
@@ -291,7 +291,7 @@ func TestBundleCommandHelp(t *testing.T) {
 	trackBundleCmd.Flags().VisitAll(func(flag *pflag.Flag) {
 		if flag.Name == "in-effect-days" {
 			foundFlag = true
-			assert.Equal(t, "30", flag.DefValue, "Default value should be 30")
+			assert.Equal(t, "60", flag.DefValue, "Default value should be 60")
 		}
 	})
 	assert.True(t, foundFlag, "in-effect-days flag should exist")
