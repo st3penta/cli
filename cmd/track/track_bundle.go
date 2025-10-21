@@ -46,7 +46,7 @@ func trackBundleCmd(track trackBundleFn, pullImage pullImageFn, pushImage pushIm
 		inEffectDays int
 	}{
 		prune:        true,
-		inEffectDays: 30,
+		inEffectDays: 60,
 	}
 
 	cmd := &cobra.Command{
