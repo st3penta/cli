@@ -102,7 +102,6 @@ TEST_OUTPUT_FILTER=grep -vE '0.0% of statements|\[no test files\]'
 .PHONY: test
 test: ## Run all unit tests
 	@echo "Unit tests:"
-    # The timeout here was previously 1 second, but we've made it longer because we were seeing timeouts when testing with Sealights
 	@set -o pipefail && go test -race -covermode=atomic -coverprofile=coverage-unit.out -timeout 10s -tags=unit ./... | $(TEST_OUTPUT_FILTER)
 	@echo "Integration tests:"
 	@set -o pipefail && go test -race -covermode=atomic -coverprofile=coverage-integration.out -timeout 15s -tags=integration ./... | $(TEST_OUTPUT_FILTER)
@@ -130,19 +129,6 @@ acceptance: ## Run all acceptance tests
 	export COVERAGE_FILENAME="-acceptance"; \
 	cd acceptance && go test -coverprofile "$$ACCEPTANCE_WORKDIR/coverage-acceptance.out" -timeout $(ACCEPTANCE_TIMEOUT) ./... && \
 	go run -modfile "$$ACCEPTANCE_WORKDIR/tools/go.mod" github.com/wadey/gocovmerge "$$ACCEPTANCE_WORKDIR/coverage-acceptance.out" > "$(ROOT_DIR)/coverage-acceptance.out"
-
-acceptance-sealights: ## Run all acceptance tests with sealights integration
-	@ACCEPTANCE_WORKDIR="$$(mktemp -d)"; \
-	cleanup() { \
-		cp "$${ACCEPTANCE_WORKDIR}"/features/__snapshots__/* "$(ROOT_DIR)"/features/__snapshots__/; \
-	}; \
-	trap cleanup EXIT; \
-	cp -R . "$$ACCEPTANCE_WORKDIR"; \
-	cd "$$ACCEPTANCE_WORKDIR" && \
-	$(MAKE) build && \
-	export COVERAGE_FILEPATH="$$ACCEPTANCE_WORKDIR"; \
-	export COVERAGE_FILENAME="-acceptance"; \
-	cd acceptance && SEALIGHTS_LOG_LEVEL=none go run -modfile "$$ACCEPTANCE_WORKDIR/tools/go.mod" gotest.tools/gotestsum --junitfile "$(ROOT_DIR)/junit-acceptance.xml" -- -parallel 1 -timeout $(ACCEPTANCE_TIMEOUT) ./...
 
 # Add @focus above the feature you're hacking on to use this
 # (Mainly for use with the feature-% target below)
