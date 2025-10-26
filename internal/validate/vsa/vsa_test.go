@@ -759,69 +759,444 @@ func TestWriterErrorHandling(t *testing.T) {
 	})
 }
 
-// TestDetectIdentifierType tests the DetectIdentifierType function
-func TestDetectIdentifierType(t *testing.T) {
+// TestExtractImageFromVSAIdentifier_Comprehensive tests the image extraction function comprehensively
+func TestExtractImageFromVSAIdentifier_Comprehensive(t *testing.T) {
 	tests := []struct {
-		name       string
-		identifier string
-		expected   IdentifierType
+		name           string
+		identifier     string
+		expectedResult string
+		expectedError  string
 	}{
+		// Valid image references (should return as-is)
 		{
-			name:       "image digest sha256",
-			identifier: "sha256:abc123def456789",
-			expected:   IdentifierImageDigest,
+			name:           "image reference with tag",
+			identifier:     "registry.com/image:latest",
+			expectedResult: "registry.com/image:latest",
+			expectedError:  "",
 		},
 		{
-			name:       "image digest sha512",
-			identifier: "sha512:abc123def456789",
-			expected:   IdentifierImageDigest,
+			name:           "docker hub reference",
+			identifier:     "nginx:1.21",
+			expectedResult: "nginx:1.21",
+			expectedError:  "",
 		},
 		{
-			name:       "image reference with tag",
-			identifier: "nginx:latest",
-			expected:   IdentifierImageReference,
+			name:           "quay reference with tag",
+			identifier:     "quay.io/redhat-user-workloads/rhtap-contract-tenant/golden-container:latest",
+			expectedResult: "quay.io/redhat-user-workloads/rhtap-contract-tenant/golden-container:latest",
+			expectedError:  "",
 		},
 		{
-			name:       "image reference with registry",
-			identifier: "registry.io/namespace/repo:tag",
-			expected:   IdentifierImageReference,
+			name:           "image reference with digest",
+			identifier:     "registry.com/image@sha256:abc123def456",
+			expectedResult: "registry.com/image:latest",
+			expectedError:  "",
 		},
 		{
-			name:       "absolute file path",
-			identifier: "/path/to/file.json",
-			expected:   IdentifierImageReference, // name.ParseReference accepts this as valid
+			name:           "docker hub with digest",
+			identifier:     "nginx@sha256:abc123def456",
+			expectedResult: "nginx:latest",
+			expectedError:  "",
+		},
+		// Valid image digests (should be converted to image references)
+		{
+			name:           "image digest with repository",
+			identifier:     "registry.com/image@sha256:abc123def456",
+			expectedResult: "registry.com/image:latest",
+			expectedError:  "",
 		},
 		{
-			name:       "relative file path",
-			identifier: "./file.json",
-			expected:   IdentifierImageReference, // name.ParseReference accepts this as valid
+			name:           "docker hub digest",
+			identifier:     "nginx@sha256:abc123def456",
+			expectedResult: "nginx:latest",
+			expectedError:  "",
 		},
 		{
-			name:       "relative file path with parent",
-			identifier: "../file.json",
-			expected:   IdentifierImageReference, // name.ParseReference accepts this as valid
+			name:           "quay digest",
+			identifier:     "quay.io/redhat-user-workloads/rhtap-contract-tenant/golden-container@sha256:185f6c39e5544479863024565bb7e63c6f2f0547c3ab4ddf99ac9b5755075cc9",
+			expectedResult: "quay.io/redhat-user-workloads/rhtap-contract-tenant/golden-container:latest",
+			expectedError:  "",
 		},
 		{
-			name:       "file with extension",
-			identifier: "file.json",
-			expected:   IdentifierImageReference, // name.ParseReference accepts this as valid
+			name:           "registry with port digest",
+			identifier:     "registry.com:5000/image@sha256:abc123def456",
+			expectedResult: "registry.com:5000/image:latest",
+			expectedError:  "",
 		},
 		{
-			name:       "file with path separators",
-			identifier: "path/to/file",
-			expected:   IdentifierImageReference, // name.ParseReference accepts this as valid
+			name:           "registry with namespace digest",
+			identifier:     "registry.com/namespace/image@sha256:abc123def456",
+			expectedResult: "registry.com/namespace/image:latest",
+			expectedError:  "",
+		},
+		// Invalid cases (should return errors)
+		{
+			name:           "file path",
+			identifier:     "./vsa-file.json",
+			expectedResult: "",
+			expectedError:  "fallback validation not supported for file paths",
 		},
 		{
-			name:       "simple image name",
-			identifier: "nginx",
-			expected:   IdentifierImageReference,
+			name:           "absolute file path",
+			identifier:     "/path/to/vsa-file.json",
+			expectedResult: "",
+			expectedError:  "fallback validation not supported for file paths",
+		},
+		{
+			name:           "pure digest without repository",
+			identifier:     "sha256:abc123def456",
+			expectedResult: "",
+			expectedError:  "fallback validation: cannot convert digest to image reference",
+		},
+		{
+			name:           "invalid identifier",
+			identifier:     "invalid-identifier",
+			expectedResult: "invalid-identifier",
+			expectedError:  "",
+		},
+		{
+			name:           "empty identifier",
+			identifier:     "",
+			expectedResult: "",
+			expectedError:  "",
+		},
+		{
+			name:           "file with extension",
+			identifier:     "vsa-file.json",
+			expectedResult: "",
+			expectedError:  "fallback validation not supported for file paths",
+		},
+		{
+			name:           "relative path with parent",
+			identifier:     "../vsa-file.json",
+			expectedResult: "",
+			expectedError:  "fallback validation not supported for file paths",
+		},
+		{
+			name:           "relative path with dot",
+			identifier:     "./vsa-file.json",
+			expectedResult: "",
+			expectedError:  "fallback validation not supported for file paths",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ExtractImageFromVSAIdentifier(tt.identifier)
+
+			if tt.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedError)
+				assert.Equal(t, "", result)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedResult, result)
+			}
+		})
+	}
+}
+
+// TestConvertDigestToImageRef_Comprehensive tests the digest conversion function comprehensively
+func TestConvertDigestToImageRef_Comprehensive(t *testing.T) {
+	tests := []struct {
+		name           string
+		digest         string
+		expectedResult string
+		expectedError  string
+	}{
+		// Valid digests with repository
+		{
+			name:           "valid digest with repository",
+			digest:         "registry.com/image@sha256:abc123def456",
+			expectedResult: "registry.com/image:latest",
+			expectedError:  "",
+		},
+		{
+			name:           "docker hub digest",
+			digest:         "nginx@sha256:abc123def456",
+			expectedResult: "nginx:latest",
+			expectedError:  "",
+		},
+		{
+			name:           "quay digest",
+			digest:         "quay.io/redhat-user-workloads/rhtap-contract-tenant/golden-container@sha256:185f6c39e5544479863024565bb7e63c6f2f0547c3ab4ddf99ac9b5755075cc9",
+			expectedResult: "quay.io/redhat-user-workloads/rhtap-contract-tenant/golden-container:latest",
+			expectedError:  "",
+		},
+		{
+			name:           "registry with port",
+			digest:         "registry.com:5000/image@sha256:abc123def456",
+			expectedResult: "registry.com:5000/image:latest",
+			expectedError:  "",
+		},
+		{
+			name:           "registry with namespace",
+			digest:         "registry.com/namespace/image@sha256:abc123def456",
+			expectedResult: "registry.com/namespace/image:latest",
+			expectedError:  "",
+		},
+		{
+			name:           "sha512 digest",
+			digest:         "registry.com/image@sha512:abc123def456",
+			expectedResult: "registry.com/image:latest",
+			expectedError:  "",
+		},
+		// Invalid cases
+		{
+			name:           "pure digest without repository",
+			digest:         "sha256:abc123def456",
+			expectedResult: "",
+			expectedError:  "fallback validation: cannot convert digest to image reference",
+		},
+		{
+			name:           "invalid digest format",
+			digest:         "invalid-digest",
+			expectedResult: "",
+			expectedError:  "fallback validation: cannot convert digest to image reference",
+		},
+		{
+			name:           "empty digest",
+			digest:         "",
+			expectedResult: "",
+			expectedError:  "fallback validation: cannot convert digest to image reference",
+		},
+		{
+			name:           "digest without algorithm",
+			digest:         "abc123def456",
+			expectedResult: "",
+			expectedError:  "fallback validation: cannot convert digest to image reference",
+		},
+		{
+			name:           "digest with invalid algorithm",
+			digest:         "registry.com/image@md5:abc123def456",
+			expectedResult: "registry.com/image:latest",
+			expectedError:  "",
+		},
+		{
+			name:           "digest with invalid hash",
+			digest:         "registry.com/image@sha256:invalid-hash",
+			expectedResult: "registry.com/image:latest",
+			expectedError:  "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ConvertDigestToImageRef(tt.digest)
+
+			if tt.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedError)
+				assert.Equal(t, "", result)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedResult, result)
+			}
+		})
+	}
+}
+
+// TestDetectIdentifierType_Comprehensive tests the identifier type detection comprehensively
+func TestDetectIdentifierType_Comprehensive(t *testing.T) {
+	tests := []struct {
+		name         string
+		identifier   string
+		expectedType IdentifierType
+	}{
+		// File paths
+		{
+			name:         "absolute file path",
+			identifier:   "/path/to/vsa-file.json",
+			expectedType: IdentifierFile,
+		},
+		{
+			name:         "relative file path with dot",
+			identifier:   "./vsa-file.json",
+			expectedType: IdentifierFile,
+		},
+		{
+			name:         "relative file path with parent",
+			identifier:   "../vsa-file.json",
+			expectedType: IdentifierFile,
+		},
+		{
+			name:         "file with extension",
+			identifier:   "vsa-file.json",
+			expectedType: IdentifierFile,
+		},
+		{
+			name:         "file with path separators",
+			identifier:   "path/to/vsa-file.json",
+			expectedType: IdentifierFile,
+		},
+		// Image digests
+		{
+			name:         "image digest with repository",
+			identifier:   "registry.com/image@sha256:abc123def456",
+			expectedType: IdentifierImageDigest,
+		},
+		{
+			name:         "docker hub digest",
+			identifier:   "nginx@sha256:abc123def456",
+			expectedType: IdentifierImageDigest,
+		},
+		{
+			name:         "quay digest",
+			identifier:   "quay.io/redhat-user-workloads/rhtap-contract-tenant/golden-container@sha256:185f6c39e5544479863024565bb7e63c6f2f0547c3ab4ddf99ac9b5755075cc9",
+			expectedType: IdentifierImageDigest,
+		},
+		{
+			name:         "sha512 digest",
+			identifier:   "registry.com/image@sha512:abc123def456",
+			expectedType: IdentifierImageDigest,
+		},
+		// Image references
+		{
+			name:         "image reference with tag",
+			identifier:   "registry.com/image:latest",
+			expectedType: IdentifierImageReference,
+		},
+		{
+			name:         "docker hub reference",
+			identifier:   "nginx:1.21",
+			expectedType: IdentifierImageReference,
+		},
+		{
+			name:         "quay reference",
+			identifier:   "quay.io/redhat-user-workloads/rhtap-contract-tenant/golden-container:latest",
+			expectedType: IdentifierImageReference,
+		},
+		{
+			name:         "simple image name",
+			identifier:   "nginx",
+			expectedType: IdentifierImageReference,
+		},
+		{
+			name:         "registry with port",
+			identifier:   "registry.com:5000/image:latest",
+			expectedType: IdentifierImageReference,
+		},
+		{
+			name:         "registry with namespace",
+			identifier:   "registry.com/namespace/image:latest",
+			expectedType: IdentifierImageReference,
+		},
+		// Edge cases
+		{
+			name:         "empty identifier",
+			identifier:   "",
+			expectedType: IdentifierFile, // Default fallback
+		},
+		{
+			name:         "pure digest without repository",
+			identifier:   "sha256:abc123def456",
+			expectedType: IdentifierImageDigest, // Valid image digest format
+		},
+		{
+			name:         "invalid identifier",
+			identifier:   "invalid-identifier",
+			expectedType: IdentifierImageReference, // name.ParseReference is permissive
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := DetectIdentifierType(tt.identifier)
-			assert.Equal(t, tt.expected, result)
+			assert.Equal(t, tt.expectedType, result)
+		})
+	}
+}
+
+// TestIsImageDigest_Comprehensive tests the image digest detection function
+func TestIsImageDigest_Comprehensive(t *testing.T) {
+	tests := []struct {
+		name           string
+		identifier     string
+		expectedResult bool
+	}{
+		// Valid image digests
+		{
+			name:           "image digest with repository",
+			identifier:     "registry.com/image@sha256:abc123def456",
+			expectedResult: true,
+		},
+		{
+			name:           "docker hub digest",
+			identifier:     "nginx@sha256:abc123def456",
+			expectedResult: true,
+		},
+		{
+			name:           "quay digest",
+			identifier:     "quay.io/redhat-user-workloads/rhtap-contract-tenant/golden-container@sha256:185f6c39e5544479863024565bb7e63c6f2f0547c3ab4ddf99ac9b5755075cc9",
+			expectedResult: true,
+		},
+		{
+			name:           "sha512 digest",
+			identifier:     "registry.com/image@sha512:abc123def456",
+			expectedResult: true,
+		},
+		{
+			name:           "registry with port",
+			identifier:     "registry.com:5000/image@sha256:abc123def456",
+			expectedResult: true,
+		},
+		{
+			name:           "registry with namespace",
+			identifier:     "registry.com/namespace/image@sha256:abc123def456",
+			expectedResult: true,
+		},
+		// Invalid cases
+		{
+			name:           "pure digest without repository",
+			identifier:     "sha256:abc123def456",
+			expectedResult: true,
+		},
+		{
+			name:           "image reference with tag",
+			identifier:     "registry.com/image:latest",
+			expectedResult: false,
+		},
+		{
+			name:           "docker hub reference",
+			identifier:     "nginx:1.21",
+			expectedResult: false,
+		},
+		{
+			name:           "file path",
+			identifier:     "./vsa-file.json",
+			expectedResult: false,
+		},
+		{
+			name:           "absolute file path",
+			identifier:     "/path/to/vsa-file.json",
+			expectedResult: false,
+		},
+		{
+			name:           "invalid digest format",
+			identifier:     "invalid-digest",
+			expectedResult: false,
+		},
+		{
+			name:           "empty identifier",
+			identifier:     "",
+			expectedResult: false,
+		},
+		{
+			name:           "digest with invalid algorithm",
+			identifier:     "registry.com/image@md5:abc123def456",
+			expectedResult: false,
+		},
+		{
+			name:           "digest with invalid hash",
+			identifier:     "registry.com/image@sha256:invalid-hash",
+			expectedResult: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isImageDigest(tt.identifier)
+			assert.Equal(t, tt.expectedResult, result)
 		})
 	}
 }

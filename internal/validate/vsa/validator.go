@@ -28,8 +28,8 @@ import (
 	"github.com/conforma/cli/internal/policy/equivalence"
 )
 
-// ValidationData represents the data needed for VSA validation
-type ValidationData struct {
+// VSAValidationConfig represents the configuration needed for VSA validation
+type VSAValidationConfig struct {
 	Retriever                   VSARetriever
 	VSAExpiration               time.Duration
 	IgnoreSignatureVerification bool
@@ -38,8 +38,8 @@ type ValidationData struct {
 	EffectiveTime               string
 }
 
-// ValidateVSAWithPolicyComparison validates a VSA by comparing its policy with the supplied policy
-func ValidateVSAWithPolicyComparison(ctx context.Context, identifier string, data *ValidationData) (*ValidationResult, error) {
+// ValidateVSAAndComparePolicy performs optimized VSA validation with single retrieval
+func ValidateVSAAndComparePolicy(ctx context.Context, identifier string, data *VSAValidationConfig) (*ValidationResult, error) {
 	if data == nil {
 		return nil, fmt.Errorf("validation data cannot be nil")
 	}
@@ -68,32 +68,56 @@ func ValidateVSAWithPolicyComparison(ctx context.Context, identifier string, dat
 			Passed:            false,
 			Message:           "No VSA found for the specified identifier",
 			SignatureVerified: result.SignatureVerified,
+			PredicateOutcome:  "",
 		}, nil
 	}
 
 	if result.Expired {
 		days := int(math.Ceil(time.Since(result.Timestamp).Hours() / 24))
+		predicateStatus := ""
+		if result.VSA != nil {
+			predicateStatus = result.VSA.Status
+		}
 		return &ValidationResult{
 			Passed:            false,
 			Message:           fmt.Sprintf("VSA expired %d day(s) ago", days),
 			SignatureVerified: result.SignatureVerified,
+			PredicateOutcome:  predicateStatus,
+		}, nil
+	}
+
+	// Extract predicate status FIRST to avoid unnecessary policy comparison
+	predicateStatus := ""
+	if result.VSA != nil {
+		predicateStatus = result.VSA.Status
+	}
+
+	// If predicate status is not "passed", return early to avoid expensive policy comparison
+	// This is the key optimization: check predicate status before doing policy work
+	if predicateStatus != "" && predicateStatus != "passed" {
+		return &ValidationResult{
+			Passed:            false,
+			Message:           fmt.Sprintf("VSA predicate status is '%s' (not 'passed')", predicateStatus),
+			SignatureVerified: result.SignatureVerified,
+			PredicateOutcome:  predicateStatus,
 		}, nil
 	}
 
 	// If signature verification was requested and failed, the error would have been returned above
 	// If signature verification was requested and succeeded, we continue with policy comparison
 
-	// Extract policy from VSA predicate
+	// Extract policy from VSA predicate (only if predicate status is "passed")
 	vsaPolicy, err := ExtractPolicyFromVSA(result.VSA)
 	if err != nil {
 		return &ValidationResult{
 			Passed:            false,
 			Message:           err.Error(),
 			SignatureVerified: result.SignatureVerified,
+			PredicateOutcome:  predicateStatus,
 		}, nil
 	}
 
-	// Compare policies if supplied policy is provided
+	// Compare policies if supplied policy is provided (only if predicate status is "passed")
 	if len(data.PolicySpec.Sources) > 0 {
 		// Parse effective time
 		effectiveTime, err := ParseEffectiveTime(data.EffectiveTime)
@@ -102,6 +126,7 @@ func ValidateVSAWithPolicyComparison(ctx context.Context, identifier string, dat
 				Passed:            false,
 				Message:           fmt.Sprintf("invalid effective time: %v", err),
 				SignatureVerified: result.SignatureVerified,
+				PredicateOutcome:  predicateStatus,
 			}, nil
 		}
 
@@ -118,6 +143,7 @@ func ValidateVSAWithPolicyComparison(ctx context.Context, identifier string, dat
 				Passed:            false,
 				Message:           fmt.Sprintf("policy comparison failed: %v", err),
 				SignatureVerified: result.SignatureVerified,
+				PredicateOutcome:  predicateStatus,
 			}, nil
 		}
 
@@ -126,6 +152,7 @@ func ValidateVSAWithPolicyComparison(ctx context.Context, identifier string, dat
 				Passed:            false,
 				Message:           FormatPolicyDifferences(differences),
 				SignatureVerified: result.SignatureVerified,
+				PredicateOutcome:  predicateStatus,
 			}, nil
 		}
 	}
@@ -135,6 +162,7 @@ func ValidateVSAWithPolicyComparison(ctx context.Context, identifier string, dat
 		Passed:            true,
 		Message:           "Policy matches",
 		SignatureVerified: result.SignatureVerified,
+		PredicateOutcome:  predicateStatus,
 	}, nil
 }
 

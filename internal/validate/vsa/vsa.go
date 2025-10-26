@@ -32,12 +32,14 @@ import (
 	ecapi "github.com/conforma/crds/api/v1alpha1"
 	"github.com/google/go-containerregistry/pkg/name"
 	ssldsse "github.com/secure-systems-lab/go-securesystemslib/dsse"
+	"github.com/sigstore/sigstore/pkg/cryptoutils"
 	"github.com/sigstore/sigstore/pkg/signature"
 	sigd "github.com/sigstore/sigstore/pkg/signature/dsse"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 
 	"github.com/conforma/cli/internal/applicationsnapshot"
+	"github.com/conforma/cli/internal/utils"
 )
 
 // ComponentSummary represents the summary information for a single component
@@ -81,6 +83,7 @@ type ValidationResult struct {
 	Passed            bool   `json:"passed"`
 	Message           string `json:"message,omitempty"`
 	SignatureVerified bool   `json:"signature_verified,omitempty"`
+	PredicateOutcome  string `json:"predicate_outcome,omitempty"` // Outcome from VSA predicate
 }
 
 // IdentifierType represents the type of VSA identifier
@@ -101,6 +104,7 @@ type ComponentResult struct {
 	ImageRef      string
 	Result        *ValidationResult
 	Error         error
+	UnifiedResult *VSAValidationResult // Unified result when fallback was used
 }
 
 // Generator handles VSA predicate generation
@@ -452,7 +456,7 @@ func (c *VSAChecker) CheckExistingVSAWithVerification(ctx context.Context, image
 			return nil, fmt.Errorf("public key path required for signature verification")
 		}
 
-		if err := verifyVSASignatureFromEnvelope(envelope, publicKeyPath); err != nil {
+		if err := verifyVSASignatureFromEnvelope(ctx, envelope, publicKeyPath); err != nil {
 			return nil, fmt.Errorf("VSA signature verification failed: %w", err)
 		}
 
@@ -585,7 +589,7 @@ func CreateRetrieverFromUploadFlags(vsaUpload []string) VSARetriever {
 }
 
 // verifyVSASignatureFromEnvelope verifies the signature of a DSSE envelope
-func verifyVSASignatureFromEnvelope(envelope *ssldsse.Envelope, publicKeyPath string) error {
+func verifyVSASignatureFromEnvelope(ctx context.Context, envelope *ssldsse.Envelope, publicKeyPath string) error {
 	// Debug: Log envelope details
 	log.Debugf("DSSE Envelope details:")
 	log.Debugf("  PayloadType: %s", envelope.PayloadType)
@@ -617,10 +621,24 @@ func verifyVSASignatureFromEnvelope(envelope *ssldsse.Envelope, publicKeyPath st
 		log.Debugf("Using KeyID from signature: %s", keyID)
 	}
 
-	// Load the verifier from the public key file
-	verifier, err := signature.LoadVerifierFromPEMFile(publicKeyPath, crypto.SHA256)
+	// Load public key using the utility function that supports both files and Kubernetes secrets
+	keyBytes, err := utils.PublicKeyFromKeyRef(ctx, publicKeyPath, afero.NewOsFs())
 	if err != nil {
-		return fmt.Errorf("failed to load verifier from public key file: %w", err)
+		return fmt.Errorf("failed to load public key: %w", err)
+	}
+
+	// log the public key
+	log.Debugf("Public key bytes: %s", string(keyBytes))
+
+	// Convert PEM to crypto.PublicKey
+	publicKey, err := cryptoutils.UnmarshalPEMToPublicKey(keyBytes)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal PEM to public key: %w", err)
+	}
+	// Create verifier from the loaded key bytes
+	verifier, err := signature.LoadVerifier(publicKey, crypto.SHA256)
+	if err != nil {
+		return fmt.Errorf("failed to create verifier from public key: %w", err)
 	}
 
 	// Get the public key
@@ -628,6 +646,9 @@ func verifyVSASignatureFromEnvelope(envelope *ssldsse.Envelope, publicKeyPath st
 	if err != nil {
 		return fmt.Errorf("failed to get public key: %w", err)
 	}
+
+	// log the public key
+	log.Debugf("Public key: %s", pub)
 
 	// Create DSSE envelope verifier using go-securesystemslib with extracted KeyID
 	ev, err := ssldsse.NewEnvelopeVerifier(&sigd.VerifierAdapter{
@@ -640,7 +661,6 @@ func verifyVSASignatureFromEnvelope(envelope *ssldsse.Envelope, publicKeyPath st
 	}
 
 	// Verify the signature
-	ctx := context.Background()
 	acceptedSignatures, err := ev.Verify(ctx, envelope)
 	if err != nil {
 		return fmt.Errorf("signature verification failed: %w", err)
@@ -655,7 +675,26 @@ func verifyVSASignatureFromEnvelope(envelope *ssldsse.Envelope, publicKeyPath st
 
 // isImageDigest checks if the identifier is an image digest
 func isImageDigest(identifier string) bool {
-	// Image digests typically start with sha256: or sha512:
+	// Pure image digests typically start with sha256: or sha512:
+	digestRegex := regexp.MustCompile(`^sha(256|512):[a-f0-9]+$`)
+	if digestRegex.MatchString(identifier) {
+		return true
+	}
+
+	// Check if it's an image reference with digest (e.g., registry.com/image@sha256:abc123)
+	if strings.Contains(identifier, "@") {
+		parts := strings.Split(identifier, "@")
+		if len(parts) == 2 {
+			digest := parts[1]
+			return digestRegex.MatchString(digest)
+		}
+	}
+
+	return false
+}
+
+// isPureDigest checks if the identifier is a pure digest (like sha256:abc123) without repository
+func isPureDigest(identifier string) bool {
 	digestRegex := regexp.MustCompile(`^sha(256|512):[a-f0-9]+$`)
 	return digestRegex.MatchString(identifier)
 }
@@ -699,23 +738,29 @@ func isFilePath(identifier string) bool {
 
 // DetectIdentifierType detects the type of VSA identifier
 func DetectIdentifierType(identifier string) IdentifierType {
-	if isImageDigest(identifier) {
-		return IdentifierImageDigest
-	}
-
-	// Try image reference parse first; it's authoritative for registries
-	if _, err := name.ParseReference(identifier); err == nil {
-		return IdentifierImageReference
-	}
-
-	// Check if it's a file path using the dedicated function
+	// Check if it's a file path first - this is more specific than image references
 	if isFilePath(identifier) {
 		return IdentifierFile
 	}
 
+	// Check for image digests (including pure digests)
+	if isImageDigest(identifier) {
+		return IdentifierImageDigest
+	}
+
+	// Try image reference parse - but be more restrictive
+	// Empty strings and pure digests should not be considered image references
+	if identifier != "" && !isPureDigest(identifier) {
+		if _, err := name.ParseReference(identifier); err == nil {
+			return IdentifierImageReference
+		}
+	}
+
 	// last resort: keep as reference so users can pass bare names like "nginx:latest"
-	if _, err := name.ParseReference("docker.io/library/" + identifier); err == nil {
-		return IdentifierImageReference
+	if identifier != "" && !isPureDigest(identifier) {
+		if _, err := name.ParseReference("docker.io/library/" + identifier); err == nil {
+			return IdentifierImageReference
+		}
 	}
 	return IdentifierFile
 }
@@ -884,4 +929,86 @@ func ExtractDigestFromImageRef(imageRef string) (string, error) {
 	// For now, return the image reference as-is and let the retriever handle it
 	// In a full implementation, this would resolve the tag to a digest
 	return imageRef, nil
+}
+
+// ExtractImageFromVSAIdentifier extracts the image reference from VSA identifier
+// This function is used for fallback validation when VSA validation fails
+func ExtractImageFromVSAIdentifier(identifier string) (string, error) {
+	// Handle empty identifier specially
+	if identifier == "" {
+		return "", nil
+	}
+
+	identifierType := DetectIdentifierType(identifier)
+
+	switch identifierType {
+	case IdentifierImageDigest:
+		// Convert digest to image reference
+		// e.g., registry/image@sha256:abc123 -> registry/image:tag
+		return ConvertDigestToImageRef(identifier)
+	case IdentifierImageReference:
+		// Check if it's actually a file path that was incorrectly detected as image reference
+		if IsFilePathLike(identifier) {
+			return "", fmt.Errorf("fallback validation not supported for file paths: %s", identifier)
+		}
+		// Already an image reference
+		return identifier, nil
+	case IdentifierFile:
+		// Cannot extract image from file path - fallback not supported
+		return "", fmt.Errorf("fallback validation not supported for file paths: %s", identifier)
+	default:
+		return "", fmt.Errorf("fallback validation not supported for identifier type: %s", identifier)
+	}
+}
+
+// isFilePathLike checks if an identifier looks like a file path
+// This handles the case where name.ParseReference incorrectly accepts file paths as valid image references
+func IsFilePathLike(identifier string) bool {
+	// Check for relative path prefixes (most reliable indicator)
+	if strings.HasPrefix(identifier, "./") || strings.HasPrefix(identifier, "../") {
+		return true
+	}
+
+	// Check for absolute paths
+	if filepath.IsAbs(identifier) {
+		return true
+	}
+
+	// Check for file extensions (but not for image tags like :latest)
+	if filepath.Ext(identifier) != "" && !strings.Contains(identifier, ":") {
+		return true
+	}
+
+	// Check for path separators but not registry separators
+	// Image references can have / but not \ or multiple / in a row
+	if strings.Contains(identifier, "\\") || strings.Contains(identifier, "//") {
+		return true
+	}
+
+	return false
+}
+
+// ConvertDigestToImageRef converts a digest to an image reference
+// This is a simplified implementation that attempts to construct a reasonable image reference
+func ConvertDigestToImageRef(digest string) (string, error) {
+	// If the digest is already in the format registry/image@sha256:abc123,
+	// we can extract the repository part and construct a tag reference
+	if strings.Contains(digest, "@") {
+		parts := strings.Split(digest, "@")
+		if len(parts) == 2 {
+			repository := parts[0]
+			// Try to construct a reasonable tag reference
+			// This is a best-effort approach since we don't have the original tag
+			imageRef := repository + ":latest"
+
+			// Validate that the constructed reference is valid
+			if _, err := name.ParseReference(imageRef); err == nil {
+				return imageRef, nil
+			}
+		}
+	}
+
+	// If we can't convert the digest to an image reference,
+	// return an error as fallback is not supported for pure digests
+	return "", fmt.Errorf("fallback validation: cannot convert digest to image reference: %s", digest)
 }

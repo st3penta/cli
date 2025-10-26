@@ -65,6 +65,7 @@ replace github.com/google/go-containerregistry => github.com/conforma/go-contain
 require (
 	github.com/go-openapi/runtime v0.28.0
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
+	golang.org/x/text v0.28.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.32.3
 )
@@ -372,7 +373,6 @@ require (
 	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/term v0.34.0 // indirect
-	golang.org/x/text v0.28.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
 	golang.org/x/tools v0.35.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
