@@ -267,10 +267,16 @@ func runValidateVSA(cmd *cobra.Command, data *validateVSAData, args []string, fs
 
 	// Precompute fallback validation context if fallback is enabled
 	if data.fallbackToImageValidation {
+		// Use the same resolved policy configuration as the main validation
+		policyConfiguration, err := validate_utils.GetPolicyConfig(ctx, data.policyConfig)
+		if err != nil {
+			return fmt.Errorf("failed to get policy configuration for fallback: %w", err)
+		}
+
 		fallbackConfig := &vsa.FallbackConfig{
 			FallbackToImageValidation: data.fallbackToImageValidation,
 			FallbackPublicKey:         data.fallbackPublicKey,
-			PolicyConfig:              data.policyConfig,
+			PolicyConfig:              policyConfiguration, // Use resolved policy configuration
 			EffectiveTime:             data.effectiveTime,
 			Info:                      data.info,
 		}
@@ -502,7 +508,7 @@ func handleVSAResult(result *vsa.ValidationResult, err error, data *validateVSAD
 		printVSAStatus(os.Stdout, "VSA validation failed", "failure")
 		displayVSAFailureDetails(result, data)
 		if data.strict {
-			return fmt.Errorf("VSA validation failed: %s", result.Message)
+			return fmt.Errorf("VSA validation failed")
 		}
 	}
 
