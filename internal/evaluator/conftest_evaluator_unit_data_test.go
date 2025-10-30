@@ -96,8 +96,9 @@ func TestPrepareDataDirs(t *testing.T) {
 				fs:      fs,
 			}
 
-			// Call prepareDataDirs
-			actualDirs, err := evaluator.prepareDataDirs(ctx)
+			// Call prepareDataDirs with the base data directory as data source
+			// In real usage, dataSourceDirs would be the directories returned by GetPolicy
+			actualDirs, err := evaluator.prepareDataDirs(ctx, []string{dataDir})
 			require.NoError(t, err)
 
 			// Convert expected relative paths to absolute paths

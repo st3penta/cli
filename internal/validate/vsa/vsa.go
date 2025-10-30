@@ -40,6 +40,7 @@ import (
 
 	"github.com/conforma/cli/internal/applicationsnapshot"
 	"github.com/conforma/cli/internal/utils"
+	validate_utils "github.com/conforma/cli/internal/validate"
 )
 
 // ComponentSummary represents the summary information for a single component
@@ -84,6 +85,17 @@ type ValidationResult struct {
 	Message           string `json:"message,omitempty"`
 	SignatureVerified bool   `json:"signature_verified,omitempty"`
 	PredicateOutcome  string `json:"predicate_outcome,omitempty"` // Outcome from VSA predicate
+
+	// Structured fields for reliable extraction (prefer over message parsing)
+	ReasonCode string      `json:"reason_code,omitempty"` // Structured reason code: "policy_mismatch", "predicate_failed", "no_vsa", "expired", "retrieval_failed"
+	PolicyDiff *PolicyDiff `json:"policy_diff,omitempty"` // Policy difference counts (only set when ReasonCode is "policy_mismatch")
+}
+
+// PolicyDiff represents policy difference counts
+type PolicyDiff struct {
+	Added   int `json:"added"`
+	Removed int `json:"removed"`
+	Changed int `json:"changed"`
 }
 
 // IdentifierType represents the type of VSA identifier
@@ -100,11 +112,11 @@ const (
 
 // ComponentResult represents the validation result for a snapshot component
 type ComponentResult struct {
-	ComponentName string
-	ImageRef      string
-	Result        *ValidationResult
-	Error         error
-	UnifiedResult *VSAValidationResult // Unified result when fallback was used
+	ComponentName  string
+	ImageRef       string
+	Result         *ValidationResult // VSA validation result
+	Error          error
+	FallbackResult *validate_utils.Result // Image validation result when fallback was used
 }
 
 // Generator handles VSA predicate generation

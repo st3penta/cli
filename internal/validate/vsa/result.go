@@ -21,8 +21,11 @@ import (
 	"fmt"
 	"io"
 
+	app "github.com/konflux-ci/application-api/api/v1alpha1"
+
 	"github.com/conforma/cli/internal/evaluator"
 	"github.com/conforma/cli/internal/output"
+	validate_utils "github.com/conforma/cli/internal/validate"
 )
 
 // VSAValidationResult represents the unified result structure for VSA validation with optional fallback
@@ -189,45 +192,68 @@ func ToVSAPhaseResult(result *ValidationResult) *VSAPhaseResult {
 	return vsaResult
 }
 
-// ToImageValidationResult converts an image validation Output to the unified ImageValidationResult format
-func ToImageValidationResult(output *output.Output) *ImageValidationResult {
+// ToImageValidationResult converts an image validation Output to the unified ImageValidationResult format.
+// It uses the same processing pipeline as the validate image command to ensure consistency.
+// showSuccesses and outputFormats are optional - if not provided, defaults are used.
+func ToImageValidationResult(
+	output *output.Output,
+	err error,
+	comp app.SnapshotComponent,
+	showSuccesses bool,
+	outputFormats []string,
+) *ImageValidationResult {
 	if output == nil {
 		return nil
 	}
 
-	// Extract violations, warnings, and successes from the output
-	violations := output.Violations()
-	warnings := output.Warnings()
-	successes := output.Successes()
+	// Use the shared processing pipeline from validate image command
+	// This ensures both commands produce identical results
+	component := validate_utils.ProcessOutputForImageValidation(
+		output,
+		err,
+		comp,
+		showSuccesses,
+		outputFormats,
+	)
 
-	// Determine if image validation passed (no violations)
-	passed := len(violations) == 0
+	// Determine if image validation passed (same logic as Component.Success)
+	passed := component.Success
 
 	// Create image validation summary
 	summary := &ImageValidationSummary{
-		TotalViolations: len(violations),
-		TotalWarnings:   len(warnings),
-		TotalSuccesses:  len(successes),
+		TotalViolations: len(component.Violations),
+		TotalWarnings:   len(component.Warnings),
+		TotalSuccesses:  len(component.Successes),
 	}
 
 	return &ImageValidationResult{
 		Passed:     passed,
-		Violations: violations,
-		Warnings:   warnings,
-		Successes:  successes,
+		Violations: component.Violations,
+		Warnings:   component.Warnings,
+		Successes:  component.Successes,
 		Summary:    summary,
 	}
+
 }
 
 // BuildUnifiedValidationResult creates a unified VSAValidationResult from VSA and image validation results
-func BuildUnifiedValidationResult(vsaResult *ValidationResult, fallbackOutput *output.Output, usedFallback bool, imageRef string) *VSAValidationResult {
+func BuildUnifiedValidationResult(
+	vsaResult *ValidationResult,
+	fallbackOutput *output.Output,
+	fallbackErr error,
+	comp app.SnapshotComponent,
+	usedFallback bool,
+	imageRef string,
+	showSuccesses bool,
+	outputFormats []string,
+) *VSAValidationResult {
 	// Convert VSA result
 	unifiedVSAResult := ToVSAPhaseResult(vsaResult)
 
-	// Convert image validation result
+	// Convert image validation result using the shared processing pipeline
 	var unifiedImageResult *ImageValidationResult
 	if usedFallback && fallbackOutput != nil {
-		unifiedImageResult = ToImageValidationResult(fallbackOutput)
+		unifiedImageResult = ToImageValidationResult(fallbackOutput, fallbackErr, comp, showSuccesses, outputFormats)
 	}
 
 	// Determine overall success

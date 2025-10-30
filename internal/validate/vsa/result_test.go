@@ -19,12 +19,15 @@ package vsa
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"testing"
 
+	app "github.com/konflux-ci/application-api/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/conforma/cli/internal/evaluator"
+	"github.com/conforma/cli/internal/output"
 )
 
 // TestVSAValidationResult_Comprehensive tests the unified result structure comprehensively
@@ -665,6 +668,285 @@ Summary:
 			err := tt.result.PrintConsole(&buf)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, buf.String())
+		})
+	}
+}
+
+// TestToVSAPhaseResult tests the ToVSAPhaseResult conversion function
+func TestToVSAPhaseResult(t *testing.T) {
+	tests := []struct {
+		name     string
+		result   *ValidationResult
+		expected *VSAPhaseResult
+	}{
+		{
+			name:     "nil result",
+			result:   nil,
+			expected: nil,
+		},
+		{
+			name: "passed result",
+			result: &ValidationResult{
+				Passed:           true,
+				Message:          "VSA validation passed",
+				PredicateOutcome: "passed",
+			},
+			expected: &VSAPhaseResult{
+				Passed:           true,
+				Message:          "VSA validation passed",
+				PredicateOutcome: "passed",
+				Failed:           "",
+				Reason:           "",
+			},
+		},
+		{
+			name: "failed result",
+			result: &ValidationResult{
+				Passed:           false,
+				Message:          "VSA validation failed: policy mismatch",
+				PredicateOutcome: "failed",
+			},
+			expected: &VSAPhaseResult{
+				Passed:           false,
+				Message:          "VSA validation failed: policy mismatch",
+				PredicateOutcome: "failed",
+				Failed:           "VSA validation failed: policy mismatch",
+				Reason:           "VSA validation failed",
+			},
+		},
+		{
+			name: "failed result with empty message",
+			result: &ValidationResult{
+				Passed:           false,
+				Message:          "",
+				PredicateOutcome: "",
+			},
+			expected: &VSAPhaseResult{
+				Passed:           false,
+				Message:          "",
+				PredicateOutcome: "",
+				Failed:           "",
+				Reason:           "VSA validation failed",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ToVSAPhaseResult(tt.result)
+
+			if tt.expected == nil {
+				assert.Nil(t, result)
+			} else {
+				assert.NotNil(t, result)
+				assert.Equal(t, tt.expected.Passed, result.Passed)
+				assert.Equal(t, tt.expected.Message, result.Message)
+				assert.Equal(t, tt.expected.PredicateOutcome, result.PredicateOutcome)
+				assert.Equal(t, tt.expected.Failed, result.Failed)
+				assert.Equal(t, tt.expected.Reason, result.Reason)
+			}
+		})
+	}
+}
+
+// TestToImageValidationResult tests the ToImageValidationResult conversion function
+func TestToImageValidationResult(t *testing.T) {
+	tests := []struct {
+		name           string
+		output         *output.Output
+		err            error
+		comp           app.SnapshotComponent
+		showSuccesses  bool
+		outputFormats  []string
+		expectedNil    bool
+		expectedPassed bool
+	}{
+		{
+			name:        "nil output",
+			output:      nil,
+			err:         nil,
+			comp:        app.SnapshotComponent{Name: "comp1", ContainerImage: "image:tag"},
+			expectedNil: true,
+		},
+		{
+			name: "successful validation",
+			output: &output.Output{
+				ImageURL:    "image:tag",
+				PolicyInput: []byte("policy"),
+			},
+			err:            nil,
+			comp:           app.SnapshotComponent{Name: "comp1", ContainerImage: "image:tag"},
+			showSuccesses:  false,
+			outputFormats:  []string{},
+			expectedNil:    false,
+			expectedPassed: true,
+		},
+		{
+			name: "validation with violations",
+			output: &output.Output{
+				ImageURL:    "image:tag",
+				PolicyInput: []byte("policy"),
+				PolicyCheck: []evaluator.Outcome{
+					{
+						Failures: []evaluator.Result{
+							{Message: "violation1"},
+						},
+					},
+				},
+			},
+			err:            nil,
+			comp:           app.SnapshotComponent{Name: "comp1", ContainerImage: "image:tag"},
+			showSuccesses:  false,
+			outputFormats:  []string{},
+			expectedNil:    false,
+			expectedPassed: false,
+		},
+		{
+			name: "validation with errors",
+			output: &output.Output{
+				ImageURL:    "image:tag",
+				PolicyInput: []byte("policy"),
+			},
+			err:            errors.New("validation error"),
+			comp:           app.SnapshotComponent{Name: "comp1", ContainerImage: "image:tag"},
+			showSuccesses:  false,
+			outputFormats:  []string{},
+			expectedNil:    false,
+			expectedPassed: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ToImageValidationResult(tt.output, tt.err, tt.comp, tt.showSuccesses, tt.outputFormats)
+
+			if tt.expectedNil {
+				assert.Nil(t, result)
+			} else {
+				assert.NotNil(t, result)
+				assert.Equal(t, tt.expectedPassed, result.Passed)
+				assert.NotNil(t, result.Summary)
+			}
+		})
+	}
+}
+
+// TestBuildUnifiedValidationResult tests the BuildUnifiedValidationResult function
+func TestBuildUnifiedValidationResult(t *testing.T) {
+	tests := []struct {
+		name             string
+		vsaResult        *ValidationResult
+		fallbackOutput   *output.Output
+		fallbackErr      error
+		comp             app.SnapshotComponent
+		usedFallback     bool
+		imageRef         string
+		showSuccesses    bool
+		outputFormats    []string
+		expectedSuccess  bool
+		expectedFallback bool
+	}{
+		{
+			name: "VSA success, no fallback",
+			vsaResult: &ValidationResult{
+				Passed:  true,
+				Message: "VSA validation passed",
+			},
+			fallbackOutput:   nil,
+			fallbackErr:      nil,
+			comp:             app.SnapshotComponent{Name: "comp1", ContainerImage: "image:tag"},
+			usedFallback:     false,
+			imageRef:         "image:tag",
+			showSuccesses:    false,
+			outputFormats:    []string{},
+			expectedSuccess:  true,
+			expectedFallback: false,
+		},
+		{
+			name: "VSA failure, fallback success",
+			vsaResult: &ValidationResult{
+				Passed:  false,
+				Message: "VSA validation failed",
+			},
+			fallbackOutput: &output.Output{
+				ImageURL:    "image:tag",
+				PolicyInput: []byte("policy"),
+			},
+			fallbackErr:      nil,
+			comp:             app.SnapshotComponent{Name: "comp1", ContainerImage: "image:tag"},
+			usedFallback:     true,
+			imageRef:         "image:tag",
+			showSuccesses:    false,
+			outputFormats:    []string{},
+			expectedSuccess:  true,
+			expectedFallback: true,
+		},
+		{
+			name: "VSA failure, fallback failure",
+			vsaResult: &ValidationResult{
+				Passed:  false,
+				Message: "VSA validation failed",
+			},
+			fallbackOutput: &output.Output{
+				ImageURL:    "image:tag",
+				PolicyInput: []byte("policy"),
+				PolicyCheck: []evaluator.Outcome{
+					{
+						Failures: []evaluator.Result{
+							{Message: "violation1"},
+						},
+					},
+				},
+			},
+			fallbackErr:      nil,
+			comp:             app.SnapshotComponent{Name: "comp1", ContainerImage: "image:tag"},
+			usedFallback:     true,
+			imageRef:         "image:tag",
+			showSuccesses:    false,
+			outputFormats:    []string{},
+			expectedSuccess:  false,
+			expectedFallback: true,
+		},
+		{
+			name:             "nil VSA result, no fallback",
+			vsaResult:        nil,
+			fallbackOutput:   nil,
+			fallbackErr:      nil,
+			comp:             app.SnapshotComponent{Name: "comp1", ContainerImage: "image:tag"},
+			usedFallback:     false,
+			imageRef:         "image:tag",
+			showSuccesses:    false,
+			outputFormats:    []string{},
+			expectedSuccess:  false,
+			expectedFallback: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := BuildUnifiedValidationResult(
+				tt.vsaResult,
+				tt.fallbackOutput,
+				tt.fallbackErr,
+				tt.comp,
+				tt.usedFallback,
+				tt.imageRef,
+				tt.showSuccesses,
+				tt.outputFormats,
+			)
+
+			assert.NotNil(t, result)
+			assert.Equal(t, tt.expectedSuccess, result.OverallSuccess)
+			assert.Equal(t, tt.expectedFallback, result.UsedFallback)
+			assert.Equal(t, tt.imageRef, result.ImageRef)
+
+			if tt.vsaResult != nil {
+				assert.NotNil(t, result.VSAPhaseResult)
+			}
+
+			if tt.usedFallback && tt.fallbackOutput != nil {
+				assert.NotNil(t, result.ImageValidationResult)
+			}
 		})
 	}
 }
