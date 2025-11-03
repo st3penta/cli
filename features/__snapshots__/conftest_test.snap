@@ -1,47 +1,37 @@
 
-[success:stdout - 1]
-[
-  {
-    "filename": "acceptance/examples/empty_input.json",
-    "namespace": "main",
-    "successes": 1
-  }
-]
----
-
-[success:stderr - 1]
-
----
-[appstudio success:stdout - 1]
+[appstudio error nofail:stdout - 1]
 {
   "timestamp": "${TIMESTAMP}",
-  "namespace": "main",
-  "successes": 1,
+  "namespace": "",
+  "successes": 0,
   "failures": 0,
   "warnings": 0,
-  "result": "SUCCESS",
-  "note": "All checks passed successfully"
+  "result": "ERROR",
+  "note": "Error: running test: load: loading policies: load: 1 error occurred during loading: stat file/not/exist.rego: no such file or directory"
 }
 ---
 
-[appstudio success:stderr - 1]
+[appstudio error nofail:stderr - 1]
+Error: running test: load: loading policies: load: 1 error occurred during loading: stat file/not/exist.rego: no such file or directory
 
 ---
-[appstudio skipped:stdout - 1]
+
+[appstudio warning:stdout - 1]
 {
   "timestamp": "${TIMESTAMP}",
   "namespace": "main",
   "successes": 0,
   "failures": 0,
-  "warnings": 0,
-  "result": "SKIPPED",
-  "note": "All checks were skipped"
+  "warnings": 1,
+  "result": "WARNING",
+  "note": "Warnings detected"
 }
 ---
 
-[appstudio skipped:stderr - 1]
+[appstudio warning:stderr - 1]
 
 ---
+
 [a warning:stdout - 1]
 [
   {
@@ -59,25 +49,104 @@
   }
 ]
 ---
-[appstudio warning:stdout - 1]
-{
-  "timestamp": "${TIMESTAMP}",
-  "namespace": "main",
-  "successes": 0,
-  "failures": 0,
-  "warnings": 1,
-  "result": "WARNING",
-  "note": "Warnings detected"
-}
----
-
-[appstudio warning:stderr - 1]
-
----
 
 [a warning:stderr - 1]
 
 ---
+
+[a different appstudio error:stdout - 1]
+{
+  "timestamp": "${TIMESTAMP}",
+  "namespace": "",
+  "successes": 0,
+  "failures": 0,
+  "warnings": 0,
+  "result": "ERROR",
+  "note": "Error: running test: parse configurations: parser unmarshal: unmarshal json: invalid character '\\n' in string literal, path: acceptance/examples/broken_input.json"
+}
+---
+
+[a different appstudio error:stderr - 1]
+Error: running test: parse configurations: parser unmarshal: unmarshal json: invalid character '\n' in string literal, path: acceptance/examples/broken_input.json
+
+---
+
+[appstudio success:stdout - 1]
+{
+  "timestamp": "${TIMESTAMP}",
+  "namespace": "main",
+  "successes": 1,
+  "failures": 0,
+  "warnings": 0,
+  "result": "SUCCESS",
+  "note": "All checks passed successfully"
+}
+---
+
+[a deny with no-fail:stdout - 1]
+[
+  {
+    "filename": "acceptance/examples/empty_input.json",
+    "namespace": "main",
+    "successes": 0,
+    "failures": [
+      {
+        "msg": "Failure due to overripeness",
+        "metadata": {
+          "query": "data.main.deny"
+        }
+      }
+    ]
+  }
+]
+---
+
+[appstudio success:stderr - 1]
+
+---
+
+[a deny with no-fail:stderr - 1]
+
+---
+
+[appstudio deny:stdout - 1]
+{
+  "timestamp": "${TIMESTAMP}",
+  "namespace": "main",
+  "successes": 0,
+  "failures": 1,
+  "warnings": 0,
+  "result": "FAILURE",
+  "note": "Failures detected"
+}
+---
+
+[a deny:stdout - 1]
+[
+  {
+    "filename": "acceptance/examples/empty_input.json",
+    "namespace": "main",
+    "successes": 0,
+    "failures": [
+      {
+        "msg": "Failure due to overripeness",
+        "metadata": {
+          "query": "data.main.deny"
+        }
+      }
+    ]
+  }
+]
+---
+
+[appstudio deny:stderr - 1]
+
+---
+
+[a deny:stderr - 1]
+
+---
+
 [a warning with fail-on-warn:stdout - 1]
 [
   {
@@ -99,48 +168,23 @@
 [a warning with fail-on-warn:stderr - 1]
 
 ---
-[a deny:stdout - 1]
-[
-  {
-    "filename": "acceptance/examples/empty_input.json",
-    "namespace": "main",
-    "successes": 0,
-    "failures": [
-      {
-        "msg": "Failure due to overripeness",
-        "metadata": {
-          "query": "data.main.deny"
-        }
-      }
-    ]
-  }
-]
+
+[appstudio skipped:stdout - 1]
+{
+  "timestamp": "${TIMESTAMP}",
+  "namespace": "main",
+  "successes": 0,
+  "failures": 0,
+  "warnings": 0,
+  "result": "SKIPPED",
+  "note": "All checks were skipped"
+}
 ---
 
-[a deny:stderr - 1]
+[appstudio skipped:stderr - 1]
 
 ---
-[a deny with no-fail:stdout - 1]
-[
-  {
-    "filename": "acceptance/examples/empty_input.json",
-    "namespace": "main",
-    "successes": 0,
-    "failures": [
-      {
-        "msg": "Failure due to overripeness",
-        "metadata": {
-          "query": "data.main.deny"
-        }
-      }
-    ]
-  }
-]
----
 
-[a deny with no-fail:stderr - 1]
-
----
 [plain text deny:stdout - 1]
 FAIL - acceptance/examples/empty_input.json - main - Failure due to overripeness
 
@@ -151,29 +195,7 @@ FAIL - acceptance/examples/empty_input.json - main - Failure due to overripeness
 [plain text deny:stderr - 1]
 
 ---
-[appstudio deny:stdout - 1]
-{
-  "timestamp": "${TIMESTAMP}",
-  "namespace": "main",
-  "successes": 0,
-  "failures": 1,
-  "warnings": 0,
-  "result": "FAILURE",
-  "note": "Failures detected"
-}
----
 
-[appstudio deny:stderr - 1]
-
----
-[normal error:stdout - 1]
-
----
-
-[normal error:stderr - 1]
-Error: running test: load: loading policies: load: 1 error occurred during loading: stat file/not/exist.rego: no such file or directory
-
----
 [appstudio error:stdout - 1]
 {
   "timestamp": "${TIMESTAMP}",
@@ -186,39 +208,30 @@ Error: running test: load: loading policies: load: 1 error occurred during loadi
 }
 ---
 
+[normal error:stdout - 1]
+
+---
+
 [appstudio error:stderr - 1]
 Error: running test: load: loading policies: load: 1 error occurred during loading: stat file/not/exist.rego: no such file or directory
 
 ---
-[appstudio error nofail:stdout - 1]
-{
-  "timestamp": "${TIMESTAMP}",
-  "namespace": "",
-  "successes": 0,
-  "failures": 0,
-  "warnings": 0,
-  "result": "ERROR",
-  "note": "Error: running test: load: loading policies: load: 1 error occurred during loading: stat file/not/exist.rego: no such file or directory"
-}
----
 
-[appstudio error nofail:stderr - 1]
+[normal error:stderr - 1]
 Error: running test: load: loading policies: load: 1 error occurred during loading: stat file/not/exist.rego: no such file or directory
 
 ---
-[a different appstudio error:stdout - 1]
-{
-  "timestamp": "${TIMESTAMP}",
-  "namespace": "",
-  "successes": 0,
-  "failures": 0,
-  "warnings": 0,
-  "result": "ERROR",
-  "note": "Error: running test: parse configurations: parser unmarshal: unmarshal json: invalid character '\\n' in string literal, path: acceptance/examples/broken_input.json"
-}
+
+[success:stdout - 1]
+[
+  {
+    "filename": "acceptance/examples/empty_input.json",
+    "namespace": "main",
+    "successes": 1
+  }
+]
 ---
 
-[a different appstudio error:stderr - 1]
-Error: running test: parse configurations: parser unmarshal: unmarshal json: invalid character '\n' in string literal, path: acceptance/examples/broken_input.json
+[success:stderr - 1]
 
 ---

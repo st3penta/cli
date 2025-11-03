@@ -1,4 +1,26 @@
 
+[inspecting a data source:stdout - 1]
+{
+  "rule_data": {
+    "banana_fail_reason": "spider attack"
+  },
+  "spam_count": 42
+}
+---
+
+[inspecting a data source:stderr - 1]
+
+---
+
+[short names output:stdout - 1]
+kitty.purr
+
+---
+
+[short names output:stderr - 1]
+
+---
+
 [inspecting a data source with a merge error:stdout - 1]
 
 ---
@@ -60,28 +82,6 @@ Fluffy
 ---
 
 [default output:stderr - 1]
-
----
-
-[inspecting a data source:stdout - 1]
-{
-  "rule_data": {
-    "banana_fail_reason": "spider attack"
-  },
-  "spam_count": 42
-}
----
-
-[inspecting a data source:stderr - 1]
-
----
-
-[short names output:stdout - 1]
-kitty.purr
-
----
-
-[short names output:stderr - 1]
 
 ---
 
