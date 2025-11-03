@@ -1,17 +1,17 @@
 
-[VSA generation with invalid storage backend configuration:stdout - 1]
+[VSA expiration flag functionality:stdout - 1]
 {
   "success": true,
   "components": [
     {
       "name": "Unnamed",
-      "containerImage": "${REGISTRY}/acceptance/vsa-invalid-image@sha256:${REGISTRY_acceptance/vsa-invalid-image:latest_DIGEST}",
+      "containerImage": "${REGISTRY}/acceptance/vsa-expiration-image@sha256:${REGISTRY_acceptance/vsa-expiration-image:latest_DIGEST}",
       "source": {},
       "success": true,
       "signatures": [
         {
           "keyid": "",
-          "sig": "${IMAGE_SIGNATURE_acceptance/vsa-invalid-image}"
+          "sig": "${IMAGE_SIGNATURE_acceptance/vsa-expiration-image}"
         }
       ],
       "attestations": [
@@ -22,33 +22,32 @@
           "signatures": [
             {
               "keyid": "",
-              "sig": "${ATTESTATION_SIGNATURE_acceptance/vsa-invalid-image}"
+              "sig": "${ATTESTATION_SIGNATURE_acceptance/vsa-expiration-image}"
             }
           ]
         }
       ]
     }
   ],
-  "key": "${vsa-invalid_PUBLIC_KEY_JSON}",
+  "key": "${vsa-expiration_PUBLIC_KEY_JSON}",
   "policy": {
     "sources": [
       {
         "policy": [
-          "git::${GITHOST}/git/vsa-invalid-policy.git?ref=${LATEST_COMMIT}"
+          "git::${GITHOST}/git/vsa-expiration-policy.git?ref=${LATEST_COMMIT}"
         ]
       }
     ],
     "rekorUrl": "${REKOR}",
-    "publicKey": "${vsa-invalid_PUBLIC_KEY}"
+    "publicKey": "${vsa-expiration_PUBLIC_KEY}"
   },
   "ec-version": "${EC_VERSION}",
   "effective-time": "${TIMESTAMP}"
 }
 ---
 
-[VSA generation with invalid storage backend configuration:stderr - 1]
-time="${TIMESTAMP}" level=warning msg="invalid storage config 'invalid-backend@somewhere': unsupported backend 'invalid-backend'. Supported backends: rekor, local"
-time="${TIMESTAMP}" level=warning msg="invalid storage config 'invalid-backend@somewhere': unsupported backend 'invalid-backend'. Supported backends: rekor, local"
+[VSA expiration flag functionality:stderr - 1]
+time="${TIMESTAMP}" level=warning msg="Failed to check for existing VSA for image ${REGISTRY}/acceptance/vsa-expiration-image@sha256:${REGISTRY_acceptance/vsa-expiration-image:latest_DIGEST}: failed to retrieve VSA envelope: no entries found in Rekor for image digest: sha256:${REGISTRY_acceptance/vsa-expiration-image:latest_DIGEST}"
 
 ---
 
@@ -103,6 +102,57 @@ time="${TIMESTAMP}" level=warning msg="invalid storage config 'invalid-backend@s
 
 ---
 
+[VSA expiration with existing valid VSA:stdout - 1]
+{
+  "success": true,
+  "components": [
+    {
+      "name": "Unnamed",
+      "containerImage": "${REGISTRY}/acceptance/vsa-existing-image@sha256:${REGISTRY_acceptance/vsa-existing-image:latest_DIGEST}",
+      "source": {},
+      "success": true,
+      "signatures": [
+        {
+          "keyid": "",
+          "sig": "${IMAGE_SIGNATURE_acceptance/vsa-existing-image}"
+        }
+      ],
+      "attestations": [
+        {
+          "type": "https://in-toto.io/Statement/v0.1",
+          "predicateType": "https://slsa.dev/provenance/v0.2",
+          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
+          "signatures": [
+            {
+              "keyid": "",
+              "sig": "${ATTESTATION_SIGNATURE_acceptance/vsa-existing-image}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "key": "${vsa-existing_PUBLIC_KEY_JSON}",
+  "policy": {
+    "sources": [
+      {
+        "policy": [
+          "git::${GITHOST}/git/vsa-existing-policy.git?ref=${LATEST_COMMIT}"
+        ]
+      }
+    ],
+    "rekorUrl": "${REKOR}",
+    "publicKey": "${vsa-existing_PUBLIC_KEY}"
+  },
+  "ec-version": "${EC_VERSION}",
+  "effective-time": "${TIMESTAMP}"
+}
+---
+
+[VSA expiration with existing valid VSA:stderr - 1]
+
+---
+
 [VSA generation with Rekor storage backend:stdout - 1]
 {
   "success": true,
@@ -154,6 +204,59 @@ time="${TIMESTAMP}" level=warning msg="invalid storage config 'invalid-backend@s
 
 ---
 
+[VSA generation with invalid storage backend configuration:stdout - 1]
+{
+  "success": true,
+  "components": [
+    {
+      "name": "Unnamed",
+      "containerImage": "${REGISTRY}/acceptance/vsa-invalid-image@sha256:${REGISTRY_acceptance/vsa-invalid-image:latest_DIGEST}",
+      "source": {},
+      "success": true,
+      "signatures": [
+        {
+          "keyid": "",
+          "sig": "${IMAGE_SIGNATURE_acceptance/vsa-invalid-image}"
+        }
+      ],
+      "attestations": [
+        {
+          "type": "https://in-toto.io/Statement/v0.1",
+          "predicateType": "https://slsa.dev/provenance/v0.2",
+          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
+          "signatures": [
+            {
+              "keyid": "",
+              "sig": "${ATTESTATION_SIGNATURE_acceptance/vsa-invalid-image}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "key": "${vsa-invalid_PUBLIC_KEY_JSON}",
+  "policy": {
+    "sources": [
+      {
+        "policy": [
+          "git::${GITHOST}/git/vsa-invalid-policy.git?ref=${LATEST_COMMIT}"
+        ]
+      }
+    ],
+    "rekorUrl": "${REKOR}",
+    "publicKey": "${vsa-invalid_PUBLIC_KEY}"
+  },
+  "ec-version": "${EC_VERSION}",
+  "effective-time": "${TIMESTAMP}"
+}
+---
+
+[VSA generation with invalid storage backend configuration:stderr - 1]
+time="${TIMESTAMP}" level=warning msg="invalid storage config 'invalid-backend@somewhere': unsupported backend 'invalid-backend'. Supported backends: rekor, local"
+time="${TIMESTAMP}" level=warning msg="invalid storage config 'invalid-backend@somewhere': unsupported backend 'invalid-backend'. Supported backends: rekor, local"
+
+---
+
 [VSA generation with multiple storage backends:stdout - 1]
 {
   "success": true,
@@ -202,159 +305,5 @@ time="${TIMESTAMP}" level=warning msg="invalid storage config 'invalid-backend@s
 ---
 
 [VSA generation with multiple storage backends:stderr - 1]
-
----
-
-[VSA generation with multiple images:stdout - 1]
-{
-  "success": true,
-  "components": [
-    {
-      "name": "Unnamed",
-      "containerImage": "${REGISTRY}/acceptance/vsa-multiple-image-2@sha256:${REGISTRY_acceptance/vsa-multiple-image-2:latest_DIGEST}",
-      "source": {},
-      "success": true,
-      "signatures": [
-        {
-          "keyid": "",
-          "sig": "${IMAGE_SIGNATURE_acceptance/vsa-multiple-image-2}"
-        }
-      ],
-      "attestations": [
-        {
-          "type": "https://in-toto.io/Statement/v0.1",
-          "predicateType": "https://slsa.dev/provenance/v0.2",
-          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
-          "signatures": [
-            {
-              "keyid": "",
-              "sig": "${ATTESTATION_SIGNATURE_acceptance/vsa-multiple-image-2}"
-            }
-          ]
-        }
-      ]
-    }
-  ],
-  "key": "${vsa-multiple_PUBLIC_KEY_JSON}",
-  "policy": {
-    "sources": [
-      {
-        "policy": [
-          "git::${GITHOST}/git/vsa-multiple-policy.git?ref=${LATEST_COMMIT}"
-        ]
-      }
-    ],
-    "rekorUrl": "${REKOR}",
-    "publicKey": "${vsa-multiple_PUBLIC_KEY}"
-  },
-  "ec-version": "${EC_VERSION}",
-  "effective-time": "${TIMESTAMP}"
-}
----
-
-[VSA generation with multiple images:stderr - 1]
-
----
-
-[VSA expiration flag functionality:stdout - 1]
-{
-  "success": true,
-  "components": [
-    {
-      "name": "Unnamed",
-      "containerImage": "${REGISTRY}/acceptance/vsa-expiration-image@sha256:${REGISTRY_acceptance/vsa-expiration-image:latest_DIGEST}",
-      "source": {},
-      "success": true,
-      "signatures": [
-        {
-          "keyid": "",
-          "sig": "${IMAGE_SIGNATURE_acceptance/vsa-expiration-image}"
-        }
-      ],
-      "attestations": [
-        {
-          "type": "https://in-toto.io/Statement/v0.1",
-          "predicateType": "https://slsa.dev/provenance/v0.2",
-          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
-          "signatures": [
-            {
-              "keyid": "",
-              "sig": "${ATTESTATION_SIGNATURE_acceptance/vsa-expiration-image}"
-            }
-          ]
-        }
-      ]
-    }
-  ],
-  "key": "${vsa-expiration_PUBLIC_KEY_JSON}",
-  "policy": {
-    "sources": [
-      {
-        "policy": [
-          "git::${GITHOST}/git/vsa-expiration-policy.git?ref=${LATEST_COMMIT}"
-        ]
-      }
-    ],
-    "rekorUrl": "${REKOR}",
-    "publicKey": "${vsa-expiration_PUBLIC_KEY}"
-  },
-  "ec-version": "${EC_VERSION}",
-  "effective-time": "${TIMESTAMP}"
-}
----
-
-[VSA expiration flag functionality:stderr - 1]
-time="${TIMESTAMP}" level=warning msg="Failed to check for existing VSA for image ${REGISTRY}/acceptance/vsa-expiration-image@sha256:${REGISTRY_acceptance/vsa-expiration-image:latest_DIGEST}: failed to retrieve VSA envelope: no entries found in Rekor for image digest: sha256:${REGISTRY_acceptance/vsa-expiration-image:latest_DIGEST}"
-
----
-
-[VSA expiration with existing valid VSA:stdout - 1]
-{
-  "success": true,
-  "components": [
-    {
-      "name": "Unnamed",
-      "containerImage": "${REGISTRY}/acceptance/vsa-existing-image@sha256:${REGISTRY_acceptance/vsa-existing-image:latest_DIGEST}",
-      "source": {},
-      "success": true,
-      "signatures": [
-        {
-          "keyid": "",
-          "sig": "${IMAGE_SIGNATURE_acceptance/vsa-existing-image}"
-        }
-      ],
-      "attestations": [
-        {
-          "type": "https://in-toto.io/Statement/v0.1",
-          "predicateType": "https://slsa.dev/provenance/v0.2",
-          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
-          "signatures": [
-            {
-              "keyid": "",
-              "sig": "${ATTESTATION_SIGNATURE_acceptance/vsa-existing-image}"
-            }
-          ]
-        }
-      ]
-    }
-  ],
-  "key": "${vsa-existing_PUBLIC_KEY_JSON}",
-  "policy": {
-    "sources": [
-      {
-        "policy": [
-          "git::${GITHOST}/git/vsa-existing-policy.git?ref=${LATEST_COMMIT}"
-        ]
-      }
-    ],
-    "rekorUrl": "${REKOR}",
-    "publicKey": "${vsa-existing_PUBLIC_KEY}"
-  },
-  "ec-version": "${EC_VERSION}",
-  "effective-time": "${TIMESTAMP}"
-}
----
-
-[VSA expiration with existing valid VSA:stderr - 1]
 
 ---
