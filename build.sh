@@ -24,6 +24,22 @@ BUILDS="${1}"
 # Generally blank, but will be set to "redhat" for Konflux builds
 BUILD_SUFFIX="${2:-""}"
 
+# When building multi-arch images, only the linux/amd64 build needs to cross-compile all platform/arch combinations for download.
+# The other platforms only need their native binary. This reduces builds from 28 (7 binaries × 4 platforms) to 10 (7 + 1 + 1 + 1).
+
+# Check if TARGETOS and TARGETARCH are set (Dockerfile sets these via buildah --platform)
+if [[ -n "${TARGETOS:-}" && -n "${TARGETARCH:-}" ]]; then
+    # We're in a Dockerfile build with TARGETOS/TARGETARCH set
+    if [[ "${TARGETOS}" == "linux" && "${TARGETARCH}" == "amd64" ]]; then
+        # amd64 builds ALL binaries for download availability
+        echo "Platform linux/amd64: Building all cross-compiled binaries for download"
+    else
+        # Other platforms only build their native binary
+        echo "Platform ${TARGETOS}/${TARGETARCH}: Building only native binary"
+        BUILDS="${TARGETOS}_${TARGETARCH}"
+    fi
+fi
+
 EC_FULL_VERSION=$(hack/derive-version.sh "${BUILD_SUFFIX}")
 
 echo "EC_FULL_VERSION=$EC_FULL_VERSION"
