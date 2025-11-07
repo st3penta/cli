@@ -585,6 +585,45 @@ type AllSectionsData struct {
 	FallbackResults []validate_utils.Result
 }
 
+// ComponentResultsDisplay holds all formatted display data for component results
+type ComponentResultsDisplay struct {
+	Header     HeaderDisplay
+	Result     ResultDisplay
+	VSASummary VSASummaryDisplay
+	PolicyDiff *PolicyDiffDisplay // nil if no policy diff
+	// Other sections will be added one at a time
+}
+
+// HeaderDisplay holds the formatted header section data
+type HeaderDisplay struct {
+	Title     string
+	Timestamp string
+}
+
+// ResultDisplay holds the formatted Result section data
+type ResultDisplay struct {
+	Overall    string // "✅ PASSED" or "❌ FAILED"
+	Fallback   string // "used for all images", "used for some images", or ""
+	ImageCount int
+	ImageLines []string // Formatted image status lines
+}
+
+// VSASummaryDisplay holds the formatted VSA Summary section data
+type VSASummaryDisplay struct {
+	Signature       string // Signature status
+	Predicate       string // Predicate status line
+	Policy          string // Policy status line
+	FallbackReasons string // Fallback reason(s) line, or ""
+}
+
+// PolicyDiffDisplay holds the formatted Policy Diff section data
+type PolicyDiffDisplay struct {
+	AffectedImages string // Comma-separated list of affected images
+	Added          string // "none" or "[include] N"
+	Removed        string // "none" or "N"
+	Changed        string // "none" or "N"
+}
+
 // Helper functions
 
 // shortenImageDigest extracts and shortens image digest to 8 characters
@@ -788,12 +827,81 @@ func aggregateAllSectionsData(allResults []vsa.ComponentResult) AllSectionsData 
 	return data
 }
 
+// buildHeaderDisplay creates a HeaderDisplay from a timestamp
+func buildHeaderDisplay(timestamp time.Time) HeaderDisplay {
+	return HeaderDisplay{
+		Title:     "VALIDATE VSA RESULT",
+		Timestamp: timestamp.Format(time.RFC3339),
+	}
+}
+
+// String formats the header for display
+func (h HeaderDisplay) String() string {
+	return fmt.Sprintf("=== %s — %s ===\n", h.Title, h.Timestamp)
+}
+
 // displayHeaderSection - Displays header with timestamp
+// DEPRECATED: Use buildHeaderDisplay and HeaderDisplay.String() instead
 func displayHeaderSection(timestamp time.Time) {
 	fmt.Printf("=== VALIDATE VSA RESULT — %s ===\n", timestamp.Format(time.RFC3339))
 }
 
+// buildResultDisplay creates a ResultDisplay from AllSectionsData
+func buildResultDisplay(data AllSectionsData) ResultDisplay {
+	result := ResultDisplay{
+		ImageCount: data.TotalImages,
+	}
+
+	// Set overall status
+	if data.OverallPassed {
+		result.Overall = "✅ PASSED"
+	} else {
+		result.Overall = "❌ FAILED"
+	}
+
+	// Set fallback status
+	if data.FallbackUsed {
+		if data.FallbackCount == data.TotalImages {
+			result.Fallback = "used for all images"
+		} else {
+			result.Fallback = "used for some images"
+		}
+	}
+
+	// Build image status lines
+	result.ImageLines = make([]string, 0, len(data.ImageStatuses))
+	for _, img := range data.ImageStatuses {
+		statusLine := fmt.Sprintf("    [%d] …%s  VSA=%s", img.Index, img.Digest, img.VSAStatus)
+		if img.FallbackStatus != "" {
+			statusLine += fmt.Sprintf("  Fallback=%s", img.FallbackStatus)
+		}
+		result.ImageLines = append(result.ImageLines, statusLine)
+	}
+
+	return result
+}
+
+// String formats the Result section for display
+func (r ResultDisplay) String() string {
+	var b strings.Builder
+	b.WriteString("Result\n")
+	b.WriteString(fmt.Sprintf("  Overall: %s\n", r.Overall))
+
+	if r.Fallback != "" {
+		b.WriteString(fmt.Sprintf("  Fallback: %s\n", r.Fallback))
+	}
+
+	b.WriteString(fmt.Sprintf("  Images (%d):\n", r.ImageCount))
+	for _, line := range r.ImageLines {
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
 // displayResultSection - Displays Result section
+// DEPRECATED: Use buildResultDisplay and ResultDisplay.String() instead
 func displayResultSection(data AllSectionsData) {
 	fmt.Println("Result")
 	if data.OverallPassed {
@@ -820,7 +928,67 @@ func displayResultSection(data AllSectionsData) {
 	}
 }
 
+// buildVSASummaryDisplay creates a VSASummaryDisplay from AllSectionsData
+func buildVSASummaryDisplay(data AllSectionsData) VSASummaryDisplay {
+	summary := VSASummaryDisplay{
+		Signature: data.SignatureStatus,
+	}
+
+	// Build predicate status
+	totalPredicates := data.PredicatePassed + data.PredicateFailed
+	if totalPredicates == 0 {
+		summary.Predicate = "(no predicate data)"
+	} else if data.PredicateFailed == 0 {
+		summary.Predicate = fmt.Sprintf("passed (%d/%d)", data.PredicatePassed, totalPredicates)
+	} else if data.PredicatePassed == 0 {
+		summary.Predicate = fmt.Sprintf("failed (%d/%d)", data.PredicateFailed, totalPredicates)
+	} else {
+		summary.Predicate = fmt.Sprintf("mixed (passed: %d, failed: %d)", data.PredicatePassed, data.PredicateFailed)
+	}
+
+	// Build policy status
+	totalPolicyChecks := data.PolicyMatches + data.PolicyMismatches
+	if totalPolicyChecks == 0 {
+		summary.Policy = "(no policy data)"
+	} else if data.PolicyMismatches == 0 {
+		summary.Policy = "matches (no differences)"
+	} else {
+		// Aggregate policy diff counts
+		totals := aggregatePolicyDiffTotals(data.PolicyDiffCounts)
+		summary.Policy = fmt.Sprintf("mismatches on %d/%d images (adds=%d, removes=%d, changes=%d)",
+			data.PolicyMismatches, totalPolicyChecks, totals.Added, totals.Removed, totals.Changed)
+	}
+
+	// Build fallback reasons
+	if len(data.FallbackReasons) > 0 {
+		var reasons []string
+		for reason := range data.FallbackReasons {
+			reasons = append(reasons, reason)
+		}
+		sort.Strings(reasons)
+		summary.FallbackReasons = strings.Join(reasons, ", ")
+	}
+
+	return summary
+}
+
+// String formats the VSA Summary section for display
+func (v VSASummaryDisplay) String() string {
+	var b strings.Builder
+	b.WriteString("VSA Summary\n")
+	b.WriteString(fmt.Sprintf("  Signature: %s\n", v.Signature))
+	b.WriteString(fmt.Sprintf("  Predicate: %s\n", v.Predicate))
+	b.WriteString(fmt.Sprintf("  Policy: %s\n", v.Policy))
+
+	if v.FallbackReasons != "" {
+		b.WriteString(fmt.Sprintf("  Fallback reason(s): %s\n", v.FallbackReasons))
+	}
+
+	return b.String()
+}
+
 // displayVSASummarySection - Displays VSA Summary section
+// DEPRECATED: Use buildVSASummaryDisplay and VSASummaryDisplay.String() instead
 func displayVSASummarySection(data AllSectionsData) {
 	fmt.Println("VSA Summary")
 	fmt.Printf("  Signature: %s\n", data.SignatureStatus)
@@ -861,7 +1029,57 @@ func displayVSASummarySection(data AllSectionsData) {
 	}
 }
 
+// buildPolicyDiffDisplay creates a PolicyDiffDisplay from AllSectionsData
+// Returns nil if there is no policy diff
+func buildPolicyDiffDisplay(data AllSectionsData) *PolicyDiffDisplay {
+	if !data.HasPolicyDiff {
+		return nil
+	}
+
+	diff := &PolicyDiffDisplay{
+		AffectedImages: strings.Join(data.AffectedImages, ", "),
+	}
+
+	// Aggregate policy diff counts across all affected images
+	totals := aggregatePolicyDiffTotals(data.PolicyDiffCounts)
+
+	// Build added line
+	if totals.Added > 0 {
+		diff.Added = fmt.Sprintf("[include] %d", totals.Added)
+	} else {
+		diff.Added = "none"
+	}
+
+	// Build removed line
+	if totals.Removed > 0 {
+		diff.Removed = fmt.Sprintf("%d", totals.Removed)
+	} else {
+		diff.Removed = "none"
+	}
+
+	// Build changed line
+	if totals.Changed > 0 {
+		diff.Changed = fmt.Sprintf("%d", totals.Changed)
+	} else {
+		diff.Changed = "none"
+	}
+
+	return diff
+}
+
+// String formats the Policy Diff section for display
+func (p PolicyDiffDisplay) String() string {
+	var b strings.Builder
+	b.WriteString("Policy Diff (summary)\n")
+	b.WriteString(fmt.Sprintf("  Affected images: [%s]\n", p.AffectedImages))
+	b.WriteString(fmt.Sprintf("  Added:   %s\n", p.Added))
+	b.WriteString(fmt.Sprintf("  Removed: %s\n", p.Removed))
+	b.WriteString(fmt.Sprintf("  Changed: %s\n", p.Changed))
+	return b.String()
+}
+
 // displayPolicyDiffSection - Displays Policy Diff section (only if policy diff exists)
+// DEPRECATED: Use buildPolicyDiffDisplay and PolicyDiffDisplay.String() instead
 func displayPolicyDiffSection(data AllSectionsData) {
 	if !data.HasPolicyDiff {
 		return
@@ -974,19 +1192,27 @@ func displayComponentResults(allResults []vsa.ComponentResult, data *validateVSA
 	// Single aggregation pass - collect everything once
 	allData := aggregateAllSectionsData(allResults)
 
+	// Build display struct
+	display := ComponentResultsDisplay{
+		Header:     buildHeaderDisplay(time.Now()),
+		Result:     buildResultDisplay(allData),
+		VSASummary: buildVSASummaryDisplay(allData),
+		PolicyDiff: buildPolicyDiffDisplay(allData),
+	}
+
 	// Display sections in order (each is self-contained)
-	displayHeaderSection(time.Now())
+	fmt.Print(display.Header.String())
 	fmt.Println()
 
-	displayResultSection(allData)
+	fmt.Print(display.Result.String())
 	fmt.Println()
 
-	displayVSASummarySection(allData)
+	fmt.Print(display.VSASummary.String())
 	fmt.Println()
 
 	// Conditional sections
-	if allData.HasPolicyDiff {
-		displayPolicyDiffSection(allData)
+	if display.PolicyDiff != nil {
+		fmt.Print(display.PolicyDiff.String())
 		fmt.Println()
 	}
 

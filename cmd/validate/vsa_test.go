@@ -2399,3 +2399,685 @@ func TestCreateErrorResult(t *testing.T) {
 
 	assert.Nil(t, result.FallbackResult)
 }
+
+func TestBuildHeaderDisplay(t *testing.T) {
+	// Test with a specific timestamp
+	timestamp := time.Date(2024, 1, 15, 10, 30, 45, 0, time.UTC)
+	header := buildHeaderDisplay(timestamp)
+
+	assert.Equal(t, "VALIDATE VSA RESULT", header.Title)
+	assert.Equal(t, "2024-01-15T10:30:45Z", header.Timestamp)
+}
+
+func TestHeaderDisplay_String(t *testing.T) {
+	tests := []struct {
+		name     string
+		header   HeaderDisplay
+		expected string
+	}{
+		{
+			name: "standard header",
+			header: HeaderDisplay{
+				Title:     "VALIDATE VSA RESULT",
+				Timestamp: "2024-01-15T10:30:45Z",
+			},
+			expected: "=== VALIDATE VSA RESULT — 2024-01-15T10:30:45Z ===\n",
+		},
+		{
+			name: "different timestamp format",
+			header: HeaderDisplay{
+				Title:     "VALIDATE VSA RESULT",
+				Timestamp: "2024-12-31T23:59:59Z",
+			},
+			expected: "=== VALIDATE VSA RESULT — 2024-12-31T23:59:59Z ===\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := tt.header.String()
+			assert.Equal(t, tt.expected, output)
+		})
+	}
+}
+
+func TestBuildHeaderDisplay_Integration(t *testing.T) {
+	// Test that buildHeaderDisplay creates correct format when used with String()
+	timestamp := time.Date(2024, 3, 20, 14, 25, 30, 0, time.UTC)
+	header := buildHeaderDisplay(timestamp)
+	output := header.String()
+
+	expected := "=== VALIDATE VSA RESULT — 2024-03-20T14:25:30Z ===\n"
+	assert.Equal(t, expected, output)
+}
+
+func TestBuildResultDisplay(t *testing.T) {
+	tests := []struct {
+		name     string
+		data     AllSectionsData
+		expected ResultDisplay
+	}{
+		{
+			name: "passed with no fallback",
+			data: AllSectionsData{
+				OverallPassed: true,
+				FallbackUsed:  false,
+				TotalImages:   2,
+				ImageStatuses: []ImageStatus{
+					{Index: 1, Digest: "abc12345", VSAStatus: "PASSED", FallbackStatus: ""},
+					{Index: 2, Digest: "def67890", VSAStatus: "PASSED", FallbackStatus: ""},
+				},
+			},
+			expected: ResultDisplay{
+				Overall:    "✅ PASSED",
+				Fallback:   "",
+				ImageCount: 2,
+				ImageLines: []string{
+					"    [1] …abc12345  VSA=PASSED",
+					"    [2] …def67890  VSA=PASSED",
+				},
+			},
+		},
+		{
+			name: "failed with fallback for all",
+			data: AllSectionsData{
+				OverallPassed: false,
+				FallbackUsed: true,
+				FallbackCount: 2,
+				TotalImages:   2,
+				ImageStatuses: []ImageStatus{
+					{Index: 1, Digest: "abc12345", VSAStatus: "FAILED(reason=no_vsa)", FallbackStatus: "PASSED"},
+					{Index: 2, Digest: "def67890", VSAStatus: "FAILED(reason=no_vsa)", FallbackStatus: "PASSED"},
+				},
+			},
+			expected: ResultDisplay{
+				Overall:    "❌ FAILED",
+				Fallback:   "used for all images",
+				ImageCount: 2,
+				ImageLines: []string{
+					"    [1] …abc12345  VSA=FAILED(reason=no_vsa)  Fallback=PASSED",
+					"    [2] …def67890  VSA=FAILED(reason=no_vsa)  Fallback=PASSED",
+				},
+			},
+		},
+		{
+			name: "failed with fallback for some",
+			data: AllSectionsData{
+				OverallPassed: false,
+				FallbackUsed: true,
+				FallbackCount: 1,
+				TotalImages:   3,
+				ImageStatuses: []ImageStatus{
+					{Index: 1, Digest: "abc12345", VSAStatus: "PASSED", FallbackStatus: ""},
+					{Index: 2, Digest: "def67890", VSAStatus: "FAILED(reason=no_vsa)", FallbackStatus: "PASSED"},
+					{Index: 3, Digest: "ghi11111", VSAStatus: "PASSED", FallbackStatus: ""},
+				},
+			},
+			expected: ResultDisplay{
+				Overall:    "❌ FAILED",
+				Fallback:   "used for some images",
+				ImageCount: 3,
+				ImageLines: []string{
+					"    [1] …abc12345  VSA=PASSED",
+					"    [2] …def67890  VSA=FAILED(reason=no_vsa)  Fallback=PASSED",
+					"    [3] …ghi11111  VSA=PASSED",
+				},
+			},
+		},
+		{
+			name: "empty images",
+			data: AllSectionsData{
+				OverallPassed: true,
+				FallbackUsed: false,
+				TotalImages:  0,
+				ImageStatuses: []ImageStatus{},
+			},
+			expected: ResultDisplay{
+				Overall:    "✅ PASSED",
+				Fallback:   "",
+				ImageCount: 0,
+				ImageLines: []string{},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := buildResultDisplay(tt.data)
+			assert.Equal(t, tt.expected.Overall, result.Overall)
+			assert.Equal(t, tt.expected.Fallback, result.Fallback)
+			assert.Equal(t, tt.expected.ImageCount, result.ImageCount)
+			assert.Equal(t, tt.expected.ImageLines, result.ImageLines)
+		})
+	}
+}
+
+func TestResultDisplay_String(t *testing.T) {
+	tests := []struct {
+		name     string
+		display  ResultDisplay
+		expected string
+	}{
+		{
+			name: "passed with no fallback",
+			display: ResultDisplay{
+				Overall:    "✅ PASSED",
+				Fallback:   "",
+				ImageCount: 2,
+				ImageLines: []string{
+					"    [1] …abc12345  VSA=PASSED",
+					"    [2] …def67890  VSA=PASSED",
+				},
+			},
+			expected: `Result
+  Overall: ✅ PASSED
+  Images (2):
+    [1] …abc12345  VSA=PASSED
+    [2] …def67890  VSA=PASSED
+`,
+		},
+		{
+			name: "failed with fallback for all",
+			display: ResultDisplay{
+				Overall:    "❌ FAILED",
+				Fallback:   "used for all images",
+				ImageCount: 2,
+				ImageLines: []string{
+					"    [1] …abc12345  VSA=FAILED(reason=no_vsa)  Fallback=PASSED",
+					"    [2] …def67890  VSA=FAILED(reason=no_vsa)  Fallback=PASSED",
+				},
+			},
+			expected: `Result
+  Overall: ❌ FAILED
+  Fallback: used for all images
+  Images (2):
+    [1] …abc12345  VSA=FAILED(reason=no_vsa)  Fallback=PASSED
+    [2] …def67890  VSA=FAILED(reason=no_vsa)  Fallback=PASSED
+`,
+		},
+		{
+			name: "failed with fallback for some",
+			display: ResultDisplay{
+				Overall:    "❌ FAILED",
+				Fallback:   "used for some images",
+				ImageCount: 3,
+				ImageLines: []string{
+					"    [1] …abc12345  VSA=PASSED",
+					"    [2] …def67890  VSA=FAILED(reason=no_vsa)  Fallback=PASSED",
+					"    [3] …ghi11111  VSA=PASSED",
+				},
+			},
+			expected: `Result
+  Overall: ❌ FAILED
+  Fallback: used for some images
+  Images (3):
+    [1] …abc12345  VSA=PASSED
+    [2] …def67890  VSA=FAILED(reason=no_vsa)  Fallback=PASSED
+    [3] …ghi11111  VSA=PASSED
+`,
+		},
+		{
+			name: "empty images",
+			display: ResultDisplay{
+				Overall:    "✅ PASSED",
+				Fallback:   "",
+				ImageCount: 0,
+				ImageLines: []string{},
+			},
+			expected: `Result
+  Overall: ✅ PASSED
+  Images (0):
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := tt.display.String()
+			assert.Equal(t, tt.expected, output)
+		})
+	}
+}
+
+func TestBuildResultDisplay_Integration(t *testing.T) {
+	// Test end-to-end: build from AllSectionsData and format with String()
+	data := AllSectionsData{
+		OverallPassed: true,
+		FallbackUsed:  false,
+		TotalImages:   1,
+		ImageStatuses: []ImageStatus{
+			{Index: 1, Digest: "abc12345", VSAStatus: "PASSED", FallbackStatus: ""},
+		},
+	}
+
+	result := buildResultDisplay(data)
+	output := result.String()
+
+	expected := `Result
+  Overall: ✅ PASSED
+  Images (1):
+    [1] …abc12345  VSA=PASSED
+`
+	assert.Equal(t, expected, output)
+}
+
+func TestBuildVSASummaryDisplay(t *testing.T) {
+	tests := []struct {
+		name     string
+		data     AllSectionsData
+		expected VSASummaryDisplay
+	}{
+		{
+			name: "all passed, no fallback reasons",
+			data: AllSectionsData{
+				SignatureStatus:  "VERIFIED",
+				PredicatePassed:  3,
+				PredicateFailed:  0,
+				PolicyMatches:    3,
+				PolicyMismatches: 0,
+				FallbackReasons:  map[string]bool{},
+			},
+			expected: VSASummaryDisplay{
+				Signature:      "VERIFIED",
+				Predicate:      "passed (3/3)",
+				Policy:         "matches (no differences)",
+				FallbackReasons: "",
+			},
+		},
+		{
+			name: "all failed, with fallback reasons",
+			data: AllSectionsData{
+				SignatureStatus:  "NOT VERIFIED",
+				PredicatePassed:  0,
+				PredicateFailed:  2,
+				PolicyMatches:    0,
+				PolicyMismatches: 2,
+				PolicyDiffCounts: map[string]PolicyDiffCounts{
+					"abc12345": {Added: 1, Removed: 2, Changed: 0},
+					"def67890": {Added: 0, Removed: 1, Changed: 1},
+				},
+				FallbackReasons: map[string]bool{
+					"no_vsa": true,
+					"expired": true,
+				},
+			},
+			expected: VSASummaryDisplay{
+				Signature:      "NOT VERIFIED",
+				Predicate:      "failed (2/2)",
+				Policy:         "mismatches on 2/2 images (adds=1, removes=3, changes=1)",
+				FallbackReasons: "expired, no_vsa",
+			},
+		},
+		{
+			name: "mixed results",
+			data: AllSectionsData{
+				SignatureStatus:  "VERIFIED",
+				PredicatePassed:  2,
+				PredicateFailed:  1,
+				PolicyMatches:    2,
+				PolicyMismatches: 1,
+				PolicyDiffCounts: map[string]PolicyDiffCounts{
+					"abc12345": {Added: 1, Removed: 0, Changed: 0},
+				},
+				FallbackReasons: map[string]bool{
+					"policy_mismatch": true,
+				},
+			},
+			expected: VSASummaryDisplay{
+				Signature:      "VERIFIED",
+				Predicate:      "mixed (passed: 2, failed: 1)",
+				Policy:         "mismatches on 1/3 images (adds=1, removes=0, changes=0)",
+				FallbackReasons: "policy_mismatch",
+			},
+		},
+		{
+			name: "no predicate or policy data",
+			data: AllSectionsData{
+				SignatureStatus:  "VERIFIED",
+				PredicatePassed:  0,
+				PredicateFailed:  0,
+				PolicyMatches:    0,
+				PolicyMismatches: 0,
+				FallbackReasons:  map[string]bool{},
+			},
+			expected: VSASummaryDisplay{
+				Signature:      "VERIFIED",
+				Predicate:      "(no predicate data)",
+				Policy:         "(no policy data)",
+				FallbackReasons: "",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			summary := buildVSASummaryDisplay(tt.data)
+			assert.Equal(t, tt.expected.Signature, summary.Signature)
+			assert.Equal(t, tt.expected.Predicate, summary.Predicate)
+			assert.Equal(t, tt.expected.Policy, summary.Policy)
+			assert.Equal(t, tt.expected.FallbackReasons, summary.FallbackReasons)
+		})
+	}
+}
+
+func TestVSASummaryDisplay_String(t *testing.T) {
+	tests := []struct {
+		name     string
+		display  VSASummaryDisplay
+		expected string
+	}{
+		{
+			name: "all passed, no fallback reasons",
+			display: VSASummaryDisplay{
+				Signature:      "VERIFIED",
+				Predicate:      "passed (3/3)",
+				Policy:         "matches (no differences)",
+				FallbackReasons: "",
+			},
+			expected: `VSA Summary
+  Signature: VERIFIED
+  Predicate: passed (3/3)
+  Policy: matches (no differences)
+`,
+		},
+		{
+			name: "all failed, with fallback reasons",
+			display: VSASummaryDisplay{
+				Signature:      "NOT VERIFIED",
+				Predicate:      "failed (2/2)",
+				Policy:         "mismatches on 2/2 images (adds=1, removes=3, changes=1)",
+				FallbackReasons: "expired, no_vsa",
+			},
+			expected: `VSA Summary
+  Signature: NOT VERIFIED
+  Predicate: failed (2/2)
+  Policy: mismatches on 2/2 images (adds=1, removes=3, changes=1)
+  Fallback reason(s): expired, no_vsa
+`,
+		},
+		{
+			name: "mixed results with fallback",
+			display: VSASummaryDisplay{
+				Signature:      "VERIFIED",
+				Predicate:      "mixed (passed: 2, failed: 1)",
+				Policy:         "mismatches on 1/3 images (adds=1, removes=0, changes=0)",
+				FallbackReasons: "policy_mismatch",
+			},
+			expected: `VSA Summary
+  Signature: VERIFIED
+  Predicate: mixed (passed: 2, failed: 1)
+  Policy: mismatches on 1/3 images (adds=1, removes=0, changes=0)
+  Fallback reason(s): policy_mismatch
+`,
+		},
+		{
+			name: "no predicate or policy data",
+			display: VSASummaryDisplay{
+				Signature:      "VERIFIED",
+				Predicate:      "(no predicate data)",
+				Policy:         "(no policy data)",
+				FallbackReasons: "",
+			},
+			expected: `VSA Summary
+  Signature: VERIFIED
+  Predicate: (no predicate data)
+  Policy: (no policy data)
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := tt.display.String()
+			assert.Equal(t, tt.expected, output)
+		})
+	}
+}
+
+func TestBuildVSASummaryDisplay_Integration(t *testing.T) {
+	// Test end-to-end: build from AllSectionsData and format with String()
+	data := AllSectionsData{
+		SignatureStatus:  "VERIFIED",
+		PredicatePassed:  2,
+		PredicateFailed:  0,
+		PolicyMatches:    2,
+		PolicyMismatches: 0,
+		FallbackReasons:  map[string]bool{},
+	}
+
+	summary := buildVSASummaryDisplay(data)
+	output := summary.String()
+
+	expected := `VSA Summary
+  Signature: VERIFIED
+  Predicate: passed (2/2)
+  Policy: matches (no differences)
+`
+	assert.Equal(t, expected, output)
+}
+
+func TestBuildPolicyDiffDisplay(t *testing.T) {
+	tests := []struct {
+		name     string
+		data     AllSectionsData
+		expected *PolicyDiffDisplay
+	}{
+		{
+			name: "no policy diff",
+			data: AllSectionsData{
+				HasPolicyDiff: false,
+			},
+			expected: nil,
+		},
+		{
+			name: "policy diff with all changes",
+			data: AllSectionsData{
+				HasPolicyDiff: true,
+				AffectedImages: []string{"abc12345", "def67890"},
+				PolicyDiffCounts: map[string]PolicyDiffCounts{
+					"abc12345": {Added: 2, Removed: 1, Changed: 0},
+					"def67890": {Added: 1, Removed: 0, Changed: 2},
+				},
+			},
+			expected: &PolicyDiffDisplay{
+				AffectedImages: "abc12345, def67890",
+				Added:          "[include] 3",
+				Removed:        "1",
+				Changed:        "2",
+			},
+		},
+		{
+			name: "policy diff with only added",
+			data: AllSectionsData{
+				HasPolicyDiff: true,
+				AffectedImages: []string{"abc12345"},
+				PolicyDiffCounts: map[string]PolicyDiffCounts{
+					"abc12345": {Added: 5, Removed: 0, Changed: 0},
+				},
+			},
+			expected: &PolicyDiffDisplay{
+				AffectedImages: "abc12345",
+				Added:          "[include] 5",
+				Removed:        "none",
+				Changed:        "none",
+			},
+		},
+		{
+			name: "policy diff with only removed",
+			data: AllSectionsData{
+				HasPolicyDiff: true,
+				AffectedImages: []string{"abc12345"},
+				PolicyDiffCounts: map[string]PolicyDiffCounts{
+					"abc12345": {Added: 0, Removed: 3, Changed: 0},
+				},
+			},
+			expected: &PolicyDiffDisplay{
+				AffectedImages: "abc12345",
+				Added:          "none",
+				Removed:        "3",
+				Changed:        "none",
+			},
+		},
+		{
+			name: "policy diff with only changed",
+			data: AllSectionsData{
+				HasPolicyDiff: true,
+				AffectedImages: []string{"abc12345"},
+				PolicyDiffCounts: map[string]PolicyDiffCounts{
+					"abc12345": {Added: 0, Removed: 0, Changed: 4},
+				},
+			},
+			expected: &PolicyDiffDisplay{
+				AffectedImages: "abc12345",
+				Added:          "none",
+				Removed:        "none",
+				Changed:        "4",
+			},
+		},
+		{
+			name: "policy diff with no changes",
+			data: AllSectionsData{
+				HasPolicyDiff: true,
+				AffectedImages: []string{"abc12345"},
+				PolicyDiffCounts: map[string]PolicyDiffCounts{
+					"abc12345": {Added: 0, Removed: 0, Changed: 0},
+				},
+			},
+			expected: &PolicyDiffDisplay{
+				AffectedImages: "abc12345",
+				Added:          "none",
+				Removed:        "none",
+				Changed:        "none",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := buildPolicyDiffDisplay(tt.data)
+			if tt.expected == nil {
+				assert.Nil(t, result)
+			} else {
+				assert.NotNil(t, result)
+				assert.Equal(t, tt.expected.AffectedImages, result.AffectedImages)
+				assert.Equal(t, tt.expected.Added, result.Added)
+				assert.Equal(t, tt.expected.Removed, result.Removed)
+				assert.Equal(t, tt.expected.Changed, result.Changed)
+			}
+		})
+	}
+}
+
+func TestPolicyDiffDisplay_String(t *testing.T) {
+	tests := []struct {
+		name     string
+		display  PolicyDiffDisplay
+		expected string
+	}{
+		{
+			name: "all changes",
+			display: PolicyDiffDisplay{
+				AffectedImages: "abc12345, def67890",
+				Added:          "[include] 3",
+				Removed:        "1",
+				Changed:        "2",
+			},
+			expected: `Policy Diff (summary)
+  Affected images: [abc12345, def67890]
+  Added:   [include] 3
+  Removed: 1
+  Changed: 2
+`,
+		},
+		{
+			name: "only added",
+			display: PolicyDiffDisplay{
+				AffectedImages: "abc12345",
+				Added:          "[include] 5",
+				Removed:        "none",
+				Changed:        "none",
+			},
+			expected: `Policy Diff (summary)
+  Affected images: [abc12345]
+  Added:   [include] 5
+  Removed: none
+  Changed: none
+`,
+		},
+		{
+			name: "only removed",
+			display: PolicyDiffDisplay{
+				AffectedImages: "abc12345",
+				Added:          "none",
+				Removed:        "3",
+				Changed:        "none",
+			},
+			expected: `Policy Diff (summary)
+  Affected images: [abc12345]
+  Added:   none
+  Removed: 3
+  Changed: none
+`,
+		},
+		{
+			name: "only changed",
+			display: PolicyDiffDisplay{
+				AffectedImages: "abc12345",
+				Added:          "none",
+				Removed:        "none",
+				Changed:        "4",
+			},
+			expected: `Policy Diff (summary)
+  Affected images: [abc12345]
+  Added:   none
+  Removed: none
+  Changed: 4
+`,
+		},
+		{
+			name: "no changes",
+			display: PolicyDiffDisplay{
+				AffectedImages: "abc12345",
+				Added:          "none",
+				Removed:        "none",
+				Changed:        "none",
+			},
+			expected: `Policy Diff (summary)
+  Affected images: [abc12345]
+  Added:   none
+  Removed: none
+  Changed: none
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := tt.display.String()
+			assert.Equal(t, tt.expected, output)
+		})
+	}
+}
+
+func TestBuildPolicyDiffDisplay_Integration(t *testing.T) {
+	// Test end-to-end: build from AllSectionsData and format with String()
+	data := AllSectionsData{
+		HasPolicyDiff: true,
+		AffectedImages: []string{"abc12345"},
+		PolicyDiffCounts: map[string]PolicyDiffCounts{
+			"abc12345": {Added: 2, Removed: 1, Changed: 0},
+		},
+	}
+
+	diff := buildPolicyDiffDisplay(data)
+	assert.NotNil(t, diff)
+	output := diff.String()
+
+	expected := `Policy Diff (summary)
+  Affected images: [abc12345]
+  Added:   [include] 2
+  Removed: 1
+  Changed: none
+`
+	assert.Equal(t, expected, output)
+}
