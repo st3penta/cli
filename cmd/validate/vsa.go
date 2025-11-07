@@ -1075,7 +1075,10 @@ func buildFallbackReportData(fallbackResults []validate_utils.Result, vsaData *v
 
 // displayFallbackImageSection - Displays fallback validate image output using WriteReport
 func displayFallbackImageSection(allData AllSectionsData, vsaData *validateVSAData, cmd *cobra.Command) error {
-	fmt.Println("=== FALLBACK: VALIDATE IMAGE ===")
+	// Only print header for text output format (or when no format is specified, which defaults to text)
+	if shouldPrintFallbackHeader(vsaData.output) {
+		fmt.Println("=== FALLBACK: VALIDATE IMAGE ===")
+	}
 
 	reportData, err := buildFallbackReportData(allData.FallbackResults, vsaData)
 	if err != nil {
@@ -1092,6 +1095,19 @@ func displayFallbackImageSection(allData AllSectionsData, vsaData *validateVSADa
 	// WriteReport generates the verbatim validate image output
 	_, err = validate_utils.WriteReport(reportData, outputOpts, cmd)
 	return err
+}
+
+// shouldPrintFallbackHeader determines if the fallback header should be printed
+// The header should only be printed when using text format or when no format is specified
+// (which defaults to text in WriteReport)
+func shouldPrintFallbackHeader(outputFormats []string) bool {
+	// If no output formats specified, WriteReport defaults to text
+	if len(outputFormats) == 0 {
+		return true
+	}
+
+	// Check if "text" format is in the output formats
+	return validate_utils.ContainsOutputFormat(outputFormats, "text")
 }
 
 // toVSASectionsReport converts ComponentResultsDisplay to VSASectionsReport
