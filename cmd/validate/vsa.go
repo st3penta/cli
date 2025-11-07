@@ -1080,9 +1080,9 @@ func displayFallbackImageSection(allData AllSectionsData, vsaData *validateVSADa
 		return err
 	}
 
-	// Output options - empty Output means write to stdout
+	// Output options - if no fallback-specific formats, default to text on stdout
 	outputOpts := validate_utils.ReportOutputOptions{
-		Output:     []string{}, // Empty = stdout (via cmd.OutOrStdout())
+		Output:     vsaData.output, // Empty = stdout (via cmd.OutOrStdout())
 		NoColor:    vsaData.noColor,
 		ForceColor: vsaData.forceColor,
 	}
@@ -1278,6 +1278,17 @@ func filterVSAOutputFormats(outputFormats []string) []string {
 		}
 	}
 	return filtered
+}
+
+// filterFallbackOutputFormats returns all output formats for fallback validation
+// The fallback validation uses WriteReport which supports all formats (json, yaml, text,
+// appstudio, summary, junit, attestation, etc.), just like the validate image command.
+// Note: If both VSA sections and fallback specify the same format (e.g., json), both
+// will output in that format (though they produce different JSON structures).
+func filterFallbackOutputFormats(outputFormats []string) []string {
+	// Return all formats - fallback validation supports all output formats
+	// including json, yaml, and text, just like validate image command
+	return outputFormats
 }
 
 // isFailureResult determines if a result represents a failure
