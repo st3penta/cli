@@ -2081,7 +2081,7 @@ func TestBuildResultDisplay(t *testing.T) {
 			name: "failed with fallback for all",
 			data: AllSectionsData{
 				OverallPassed: false,
-				FallbackUsed: true,
+				FallbackUsed:  true,
 				FallbackCount: 2,
 				TotalImages:   2,
 				ImageStatuses: []ImageStatus{
@@ -2103,7 +2103,7 @@ func TestBuildResultDisplay(t *testing.T) {
 			name: "failed with fallback for some",
 			data: AllSectionsData{
 				OverallPassed: false,
-				FallbackUsed: true,
+				FallbackUsed:  true,
 				FallbackCount: 1,
 				TotalImages:   3,
 				ImageStatuses: []ImageStatus{
@@ -2127,8 +2127,8 @@ func TestBuildResultDisplay(t *testing.T) {
 			name: "empty images",
 			data: AllSectionsData{
 				OverallPassed: true,
-				FallbackUsed: false,
-				TotalImages:  0,
+				FallbackUsed:  false,
+				TotalImages:   0,
 				ImageStatuses: []ImageStatus{},
 			},
 			expected: ResultDisplay{
@@ -2277,9 +2277,9 @@ func TestBuildVSASummaryDisplay(t *testing.T) {
 				FallbackReasons:  map[string]bool{},
 			},
 			expected: VSASummaryDisplay{
-				Signature:      "VERIFIED",
-				Predicate:      "passed (3/3)",
-				Policy:         "matches (no differences)",
+				Signature:       "VERIFIED",
+				Predicate:       "passed (3/3)",
+				Policy:          "matches (no differences)",
 				FallbackReasons: "",
 			},
 		},
@@ -2296,14 +2296,14 @@ func TestBuildVSASummaryDisplay(t *testing.T) {
 					"def67890": {Added: 0, Removed: 1, Changed: 1},
 				},
 				FallbackReasons: map[string]bool{
-					"no_vsa": true,
+					"no_vsa":  true,
 					"expired": true,
 				},
 			},
 			expected: VSASummaryDisplay{
-				Signature:      "NOT VERIFIED",
-				Predicate:      "failed (2/2)",
-				Policy:         "mismatches on 2/2 images (adds=1, removes=3, changes=1)",
+				Signature:       "NOT VERIFIED",
+				Predicate:       "failed (2/2)",
+				Policy:          "mismatches on 2/2 images (adds=1, removes=3, changes=1)",
 				FallbackReasons: "expired, no_vsa",
 			},
 		},
@@ -2323,9 +2323,9 @@ func TestBuildVSASummaryDisplay(t *testing.T) {
 				},
 			},
 			expected: VSASummaryDisplay{
-				Signature:      "VERIFIED",
-				Predicate:      "mixed (passed: 2, failed: 1)",
-				Policy:         "mismatches on 1/3 images (adds=1, removes=0, changes=0)",
+				Signature:       "VERIFIED",
+				Predicate:       "mixed (passed: 2, failed: 1)",
+				Policy:          "mismatches on 1/3 images (adds=1, removes=0, changes=0)",
 				FallbackReasons: "policy_mismatch",
 			},
 		},
@@ -2340,9 +2340,9 @@ func TestBuildVSASummaryDisplay(t *testing.T) {
 				FallbackReasons:  map[string]bool{},
 			},
 			expected: VSASummaryDisplay{
-				Signature:      "VERIFIED",
-				Predicate:      "(no predicate data)",
-				Policy:         "(no policy data)",
+				Signature:       "VERIFIED",
+				Predicate:       "(no predicate data)",
+				Policy:          "(no policy data)",
 				FallbackReasons: "",
 			},
 		},
@@ -2368,9 +2368,9 @@ func TestVSASummaryDisplay_String(t *testing.T) {
 		{
 			name: "all passed, no fallback reasons",
 			display: VSASummaryDisplay{
-				Signature:      "VERIFIED",
-				Predicate:      "passed (3/3)",
-				Policy:         "matches (no differences)",
+				Signature:       "VERIFIED",
+				Predicate:       "passed (3/3)",
+				Policy:          "matches (no differences)",
 				FallbackReasons: "",
 			},
 			expected: `VSA Summary
@@ -2382,9 +2382,9 @@ func TestVSASummaryDisplay_String(t *testing.T) {
 		{
 			name: "all failed, with fallback reasons",
 			display: VSASummaryDisplay{
-				Signature:      "NOT VERIFIED",
-				Predicate:      "failed (2/2)",
-				Policy:         "mismatches on 2/2 images (adds=1, removes=3, changes=1)",
+				Signature:       "NOT VERIFIED",
+				Predicate:       "failed (2/2)",
+				Policy:          "mismatches on 2/2 images (adds=1, removes=3, changes=1)",
 				FallbackReasons: "expired, no_vsa",
 			},
 			expected: `VSA Summary
@@ -2397,9 +2397,9 @@ func TestVSASummaryDisplay_String(t *testing.T) {
 		{
 			name: "mixed results with fallback",
 			display: VSASummaryDisplay{
-				Signature:      "VERIFIED",
-				Predicate:      "mixed (passed: 2, failed: 1)",
-				Policy:         "mismatches on 1/3 images (adds=1, removes=0, changes=0)",
+				Signature:       "VERIFIED",
+				Predicate:       "mixed (passed: 2, failed: 1)",
+				Policy:          "mismatches on 1/3 images (adds=1, removes=0, changes=0)",
 				FallbackReasons: "policy_mismatch",
 			},
 			expected: `VSA Summary
@@ -2412,9 +2412,9 @@ func TestVSASummaryDisplay_String(t *testing.T) {
 		{
 			name: "no predicate or policy data",
 			display: VSASummaryDisplay{
-				Signature:      "VERIFIED",
-				Predicate:      "(no predicate data)",
-				Policy:         "(no policy data)",
+				Signature:       "VERIFIED",
+				Predicate:       "(no predicate data)",
+				Policy:          "(no policy data)",
 				FallbackReasons: "",
 			},
 			expected: `VSA Summary
@@ -2471,7 +2471,7 @@ func TestBuildPolicyDiffDisplay(t *testing.T) {
 		{
 			name: "policy diff with all changes",
 			data: AllSectionsData{
-				HasPolicyDiff: true,
+				HasPolicyDiff:  true,
 				AffectedImages: []string{"abc12345", "def67890"},
 				PolicyDiffCounts: map[string]PolicyDiffCounts{
 					"abc12345": {Added: 2, Removed: 1, Changed: 0},
@@ -2488,7 +2488,7 @@ func TestBuildPolicyDiffDisplay(t *testing.T) {
 		{
 			name: "policy diff with only added",
 			data: AllSectionsData{
-				HasPolicyDiff: true,
+				HasPolicyDiff:  true,
 				AffectedImages: []string{"abc12345"},
 				PolicyDiffCounts: map[string]PolicyDiffCounts{
 					"abc12345": {Added: 5, Removed: 0, Changed: 0},
@@ -2504,7 +2504,7 @@ func TestBuildPolicyDiffDisplay(t *testing.T) {
 		{
 			name: "policy diff with only removed",
 			data: AllSectionsData{
-				HasPolicyDiff: true,
+				HasPolicyDiff:  true,
 				AffectedImages: []string{"abc12345"},
 				PolicyDiffCounts: map[string]PolicyDiffCounts{
 					"abc12345": {Added: 0, Removed: 3, Changed: 0},
@@ -2520,7 +2520,7 @@ func TestBuildPolicyDiffDisplay(t *testing.T) {
 		{
 			name: "policy diff with only changed",
 			data: AllSectionsData{
-				HasPolicyDiff: true,
+				HasPolicyDiff:  true,
 				AffectedImages: []string{"abc12345"},
 				PolicyDiffCounts: map[string]PolicyDiffCounts{
 					"abc12345": {Added: 0, Removed: 0, Changed: 4},
@@ -2536,7 +2536,7 @@ func TestBuildPolicyDiffDisplay(t *testing.T) {
 		{
 			name: "policy diff with no changes",
 			data: AllSectionsData{
-				HasPolicyDiff: true,
+				HasPolicyDiff:  true,
 				AffectedImages: []string{"abc12345"},
 				PolicyDiffCounts: map[string]PolicyDiffCounts{
 					"abc12345": {Added: 0, Removed: 0, Changed: 0},
@@ -2661,7 +2661,7 @@ func TestPolicyDiffDisplay_String(t *testing.T) {
 func TestBuildPolicyDiffDisplay_Integration(t *testing.T) {
 	// Test end-to-end: build from AllSectionsData and format with String()
 	data := AllSectionsData{
-		HasPolicyDiff: true,
+		HasPolicyDiff:  true,
 		AffectedImages: []string{"abc12345"},
 		PolicyDiffCounts: map[string]PolicyDiffCounts{
 			"abc12345": {Added: 2, Removed: 1, Changed: 0},

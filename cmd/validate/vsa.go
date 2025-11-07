@@ -57,7 +57,9 @@ const (
 
 // Constants for validation status
 const (
-	unknownReason = "unknown"
+	unknownReason     = "unknown"
+	noPolicyDiff      = "none"
+	retrievalFailedRC = "retrieval_failed"
 )
 
 // Reason code mappings
@@ -307,7 +309,7 @@ func runValidateVSA(cmd *cobra.Command, data *validateVSAData, args []string, fs
 	}
 	printVSAInfo(os.Stdout, fmt.Sprintf("Policy: %s", data.policyConfig))
 
-	return validateSnapshotVSAsFromSpec(ctx, snapshot, data, fs, cmd)
+	return validateSnapshotVSAsFromSpec(ctx, snapshot, data, cmd)
 }
 
 // validateVSAInput validates the command input using Cobra's validation patterns
@@ -439,7 +441,7 @@ func worker(jobs <-chan app.SnapshotComponent, results chan<- vsa.ComponentResul
 
 // validateSnapshotVSAsFromSpec processes components from a SnapshotSpec in parallel
 // This is the unified processing path used by both --images and single identifier cases
-func validateSnapshotVSAsFromSpec(ctx context.Context, snapshot *app.SnapshotSpec, data *validateVSAData, fs afero.Fs, cmd *cobra.Command) error {
+func validateSnapshotVSAsFromSpec(ctx context.Context, snapshot *app.SnapshotSpec, data *validateVSAData, cmd *cobra.Command) error {
 	// Store snapshot spec for use in fallback validation
 	data.snapshot = snapshot
 
@@ -1005,21 +1007,21 @@ func buildPolicyDiffDisplay(data AllSectionsData) *PolicyDiffDisplay {
 	if totals.Added > 0 {
 		diff.Added = fmt.Sprintf("[include] %d", totals.Added)
 	} else {
-		diff.Added = "none"
+		diff.Added = noPolicyDiff
 	}
 
 	// Build removed line
 	if totals.Removed > 0 {
 		diff.Removed = fmt.Sprintf("%d", totals.Removed)
 	} else {
-		diff.Removed = "none"
+		diff.Removed = noPolicyDiff
 	}
 
 	// Build changed line
 	if totals.Changed > 0 {
 		diff.Changed = fmt.Sprintf("%d", totals.Changed)
 	} else {
-		diff.Changed = "none"
+		diff.Changed = noPolicyDiff
 	}
 
 	return diff
@@ -1280,17 +1282,6 @@ func filterVSAOutputFormats(outputFormats []string) []string {
 	return filtered
 }
 
-// filterFallbackOutputFormats returns all output formats for fallback validation
-// The fallback validation uses WriteReport which supports all formats (json, yaml, text,
-// appstudio, summary, junit, attestation, etc.), just like the validate image command.
-// Note: If both VSA sections and fallback specify the same format (e.g., json), both
-// will output in that format (though they produce different JSON structures).
-func filterFallbackOutputFormats(outputFormats []string) []string {
-	// Return all formats - fallback validation supports all output formats
-	// including json, yaml, and text, just like validate image command
-	return outputFormats
-}
-
 // isFailureResult determines if a result represents a failure
 func isFailureResult(result vsa.ComponentResult) bool {
 	resultType := classifyResult(result)
@@ -1502,16 +1493,16 @@ func createValidationResultFromError(err error) *vsa.ValidationResult {
 	}
 
 	// Determine reason code from error message
-	reasonCode := "retrieval_failed"
+	reasonCode := retrievalFailedRC
 	errMsg := err.Error()
 
 	// Check for specific error types
 	if strings.Contains(errMsg, "timeout") || strings.Contains(errMsg, "exceeded allowed execution time") {
-		reasonCode = "retrieval_failed"
+		reasonCode = retrievalFailedRC
 	} else if strings.Contains(errMsg, "no entries found") || strings.Contains(errMsg, "not found") {
 		reasonCode = "no_vsa"
 	} else if strings.Contains(errMsg, "signature") {
-		reasonCode = "retrieval_failed"
+		reasonCode = retrievalFailedRC
 	}
 
 	return &vsa.ValidationResult{
