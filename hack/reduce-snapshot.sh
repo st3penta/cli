@@ -20,10 +20,10 @@
 # It requires that the following environment variables be defined:
 #
 # - SINGLE_COMPONENT: true if single component mode is enabled.
-# - SNAPSHOT: String representation of Snapshot
+# - SNAPSHOT: Path to Snapshot json file
 # - CUSTOM_RESOURCE: Custom Resource to query for built component in Snapshot
 # - CUSTOM_RESOURCE_NAMESPACE: Namespace where Custom Resource is found
-# - SNAPSHOT_PATH: The location to place the reduced Snapshot json file
+# - SNAPSHOT_PATH: Same path as SNAPSHOT. The reduced Snapshot will be stored here.
 
 set -o errexit
 set -o nounset
@@ -63,15 +63,16 @@ if [ "${SINGLE_COMPONENT}" == "true" ]; then
     jq --arg component "${SNAPSHOT_CREATION_COMPONENT}" \
     'del(.components[] | select(.name != $component))' "$WORKING_SNAPSHOT" > "$REDUCED_SNAPSHOT"
 
-    mv "$REDUCED_SNAPSHOT" "$WORKING_SNAPSHOT"
-    ## make sure we still have 1 component
-    COMPONENT_COUNT=$(jq -r '[ .components[] ] | length' "$WORKING_SNAPSHOT")
-    echo "COMPONENT_COUNT: ${COMPONENT_COUNT}"
-    if [ "${COMPONENT_COUNT}" != "1" ] ; then
+    COMPONENT_COUNT=$(jq -r '[ .components[] ] | length' "$REDUCED_SNAPSHOT")
+    if [ "${COMPONENT_COUNT}" == "1" ]; then
+      mv "$REDUCED_SNAPSHOT" "$WORKING_SNAPSHOT"
+    else
       echo "Error: Reduced Snapshot has ${COMPONENT_COUNT} components. It should contain 1"
       echo "       Verify that the Snapshot contains the built component: ${SNAPSHOT_CREATION_COMPONENT}"
+      echo "Using original Snapshot"
       exit 1
     fi
+
   fi
 fi
 
