@@ -25,8 +25,10 @@ Built for multiple architectures (Linux, macOS, Windows) using `make dist`. Thes
 
 Container images are built and pushed to *two* registry organizations:
 
-* `quay.io/conforma/cli`
-* `quay.io/enterprise-contract/ec-cli`
+* `quay.io/conforma/cli` - Primary registry
+* `quay.io/enterprise-contract/ec-cli` - Deprecated (see note below)
+
+IMPORTANT: The `quay.io/enterprise-contract/ec-cli` registry is deprecated and maintained only for backward compatibility. It will stop receiving updates in the future. Use `quay.io/conforma/cli` for all new deployments.
 
 Each image is tagged with:
 
@@ -43,8 +45,10 @@ OCI-compliant Tekton task bundles containing:
 
 Published to *two* repositories:
 
-* `quay.io/conforma/tekton-task`
-* `quay.io/enterprise-contract/ec-task-bundle`
+* `quay.io/conforma/tekton-task` - Primary repository
+* `quay.io/enterprise-contract/ec-task-bundle` - Deprecated (see note below)
+
+IMPORTANT: The `quay.io/enterprise-contract/ec-task-bundle` repository is deprecated and maintained only for backward compatibility. It will stop receiving updates in the future. Use `quay.io/conforma/tekton-task` for all new deployments.
 
 Bundles are tagged with the same pattern as container images.
 
@@ -71,9 +75,9 @@ The release workflow (`.github/workflows/release.yaml`) executes these steps:
 The project publishes to two separate organizations for historical and organizational reasons:
 
 * **`conforma/*`**: Primary organizational namespace
-* **`enterprise-contract/*`**: Legacy namespace maintained for backward compatibility
+* **`enterprise-contract/*`**: Legacy namespace (deprecated)
 
-Both registries receive identical artifacts with identical tags, ensuring users can pull from either location.
+Both registries currently receive identical artifacts with identical tags. However, the `enterprise-contract/*` namespace is deprecated and will eventually stop receiving updates.
 
 == Image Verification
 
@@ -93,12 +97,10 @@ Tekton task bundles are OCI artifacts that package the Tekton task definitions. 
 . **Reading the task definition files** from the repository:
   * `tasks/verify-enterprise-contract/0.1/verify-enterprise-contract.yaml`
   * `tasks/verify-conforma-konflux-ta/0.1/verify-conforma-konflux-ta.yaml`
-+
-NOTE: These files in the repository use `:latest` tags. They are NOT modified in the repository itself.
 
 . **Dynamically updating image references** - During the release process, the workflow:
   * Reads these task YAML files (which use `:latest` tags)
-  * Uses `yq` to dynamically replace all `.spec.steps[].image` fields with the specific image reference
+  * Uses `yq` to dynamically replace all `.spec.steps[].image` fields with specific image digests
   * Example transformation:
 +
 [source,yaml]
@@ -109,18 +111,16 @@ spec:
     - name: validate
       image: quay.io/conforma/cli:latest
       
-# What gets packaged in the released bundle (using SHA256 digest):
+# What gets packaged in the released bundle (pinned to digest):
 spec:
   steps:
     - name: validate
       image: quay.io/conforma/cli@sha256:a55110c6de8abe9c94b426084dff73669c3dfdd7c49a45f2339bb91ea2975bbe
 ----
-+
-NOTE: The bundles use **digest references** (SHA256 content hashes), not tags. This provides the strongest immutability guarantee since the digest is computed from the actual image content.
 
-. **Packaging and pushing** - The modified task definitions are bundled and pushed as OCI artifacts using `make task-bundle-snapshot`
+. **Packaging and pushing** - The modified task definitions are bundled and pushed as OCI artifacts using `make task-bundle-snapshot`.
 
-**Important**: The task files in the repository always keep `:latest` tags. Only the published bundles contain specific digest references. This means each released bundle is immutable and always references the exact EC CLI image it was built with, ensuring reproducibility.
+NOTE: The task files in the repository use `:latest` tags, but when the bundles are created and pushed, the image references are pinned to specific image digests (SHA256 content hashes). The repository files are never modified. This ensures each released bundle is immutable and always references the exact EC CLI image it was built with.
 
 == Versioning
 
