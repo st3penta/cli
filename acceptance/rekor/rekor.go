@@ -357,6 +357,18 @@ func IsRunning(ctx context.Context) bool {
 	return testenv.HasState[rekorState](ctx)
 }
 
+// rekorUploadShouldFail creates WireMock stubs that simulate Rekor upload failures
+func rekorUploadShouldFail(ctx context.Context) error {
+	// Create a stub that returns a 500 Internal Server Error for VSA upload requests
+	return wiremock.StubFor(ctx, wiremock.Post(wiremock.URLPathEqualTo("/api/v1/log/entries")).
+		WillReturnResponse(wiremock.NewResponse().
+			WithStatus(500).
+			WithHeaders(map[string]string{
+				"Content-Type": "application/json",
+			}).
+			WithBody(`{"message":"Internal server error"}`)))
+}
+
 // AddStepsTo adds Gherkin steps to the godog ScenarioContext
 func AddStepsTo(sc *godog.ScenarioContext) {
 	sc.Step(`^stub rekord running$`, stubRekordRunning)
@@ -366,6 +378,7 @@ func AddStepsTo(sc *godog.ScenarioContext) {
 	sc.Step(`^VSA should be uploaded to Rekor successfully$`, vsaShouldBeUploadedToRekor)
 	sc.Step(`^VSA index search should return no results$`, stubVSAIndexSearch)
 	sc.Step(`^VSA index search should return valid VSA$`, stubVSAIndexSearchWithResult)
+	sc.Step(`^Rekor upload should fail$`, rekorUploadShouldFail)
 }
 
 // expectVSAUploadToRekor creates WireMock stubs to expect VSA upload requests to Rekor
