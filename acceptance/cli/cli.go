@@ -89,6 +89,7 @@ func variables(ctx context.Context) (context.Context, []string, map[string]strin
 		"PATH=" + os.Getenv("PATH"),
 		"COVERAGE_FILEPATH=" + os.Getenv("COVERAGE_FILEPATH"), // where to put the coverage file, $COVERAGE_FILEPATH is provided by the Makefile, if empty it'll be $TMPDIR
 		"COVERAGE_FILENAME=" + os.Getenv("COVERAGE_FILENAME"), // suffix for the coverage file
+		"GOCOVERDIR=" + os.Getenv("GOCOVERDIR"),               // directory where the Go coverage raw data is stored
 		"HOME=/tmp",
 	}
 
