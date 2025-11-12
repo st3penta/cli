@@ -129,7 +129,7 @@ acceptance: ## Run all acceptance tests
 	export COVERAGE_FILEPATH="$$ACCEPTANCE_WORKDIR"; \
 	export COVERAGE_FILENAME="-acceptance"; \
 	export GOCOVERDIR="$${ACCEPTANCE_WORKDIR}/coverage"; \
-	cd acceptance && go test ./... ; go tool covdata textfmt -i=$${GOCOVERDIR} -o="$(ROOT_DIR)/coverage-acceptance.out"
+	cd acceptance && go test -timeout $(ACCEPTANCE_TIMEOUT) ./... ; go tool covdata textfmt -i=$${GOCOVERDIR} -o="$(ROOT_DIR)/coverage-acceptance.out"
 
 # Add @focus above the feature you're hacking on to use this
 # (Mainly for use with the feature-% target below)
