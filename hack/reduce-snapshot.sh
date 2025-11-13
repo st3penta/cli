@@ -35,7 +35,7 @@ set -o pipefail
 # Always use a temp file for WORKING_SNAPSHOT to avoid truncation issues when writing
 # the final output to SNAPSHOT_PATH (which may be the same file as SNAPSHOT).
 
-WORKING_SNAPSHOT="$(mktemp "${HOME:-/tmp}/snapshot.XXXXXX")"
+WORKING_SNAPSHOT="$(mktemp /tmp/snapshot.XXXXXX)"
 if [[ -f "$SNAPSHOT" ]]; then
   cp "$SNAPSHOT" "$WORKING_SNAPSHOT"
 else
