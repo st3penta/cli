@@ -32,13 +32,16 @@ set -o pipefail
 
 # Make sure to move snapshot contents to the WORKING_SNAPSHOT location. Then allow jq to
 # work with it there. This avoids having to read SNAPSHOT to memory.
+# Always use a temp file for WORKING_SNAPSHOT to avoid truncation issues when writing
+# the final output to SNAPSHOT_PATH (which may be the same file as SNAPSHOT).
 
+WORKING_SNAPSHOT="$(mktemp "${HOME:-/tmp}/snapshot.XXXXXX")"
 if [[ -f "$SNAPSHOT" ]]; then
-  WORKING_SNAPSHOT="$SNAPSHOT"
+  cp "$SNAPSHOT" "$WORKING_SNAPSHOT"
 else
-  WORKING_SNAPSHOT="$(mktemp "${HOME:-/tmp}/snapshot.XXXXXX")"
   printf "%s" "$SNAPSHOT" > "$WORKING_SNAPSHOT"
 fi
+
 jq empty "$WORKING_SNAPSHOT" || { echo "JSON is invalid"; exit 1; }
 
 echo "Single Component mode? ${SINGLE_COMPONENT}"
