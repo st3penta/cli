@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"runtime/trace"
-	"sort"
 	"strings"
 	"time"
 
@@ -36,7 +35,6 @@ import (
 
 	"github.com/conforma/cli/internal/applicationsnapshot"
 	"github.com/conforma/cli/internal/evaluator"
-	"github.com/conforma/cli/internal/format"
 	"github.com/conforma/cli/internal/image"
 	"github.com/conforma/cli/internal/output"
 	"github.com/conforma/cli/internal/policy"
@@ -321,12 +319,6 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 				defer task.End()
 			}
 
-			type result struct {
-				err         error
-				component   applicationsnapshot.Component
-				policyInput []byte
-			}
-
 			appComponents := data.spec.Components
 			evaluators := []evaluator.Evaluator{}
 
@@ -364,7 +356,7 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 
 			// worker is responsible for processing one component at a time from the jobs channel,
 			// and for emitting a corresponding result for the component on the results channel.
-			worker := func(id int, jobs <-chan app.SnapshotComponent, results chan<- result) {
+			worker := func(id int, jobs <-chan app.SnapshotComponent, results chan<- validate_utils.Result) {
 				log.Debugf("Starting worker %d", id)
 				for comp := range jobs {
 					ctx := cmd.Context()
@@ -391,46 +383,11 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 						// Use original validation when VSA checking is disabled
 						out, err = validate(ctx, comp, data.spec, data.policy, evaluators, data.info)
 					}
-					res := result{
-						err: err,
-						component: applicationsnapshot.Component{
-							SnapshotComponent: comp,
-							Success:           err == nil,
-						},
+					res := validate_utils.PopulateResultFromOutput(out, err, comp, showSuccesses, data.output)
+					if err == nil && out == nil {
+						// Validation was skipped due to valid VSA - no violations, no processing needed
+						log.Debugf("Validation skipped for %s due to valid VSA", comp.ContainerImage)
 					}
-
-					// Skip on err to not panic. Error is return on routine completion.
-					if err == nil {
-						if out != nil {
-							// Normal validation completed
-							res.component.Violations = out.Violations()
-							res.component.Warnings = out.Warnings()
-
-							successes := out.Successes()
-							res.component.SuccessCount = len(successes)
-							if showSuccesses {
-								res.component.Successes = successes
-							}
-
-							res.component.Signatures = out.Signatures
-							// Create a new result object for attestations. The point is to only keep the data that's needed.
-							// For example, the Statement is only needed when the full attestation is printed.
-							for _, att := range out.Attestations {
-								attResult := applicationsnapshot.NewAttestationResult(att)
-								if containsOutput(data.output, "attestation") {
-									attResult.Statement = att.Statement()
-								}
-								res.component.Attestations = append(res.component.Attestations, attResult)
-							}
-							res.component.ContainerImage = out.ImageURL
-							res.policyInput = out.PolicyInput
-						} else {
-							// Validation was skipped due to valid VSA - no violations, no processing needed
-							log.Debugf("Validation skipped for %s due to valid VSA", comp.ContainerImage)
-							res.component.ContainerImage = comp.ContainerImage
-						}
-					}
-					res.component.Success = err == nil && len(res.component.Violations) == 0
 
 					if task != nil {
 						task.End()
@@ -446,7 +403,7 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 			numWorkers := data.workers
 
 			jobs := make(chan app.SnapshotComponent, numComponents)
-			results := make(chan result, numComponents)
+			results := make(chan validate_utils.Result, numComponents)
 			// Initialize each worker. They will wait patiently until a job is sent to the jobs
 			// channel, or the jobs channel is closed.
 			for i := 0; i <= numWorkers; i++ {
@@ -459,40 +416,43 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 			}
 			close(jobs)
 
-			var components []applicationsnapshot.Component
-			var manyPolicyInput [][]byte
-			var allErrors error = nil
+			// Collect all results from the channel
+			var allResults []validate_utils.Result
 			for i := 0; i < numComponents; i++ {
-				r := <-results
-				if r.err != nil {
-					e := fmt.Errorf("error validating image %s of component %s: %w", r.component.ContainerImage, r.component.Name, r.err)
-					allErrors = errors.Join(allErrors, e)
-				} else {
-					components = append(components, r.component)
-					manyPolicyInput = append(manyPolicyInput, r.policyInput)
-				}
+				allResults = append(allResults, <-results)
 			}
 			close(results)
-			if allErrors != nil {
-				return allErrors
-			}
 
-			// Ensure some consistency in output.
-			sort.Slice(components, func(i, j int) bool {
-				return components[i].ContainerImage > components[j].ContainerImage
-			})
+			components, manyPolicyInput, err := validate_utils.CollectComponentResults(
+				allResults,
+				func(r validate_utils.Result) error {
+					return fmt.Errorf("error validating image %s of component %s: %w", r.Component.ContainerImage, r.Component.Name, r.Err)
+				},
+			)
+			if err != nil {
+				return err
+			}
 
 			if len(data.outputFile) > 0 {
 				data.output = append(data.output, fmt.Sprintf("%s=%s", applicationsnapshot.JSON, data.outputFile))
 			}
 
-			report, err := applicationsnapshot.NewReport(data.snapshot, components, data.policy, manyPolicyInput, showSuccesses, showWarnings, data.expansion)
-			if err != nil {
-				return err
+			reportData := validate_utils.ReportData{
+				Snapshot:      data.snapshot,
+				Components:    components,
+				Policy:        data.policy,
+				PolicyInputs:  manyPolicyInput,
+				Expansion:     data.expansion,
+				ShowSuccesses: showSuccesses,
+				ShowWarnings:  showWarnings,
 			}
-			p := format.NewTargetParser(applicationsnapshot.JSON, format.Options{ShowSuccesses: showSuccesses, ShowWarnings: showWarnings}, cmd.OutOrStdout(), utils.FS(cmd.Context()))
-			utils.SetColorEnabled(data.noColor, data.forceColor)
-			if err := report.WriteAll(data.output, p); err != nil {
+			outputOpts := validate_utils.ReportOutputOptions{
+				Output:     data.output,
+				NoColor:    data.noColor,
+				ForceColor: data.forceColor,
+			}
+			report, err := validate_utils.WriteReport(reportData, outputOpts, cmd)
+			if err != nil {
 				return err
 			}
 
@@ -684,12 +644,3 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 }
 
 // find if the slice contains "value" output
-func containsOutput(data []string, value string) bool {
-	for _, item := range data {
-		newItem := strings.Split(item, "=")
-		if newItem[0] == value {
-			return true
-		}
-	}
-	return false
-}

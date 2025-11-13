@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"path"
@@ -196,19 +197,18 @@ type ConfigProvider interface {
 
 // ConftestEvaluator represents a structure which can be used to evaluate targets
 type conftestEvaluator struct {
-	policySources        []source.PolicySource
-	outputFormat         string
-	workDir              string
-	dataDir              string
-	policyDir            string
-	policy               ConfigProvider
-	include              *Criteria
-	exclude              *Criteria
-	fs                   afero.Fs
-	namespace            []string
-	source               ecc.Source
-	postEvaluationFilter PostEvaluationFilter
-	policyResolver       PolicyResolver // Unified policy resolver for both pre and post-evaluation filtering
+	policySources  []source.PolicySource
+	outputFormat   string
+	workDir        string
+	dataDir        string
+	policyDir      string
+	policy         ConfigProvider
+	include        *Criteria
+	exclude        *Criteria
+	fs             afero.Fs
+	namespace      []string
+	source         ecc.Source
+	policyResolver PolicyResolver // Unified policy resolver for both pre and post-evaluation filtering
 }
 
 type conftestRunner struct {
@@ -297,21 +297,6 @@ func (r conftestRunner) Run(ctx context.Context, fileList []string) (result []Ou
 // Evaluator interface
 func NewConftestEvaluator(ctx context.Context, policySources []source.PolicySource, p ConfigProvider, source ecc.Source) (Evaluator, error) {
 	return NewConftestEvaluatorWithNamespace(ctx, policySources, p, source, []string{})
-}
-
-// NewConftestEvaluatorWithPostEvaluationFilter returns initialized conftestEvaluator with a custom post-evaluation filter
-func NewConftestEvaluatorWithPostEvaluationFilter(ctx context.Context, policySources []source.PolicySource, p ConfigProvider, source ecc.Source, postEvaluationFilter PostEvaluationFilter) (Evaluator, error) {
-	evaluator, err := NewConftestEvaluatorWithNamespace(ctx, policySources, p, source, []string{})
-	if err != nil {
-		return nil, err
-	}
-
-	// Set the post-evaluation filter
-	if conftestEval, ok := evaluator.(*conftestEvaluator); ok {
-		conftestEval.postEvaluationFilter = postEvaluationFilter
-	}
-
-	return evaluator, nil
 }
 
 // NewConftestEvaluatorWithFilterType returns initialized conftestEvaluator with a specific filter type
@@ -441,6 +426,8 @@ func (c conftestEvaluator) Evaluate(ctx context.Context, target EvaluationTarget
 	rules := policyRules{}
 	// Track non-annotated rules separately for filtering purposes only
 	nonAnnotatedRules := nonAnnotatedRules{}
+	// Track data source directories for prepareDataDirs
+	dataSourceDirs := []string{}
 	// Download all sources
 	for _, s := range c.policySources {
 		dir, err := s.GetPolicy(ctx, c.workDir, false)
@@ -448,6 +435,11 @@ func (c conftestEvaluator) Evaluate(ctx context.Context, target EvaluationTarget
 			log.Debugf("Unable to download source from %s!", s.PolicyUrl())
 			// TODO do we want to download other policies instead of erroring out?
 			return nil, err
+		}
+		// Track data source directories - these are the actual directories returned by GetPolicy
+		// which may be symlinks, so we need to use them directly rather than walking
+		if s.Subdir() == "data" {
+			dataSourceDirs = append(dataSourceDirs, dir)
 		}
 		annotations := []*ast.AnnotationsRef{}
 		fs := utils.FS(ctx)
@@ -584,12 +576,10 @@ func (c conftestEvaluator) Evaluate(ctx context.Context, target EvaluationTarget
 		log.Debugf("Namespaces to use: %v, allNamespaces: %v", namespacesToUse, allNamespaces)
 
 		// Prepare the list of data dirs
-		dataDirs, err := c.prepareDataDirs(ctx)
+		dataDirs, err := c.prepareDataDirs(ctx, dataSourceDirs)
 		if err != nil {
 			return nil, err
 		}
-
-		log.Debugf("Data dirs: %v", dataDirs)
 
 		r = &conftestRunner{
 			runner.TestRunner{
@@ -700,15 +690,54 @@ func (c conftestEvaluator) Evaluate(ctx context.Context, target EvaluationTarget
 	return results, nil
 }
 
-// prepareDataDirs inspects the top level data dir and returns a list of the directories
-// that appear to have data files in them. That list will be passed to the conftest runner.
-func (c conftestEvaluator) prepareDataDirs(ctx context.Context) ([]string, error) {
+// prepareDataDirs inspects the data source directories and base data dir to return a list of
+// directories that contain data files. That list will be passed to the conftest runner.
+// dataSourceDirs contains the directories returned by GetPolicy for data sources.
+// These directories may be symlinks (from cached downloads), but we walk them directly
+// which ensures we find the files regardless of whether they're symlinks or not.
+func (c conftestEvaluator) prepareDataDirs(ctx context.Context, dataSourceDirs []string) ([]string, error) {
 	// The reason we do this is to avoid having the names of the subdirs under c.dataDir
 	// converted to keys in the data structure. We want the top level keys in the data files
 	// to be at the top level of the data structure visible to the rego rules.
 
 	dirsWithDataFiles := make(map[string]bool)
-	err := afero.Walk(c.fs, c.dataDir, func(path string, info os.FileInfo, err error) error {
+
+	// Walk each data source directory returned by GetPolicy
+	// These are the actual directories (possibly symlinks) where data was downloaded
+	// Walking them directly ensures we find files even if they're symlinks
+	for _, dataSourceDir := range dataSourceDirs {
+		// IMPORTANT: Use fs.WalkDir instead of afero.Walk because afero.Walk does not follow symlinks.
+		// When cached downloads create symlinks (as in getPolicyThroughCache), afero.Walk won't traverse
+		// into the symlinked directories, causing data files to be missed.
+		// See afero issue https://github.com/spf13/afero/issues/284 and internal/opa/inspect.go for reference.
+		err := fs.WalkDir(opaWrapperFs{afs: c.fs}, dataSourceDir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+
+			// Only process files, not directories
+			if !d.IsDir() {
+				ext := filepath.Ext(d.Name())
+				// Check if this is a data file (.json, .yaml, .yml)
+				// Todo: Should probably recognize other supported types of data
+				if ext == ".json" || ext == ".yaml" || ext == ".yml" {
+					// Mark the directory containing this file as having data
+					dir := filepath.Dir(path)
+					dirsWithDataFiles[dir] = true
+				}
+			}
+
+			return nil
+		})
+		if err != nil {
+			// Continue with other directories even if one fails
+			continue
+		}
+	}
+
+	// Also walk the base data directory to find config.json and any other files
+	// This ensures we don't miss files that weren't from GetPolicy sources
+	err := fs.WalkDir(opaWrapperFs{afs: c.fs}, c.dataDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -719,10 +748,9 @@ func (c conftestEvaluator) prepareDataDirs(ctx context.Context) ([]string, error
 		}
 
 		// Only process files, not directories
-		if !info.IsDir() {
-			ext := filepath.Ext(info.Name())
+		if !d.IsDir() {
+			ext := filepath.Ext(d.Name())
 			// Check if this is a data file (.json, .yaml, .yml)
-			// Todo: Should probably recognize other supported types of data
 			if ext == ".json" || ext == ".yaml" || ext == ".yml" {
 				// Mark the directory containing this file as having data
 				dir := filepath.Dir(path)
@@ -1227,4 +1255,16 @@ func extractCodeFromRuleBody(ruleRef *ast.Rule) string {
 	}
 
 	return ""
+}
+
+// opaWrapperFs wraps afero.Fs to implement fs.FS interface for use with fs.WalkDir.
+// This ensures symlinks are followed when walking directories, which is critical
+// when cached downloads create symlinks via getPolicyThroughCache.
+// See internal/opa/inspect.go for the original implementation.
+type opaWrapperFs struct {
+	afs afero.Fs
+}
+
+func (w opaWrapperFs) Open(name string) (fs.File, error) {
+	return w.afs.Open(name)
 }

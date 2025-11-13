@@ -69,6 +69,7 @@ func ValidateVSAAndComparePolicy(ctx context.Context, identifier string, data *V
 			Message:           "No VSA found for the specified identifier",
 			SignatureVerified: result.SignatureVerified,
 			PredicateOutcome:  "",
+			ReasonCode:        "no_vsa",
 		}, nil
 	}
 
@@ -83,6 +84,7 @@ func ValidateVSAAndComparePolicy(ctx context.Context, identifier string, data *V
 			Message:           fmt.Sprintf("VSA expired %d day(s) ago", days),
 			SignatureVerified: result.SignatureVerified,
 			PredicateOutcome:  predicateStatus,
+			ReasonCode:        "expired",
 		}, nil
 	}
 
@@ -100,6 +102,7 @@ func ValidateVSAAndComparePolicy(ctx context.Context, identifier string, data *V
 			Message:           fmt.Sprintf("VSA predicate status is '%s' (not 'passed')", predicateStatus),
 			SignatureVerified: result.SignatureVerified,
 			PredicateOutcome:  predicateStatus,
+			ReasonCode:        "predicate_failed",
 		}, nil
 	}
 
@@ -148,11 +151,30 @@ func ValidateVSAAndComparePolicy(ctx context.Context, identifier string, data *V
 		}
 
 		if !equivalent {
+			// Count policy differences for structured field
+			added, removed, changed := 0, 0, 0
+			for _, diff := range differences {
+				switch diff.Kind {
+				case equivalence.DiffAdded:
+					added++
+				case equivalence.DiffRemoved:
+					removed++
+				case equivalence.DiffChanged:
+					changed++
+				}
+			}
+
 			return &ValidationResult{
 				Passed:            false,
 				Message:           FormatPolicyDifferences(differences),
 				SignatureVerified: result.SignatureVerified,
 				PredicateOutcome:  predicateStatus,
+				ReasonCode:        "policy_mismatch",
+				PolicyDiff: &PolicyDiff{
+					Added:   added,
+					Removed: removed,
+					Changed: changed,
+				},
 			}, nil
 		}
 	}

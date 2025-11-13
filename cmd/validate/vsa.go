@@ -25,6 +25,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	hd "github.com/MakeNowJust/heredoc"
@@ -33,6 +34,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/yaml"
 
 	"github.com/conforma/cli/internal/applicationsnapshot"
 	"github.com/conforma/cli/internal/image"
@@ -50,43 +52,28 @@ const (
 	DefaultEffectiveTime   = "now"
 	DefaultStrictMode      = true
 	DefaultFallbackEnabled = true
+	DefaultTimeoutDuration = 30 * time.Minute
 )
 
-// Helper functions for color-aware output
-func printVSAStatus(w io.Writer, message string, status string) {
-	if utils.ColorEnabled {
-		switch status {
-		case "success":
-			fmt.Fprintf(w, "✅ %s\n", message)
-		case "failure":
-			fmt.Fprintf(w, "❌ %s\n", message)
-		case "warning":
-			fmt.Fprintf(w, "⚠️  %s\n", message)
-		case "info":
-			fmt.Fprintf(w, "ℹ️  %s\n", message)
-		default:
-			fmt.Fprintf(w, "%s\n", message)
-		}
-	} else {
-		fmt.Fprintf(w, "[%s] %s\n", strings.ToUpper(status), message)
-	}
+// Constants for validation status
+const (
+	unknownReason     = "unknown"
+	noPolicyDiff      = "none"
+	retrievalFailedRC = "retrieval_failed"
+)
 
+// Reason code mappings
+var reasonCodeToDisplay = map[string]string{
+	"policy_mismatch":  "policy mismatch",
+	"predicate_failed": "predicate failed",
+	"no_vsa":           "no vsa",
+	"expired":          "expired",
+	"retrieval_failed": "retrieval failed",
 }
 
+// Helper function for color-aware output
 func printVSAInfo(w io.Writer, message string) {
-	if utils.ColorEnabled {
-		fmt.Fprintf(w, "ℹ️  %s\n", message)
-	} else {
-		fmt.Fprintf(w, "[INFO] %s\n", message)
-	}
-}
-
-func printVSAWarning(w io.Writer, message string) {
-	if utils.ColorEnabled {
-		fmt.Fprintf(w, "⚠️  %s\n", message)
-	} else {
-		fmt.Fprintf(w, "[WARNING] %s\n", message)
-	}
+	fmt.Fprintf(w, "[INFO] %s\n", message)
 }
 
 // validateVSAData holds the command data
@@ -117,9 +104,8 @@ type validateVSAData struct {
 	fallbackPublicKey         string // Public key for fallback image validation
 
 	// Output options
-	output     []string // Output formats
-	outputFile string   // Output file (deprecated)
-	strict     bool     // Strict mode (fail on any error)
+	output []string // Output formats
+	strict bool     // Strict mode (fail on any error)
 
 	// Parallel processing options
 	workers int // Number of worker threads for parallel processing
@@ -135,6 +121,9 @@ type validateVSAData struct {
 
 	// Precomputed fallback validation context (created once, reused for all fallbacks)
 	fallbackContext *vsa.FallbackValidationContext
+
+	// Snapshot spec for fallback validation
+	snapshot *app.SnapshotSpec
 }
 
 func NewValidateVSACmd() *cobra.Command {
@@ -295,13 +284,32 @@ func runValidateVSA(cmd *cobra.Command, data *validateVSAData, args []string, fs
 	data.retriever = retriever
 
 	// Process validation
-	// Images is a snapshot
-	if data.images != "" {
-		return validateSnapshotVSAs(ctx, data, fs)
-	} else {
-		// VSA identifier is a single VSA, usually from a file system
-		return validateSingleVSA(ctx, data, args, fs)
+	// Normalize input to SnapshotSpec using DetermineInputSpec (same as validate image)
+	// This unifies --images and single identifier handling
+	identifier := extractVSAIdentifier(data, args)
+
+	// Use DetermineInputSpec to normalize input (supports both --images and single identifier)
+	snapshot, _, err := applicationsnapshot.DetermineInputSpec(ctx, applicationsnapshot.Input{
+		Image:  identifier,  // Single VSA identifier
+		Images: data.images, // Snapshot file/JSON string
+	})
+	if err != nil {
+		return fmt.Errorf("failed to parse input: %w", err)
 	}
+
+	if len(snapshot.Components) == 0 {
+		return fmt.Errorf("no components found in input")
+	}
+
+	// Print appropriate message based on input type
+	if data.images != "" {
+		printVSAInfo(os.Stdout, fmt.Sprintf("Validating VSAs from snapshot: %s", data.images))
+	} else {
+		printVSAInfo(os.Stdout, fmt.Sprintf("Validating VSA: %s", identifier))
+	}
+	printVSAInfo(os.Stdout, fmt.Sprintf("Policy: %s", data.policyConfig))
+
+	return validateSnapshotVSAsFromSpec(ctx, snapshot, data, cmd)
 }
 
 // validateVSAInput validates the command input using Cobra's validation patterns
@@ -349,30 +357,6 @@ func validateVSAInput(data *validateVSAData, args []string) error {
 	return nil
 }
 
-// outputVSAWithUnifiedResults outputs the combined VSA and fallback results using unified result structure
-func outputVSAWithUnifiedResults(vsaResult *vsa.ValidationResult, fallbackOutput *output.Output, data *validateVSAData, fs afero.Fs) error {
-	// Create unified result
-	unifiedResult := vsa.BuildUnifiedValidationResult(vsaResult, fallbackOutput, true, data.vsaIdentifier)
-
-	// Default to console output if no output formats specified
-	if len(data.output) == 0 {
-		data.output = append(data.output, "text")
-	}
-
-	// Use the reusable output function with adapter
-	adapter := &UnifiedResultAdapter{result: unifiedResult}
-	if err := writeOutputToFormats(adapter, data, fs); err != nil {
-		return err
-	}
-
-	// Handle strict mode
-	if data.strict && !unifiedResult.OverallSuccess {
-		return fmt.Errorf("validation failed")
-	}
-
-	return nil
-}
-
 // parseVSAExpiration parses the VSA expiration string into a duration
 func parseVSAExpiration(data *validateVSAData) error {
 	expiration, err := vsa.ParseVSAExpirationDuration(data.vsaExpirationStr)
@@ -411,119 +395,12 @@ func loadPolicyConfig(ctx context.Context, data *validateVSAData) error {
 	return nil
 }
 
-// validateSingleVSA validates a single VSA with optional fallback
-func validateSingleVSA(ctx context.Context, data *validateVSAData, args []string, fs afero.Fs) error {
-	identifier := extractVSAIdentifier(data, args)
-	printVSAInfo(os.Stdout, fmt.Sprintf("Validating VSA: %s", identifier))
-	printVSAInfo(os.Stdout, fmt.Sprintf("Policy: %s", data.policyConfig))
-
-	// Perform VSA validation
-	result, err := performVSAValidationForSingle(ctx, identifier, data)
-
-	// Handle fallback logic if enabled
-	if data.fallbackToImageValidation && vsa.ShouldTriggerFallback(err, result) {
-		return handleFallbackValidation(ctx, identifier, result, data, fs)
-	}
-
-	// Handle VSA validation results (when no fallback or fallback not triggered)
-	return handleVSAResult(result, err, data)
-}
-
 // extractVSAIdentifier extracts the VSA identifier from args or data
 func extractVSAIdentifier(data *validateVSAData, args []string) string {
 	if len(args) > 0 {
 		return args[0]
 	}
 	return data.vsaIdentifier
-}
-
-// performVSAValidationForSingle performs VSA validation for a single identifier
-func performVSAValidationForSingle(ctx context.Context, identifier string, data *validateVSAData) (*vsa.ValidationResult, error) {
-	validationData := &vsa.VSAValidationConfig{
-		Retriever:                   data.retriever,
-		VSAExpiration:               data.vsaExpiration,
-		IgnoreSignatureVerification: data.ignoreSignatureVerification,
-		PublicKeyPath:               data.publicKeyPath,
-		PolicySpec:                  data.policySpec,
-		EffectiveTime:               data.effectiveTime,
-	}
-
-	return vsa.ValidateVSAAndComparePolicy(ctx, identifier, validationData)
-}
-
-// handleFallbackValidation handles the fallback validation logic
-func handleFallbackValidation(ctx context.Context, imageRef string, result *vsa.ValidationResult, data *validateVSAData, fs afero.Fs) error {
-	printVSAInfo(os.Stdout, "Falling back to image validation...")
-	printVSAInfo(os.Stdout, fmt.Sprintf("Image reference: %s", imageRef))
-
-	// Create worker context for fallback validation
-	workerFallbackContext, workerErr := vsa.CreateWorkerFallbackContext(ctx, data.fallbackContext.FallbackPolicy)
-	if workerErr != nil {
-		return fmt.Errorf("failed to create fallback context: %w", workerErr)
-	}
-
-	// Use the common fallback validation logic
-	fallbackResult := vsa.PerformFallbackValidation(result, "")
-	if fallbackResult.Error != nil {
-		return fallbackResult.Error
-	}
-
-	// Perform image validation
-	fallbackOutput, fallbackErr := validateImageFallbackWithWorkerContext(ctx, data, imageRef, "single-vsa-component", workerFallbackContext)
-	if fallbackErr != nil {
-		return fmt.Errorf("fallback image validation failed: %w", fallbackErr)
-	}
-
-	// Set the fallback output
-	fallbackResult.FallbackOutput = fallbackOutput
-
-	// Output fallback results and return
-	return outputVSAWithUnifiedResults(fallbackResult.VSAResult, fallbackResult.FallbackOutput, data, fs)
-}
-
-// handleVSAResult handles the VSA validation result display and error handling
-func handleVSAResult(result *vsa.ValidationResult, err error, data *validateVSAData) error {
-	if err != nil {
-		return fmt.Errorf("VSA validation failed: %w", err)
-	}
-
-	if result.Passed {
-		printVSAStatus(os.Stdout, "VSA validation passed", "success")
-		displayVSASuccessDetails(result, data)
-	} else {
-		printVSAStatus(os.Stdout, "VSA validation failed", "failure")
-		displayVSAFailureDetails(result, data)
-		if data.strict {
-			return fmt.Errorf("VSA validation failed")
-		}
-	}
-
-	return nil
-}
-
-// displayVSASuccessDetails displays success details for VSA validation
-func displayVSASuccessDetails(result *vsa.ValidationResult, data *validateVSAData) {
-	if result.Message != "" {
-		printVSAInfo(os.Stdout, fmt.Sprintf("   %s", result.Message))
-	}
-	if result.SignatureVerified {
-		printVSAInfo(os.Stdout, "   🔐 Signature verified")
-	} else if !data.ignoreSignatureVerification {
-		printVSAWarning(os.Stdout, "Signature verification requested but not performed")
-	}
-	if result.PredicateOutcome != "" {
-		printVSAInfo(os.Stdout, fmt.Sprintf("   Predicate Status: %s", result.PredicateOutcome))
-	}
-}
-
-// displayVSAFailureDetails displays failure details for VSA validation
-func displayVSAFailureDetails(result *vsa.ValidationResult, data *validateVSAData) {
-	if result.Message != "" {
-		printVSAInfo(os.Stdout, fmt.Sprintf("   %s", result.Message))
-	}
-	if result.PredicateOutcome != "" {
-		printVSAInfo(os.Stdout, fmt.Sprintf("   Predicate Status: %s", result.PredicateOutcome))
-	}
 }
 
 // worker processes components from the jobs channel and sends results to the results channel
@@ -562,16 +439,11 @@ func worker(jobs <-chan app.SnapshotComponent, results chan<- vsa.ComponentResul
 	}
 }
 
-// validateSnapshotVSAs processes multiple components from a snapshot file in parallel
-func validateSnapshotVSAs(ctx context.Context, data *validateVSAData, fs afero.Fs) error {
-	printVSAInfo(os.Stdout, fmt.Sprintf("Validating VSAs from snapshot: %s", data.images))
-	printVSAInfo(os.Stdout, fmt.Sprintf("Policy: %s", data.policyConfig))
-
-	// Parse snapshot
-	snapshot, err := parseSnapshot(ctx, data.images)
-	if err != nil {
-		return err
-	}
+// validateSnapshotVSAsFromSpec processes components from a SnapshotSpec in parallel
+// This is the unified processing path used by both --images and single identifier cases
+func validateSnapshotVSAsFromSpec(ctx context.Context, snapshot *app.SnapshotSpec, data *validateVSAData, cmd *cobra.Command) error {
+	// Store snapshot spec for use in fallback validation
+	data.snapshot = snapshot
 
 	// Process components in parallel
 	allResults, err := processComponentsInParallel(ctx, snapshot.Components, data)
@@ -580,31 +452,12 @@ func validateSnapshotVSAs(ctx context.Context, data *validateVSAData, fs afero.F
 	}
 
 	// Display results
-	displayComponentResults(allResults, data)
-
-	// Handle output formatting
-	if err := handleSnapshotOutput(allResults, data, fs); err != nil {
+	if err := displayComponentResults(allResults, data, cmd); err != nil {
 		return err
 	}
 
 	// Check strict mode
 	return checkStrictMode(allResults, data)
-}
-
-// parseSnapshot parses the application snapshot from the input file
-func parseSnapshot(ctx context.Context, imagesPath string) (*app.SnapshotSpec, error) {
-	snapshot, _, err := applicationsnapshot.DetermineInputSpec(ctx, applicationsnapshot.Input{
-		Images: imagesPath,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse snapshot: %w", err)
-	}
-
-	if len(snapshot.Components) == 0 {
-		return nil, fmt.Errorf("snapshot contains no components")
-	}
-
-	return snapshot, nil
 }
 
 // processComponentsInParallel processes all components using parallel workers
@@ -616,18 +469,30 @@ func processComponentsInParallel(ctx context.Context, components []app.SnapshotC
 	printVSAInfo(os.Stdout, fmt.Sprintf("=== Processing Components in Parallel (%d workers) ===", numWorkers))
 
 	// Add timeout for parallel processing to prevent hanging
-	timeoutDuration := 30 * time.Minute
-	ctx, cancel := context.WithTimeout(ctx, timeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, DefaultTimeoutDuration)
 	defer cancel()
 
 	// Set up parallel processing infrastructure
 	jobs := make(chan app.SnapshotComponent, numComponents)
 	results := make(chan vsa.ComponentResult, numComponents)
 
+	// Use WaitGroup to track worker completion
+	var wg sync.WaitGroup
+
 	// Start worker goroutines
 	for i := 0; i < numWorkers; i++ {
-		go worker(jobs, results, ctx, data)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			worker(jobs, results, ctx, data)
+		}()
 	}
+
+	// Close results channel after all workers finish
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
 
 	// Send all components to workers
 	for _, component := range components {
@@ -636,7 +501,9 @@ func processComponentsInParallel(ctx context.Context, components []app.SnapshotC
 			// Component sent successfully
 		case <-ctx.Done():
 			close(jobs)
-			return nil, fmt.Errorf("parallel processing timeout after %v: %w", timeoutDuration, ctx.Err())
+			// Don't wait for workers - context cancellation will signal them to stop
+			// and the results channel will be closed by the goroutine after workers finish
+			return nil, fmt.Errorf("parallel processing timeout after %v: %w", DefaultTimeoutDuration, ctx.Err())
 		}
 	}
 	close(jobs)
@@ -645,14 +512,20 @@ func processComponentsInParallel(ctx context.Context, components []app.SnapshotC
 	var allResults []vsa.ComponentResult
 	for i := 0; i < numComponents; i++ {
 		select {
-		case result := <-results:
+		case result, ok := <-results:
+			if !ok {
+				// Channel closed, but we haven't received all results
+				// This shouldn't happen normally, but handle gracefully
+				return allResults, fmt.Errorf("results channel closed prematurely (received %d/%d results)", len(allResults), numComponents)
+			}
 			allResults = append(allResults, result)
 		case <-ctx.Done():
-			close(results)
-			return nil, fmt.Errorf("parallel processing timeout after %v: %w", timeoutDuration, ctx.Err())
+			// Timeout during collection - return with partial results
+			// Don't wait for workers as they may be blocked trying to send to a full buffer
+			// The context cancellation will signal workers to stop processing
+			return nil, fmt.Errorf("parallel processing timeout after %v: %w", DefaultTimeoutDuration, ctx.Err())
 		}
 	}
-	close(results)
 
 	// Sort results by component name for consistent display
 	sort.Slice(allResults, func(i, j int) bool {
@@ -662,91 +535,780 @@ func processComponentsInParallel(ctx context.Context, components []app.SnapshotC
 	return allResults, nil
 }
 
-// displayComponentResults displays the validation results for each component
-func displayComponentResults(allResults []vsa.ComponentResult, data *validateVSAData) {
-	var successCount, failureCount, fallbackCount int
+// Data structures for aggregated section data
+type ImageStatus struct {
+	Index          int
+	Digest         string // Shortened digest
+	VSAStatus      string // "PASSED" or "FAILED(reason=...)"
+	FallbackStatus string // "PASSED", "FAILED", or ""
+}
 
-	printVSAInfo(os.Stdout, "\n=== Component Validation Results ===")
-	for _, result := range allResults {
-		printVSAInfo(os.Stdout, fmt.Sprintf("\nComponent: %s", result.ComponentName))
-		printVSAInfo(os.Stdout, fmt.Sprintf("  Image: %s", result.ImageRef))
+type PolicyDiffCounts struct {
+	Added   int
+	Removed int
+	Changed int
+}
 
-		resultType := classifyResult(result)
-		switch resultType {
-		case ResultTypeError:
-			failureCount++
-			printVSAStatus(os.Stdout, fmt.Sprintf("Failed: %v", result.Error), "failure")
-		case ResultTypeFallback:
-			fallbackCount++
-			if result.UnifiedResult.OverallSuccess {
-				successCount++
-			} else {
-				failureCount++
-			}
-			displayFallbackResult(result)
-		case ResultTypeVSASuccess:
-			successCount++
-			displayVSASuccessResult(result, data)
-		case ResultTypeVSAFailure:
-			failureCount++
-			displayVSAFailureResult(result, data)
-		case ResultTypeUnexpected:
-			failureCount++
-			printVSAStatus(os.Stdout, fmt.Sprintf("  Unexpected state: no validation result for component %s", result.ComponentName), "failure")
+// AllSectionsData - Aggregated data for all sections in one structure
+// Collected in a single pass for efficiency
+type AllSectionsData struct {
+	// Result section data
+	OverallPassed bool
+	FallbackUsed  bool
+	FallbackCount int
+	TotalImages   int
+	ImageStatuses []ImageStatus
+
+	// VSA Summary data
+	SignatureStatus  string
+	PredicatePassed  int
+	PredicateFailed  int
+	PolicyMatches    int
+	PolicyMismatches int
+	PolicyDiffCounts map[string]PolicyDiffCounts // keyed by short digest
+	FallbackReasons  map[string]bool             // deduplicated reasons
+
+	// Policy Diff data
+	HasPolicyDiff  bool
+	AffectedImages []string
+
+	// Final Summary data
+	VSAPassed       int
+	VSAFailed       int
+	FallbackPassed  int
+	FallbackFailed  int
+	FallbackNotUsed int
+
+	// Fallback results (already processed, no re-processing needed)
+	FallbackResults []validate_utils.Result
+}
+
+// ComponentResultsDisplay holds all formatted display data for component results
+type ComponentResultsDisplay struct {
+	Header     HeaderDisplay
+	Result     ResultDisplay
+	VSASummary VSASummaryDisplay
+	PolicyDiff *PolicyDiffDisplay // nil if no policy diff
+	// Other sections will be added one at a time
+}
+
+// VSASectionsReport holds the structured data for VSA sections that can be serialized
+type VSASectionsReport struct {
+	Header     HeaderReport      `json:"header" yaml:"header"`
+	Result     ResultReport      `json:"result" yaml:"result"`
+	VSASummary VSASummaryReport  `json:"vsa_summary" yaml:"vsa_summary"`
+	PolicyDiff *PolicyDiffReport `json:"policy_diff,omitempty" yaml:"policy_diff,omitempty"`
+}
+
+// HeaderReport is the serializable version of HeaderDisplay
+type HeaderReport struct {
+	Title     string `json:"title" yaml:"title"`
+	Timestamp string `json:"timestamp" yaml:"timestamp"`
+}
+
+// ResultReport is the serializable version of ResultDisplay
+type ResultReport struct {
+	Overall    string   `json:"overall" yaml:"overall"`
+	Fallback   string   `json:"fallback,omitempty" yaml:"fallback,omitempty"`
+	ImageCount int      `json:"image_count" yaml:"image_count"`
+	Images     []string `json:"images" yaml:"images"`
+}
+
+// VSASummaryReport is the serializable version of VSASummaryDisplay
+type VSASummaryReport struct {
+	Signature       string `json:"signature" yaml:"signature"`
+	Predicate       string `json:"predicate" yaml:"predicate"`
+	Policy          string `json:"policy" yaml:"policy"`
+	FallbackReasons string `json:"fallback_reasons,omitempty" yaml:"fallback_reasons,omitempty"`
+}
+
+// PolicyDiffReport is the serializable version of PolicyDiffDisplay
+type PolicyDiffReport struct {
+	AffectedImages string `json:"affected_images" yaml:"affected_images"`
+	Added          string `json:"added" yaml:"added"`
+	Removed        string `json:"removed" yaml:"removed"`
+	Changed        string `json:"changed" yaml:"changed"`
+}
+
+// HeaderDisplay holds the formatted header section data
+type HeaderDisplay struct {
+	Title     string
+	Timestamp string
+}
+
+// ResultDisplay holds the formatted Result section data
+type ResultDisplay struct {
+	Overall    string // "✅ PASSED" or "❌ FAILED"
+	Fallback   string // "used for all images", "used for some images", or ""
+	ImageCount int
+	ImageLines []string // Formatted image status lines
+}
+
+// VSASummaryDisplay holds the formatted VSA Summary section data
+type VSASummaryDisplay struct {
+	Signature       string // Signature status
+	Predicate       string // Predicate status line
+	Policy          string // Policy status line
+	FallbackReasons string // Fallback reason(s) line, or ""
+}
+
+// PolicyDiffDisplay holds the formatted Policy Diff section data
+type PolicyDiffDisplay struct {
+	AffectedImages string // Comma-separated list of affected images
+	Added          string // "none" or "[include] N"
+	Removed        string // "none" or "N"
+	Changed        string // "none" or "N"
+}
+
+// Helper functions
+
+// shortenImageDigest extracts and shortens image digest to 8 characters
+func shortenImageDigest(imageRef string) string {
+	// Extract digest from image reference (format: registry/repo@sha256:digest)
+	parts := strings.Split(imageRef, "@")
+	if len(parts) < 2 {
+		// No digest, return first 8 chars of image ref
+		if len(imageRef) > 8 {
+			return "…" + imageRef[len(imageRef)-8:]
+		}
+		return imageRef
+	}
+
+	digest := parts[1]
+	// Remove sha256: prefix if present
+	digest = strings.TrimPrefix(digest, "sha256:")
+	// Return first 8 characters
+	if len(digest) >= 8 {
+		return digest[:8]
+	}
+	return digest
+}
+
+// extractFallbackReason extracts the reason for fallback from ValidationResult
+// Prefers structured ReasonCode field, falls back to message parsing for backward compatibility
+func extractFallbackReason(result *vsa.ValidationResult) string {
+	if result == nil {
+		return unknownReason
+	}
+
+	// Prefer structured ReasonCode field if available
+	if result.ReasonCode != "" {
+		if display, ok := reasonCodeToDisplay[result.ReasonCode]; ok {
+			return display
+		}
+		// Unknown reason code, fall through to message parsing
+	}
+
+	// Fallback to message parsing for backward compatibility (e.g., old ValidationResult without ReasonCode)
+	return extractReasonFromMessage(result.Message)
+}
+
+// extractReasonFromMessage parses reason from message text (fallback for old ValidationResult)
+func extractReasonFromMessage(message string) string {
+	if strings.Contains(message, "Policy mismatch") {
+		return "policy mismatch"
+	}
+	if strings.Contains(message, "predicate") || strings.Contains(message, "Predicate") {
+		return "predicate failed"
+	}
+	if strings.Contains(message, "No VSA found") || strings.Contains(message, "no VSA") {
+		return "no vsa"
+	}
+	if strings.Contains(message, "expired") {
+		return "expired"
+	}
+	if strings.Contains(message, "failed to check existing VSA") || strings.Contains(message, "retrieval failed") {
+		return "retrieval failed"
+	}
+	return unknownReason
+}
+
+// parsePolicyDiffFromMessage extracts policy diff counts from ValidationResult
+// Prefers structured PolicyDiff field, falls back to message parsing for backward compatibility
+func parsePolicyDiffFromMessage(result *vsa.ValidationResult) (added, removed, changed int, hasDiff bool) {
+	if result == nil {
+		return 0, 0, 0, false
+	}
+
+	// Prefer structured PolicyDiff field if available
+	if result.PolicyDiff != nil {
+		return result.PolicyDiff.Added, result.PolicyDiff.Removed, result.PolicyDiff.Changed, true
+	}
+
+	// Fallback to message parsing for backward compatibility (e.g., old ValidationResult without PolicyDiff)
+	message := result.Message
+	if !strings.Contains(message, "Policy mismatch") {
+		return 0, 0, 0, false
+	}
+
+	// Look for pattern: "X added, Y removed, Z changed"
+	// Example: "❌ Policy mismatch detected — 1 added, 0 removed, 0 changed; 1 differences"
+	// Note: Uses em dash (—) not hyphen (-)
+	parts := strings.Split(message, "—")
+	if len(parts) < 2 {
+		// Try with regular dash as fallback
+		parts = strings.Split(message, "-")
+		if len(parts) < 2 {
+			return 0, 0, 0, true
 		}
 	}
 
-	// Print summary statistics
-	printVSAInfo(os.Stdout, "\n=== Snapshot Validation Summary ===")
-	printVSAInfo(os.Stdout, fmt.Sprintf("Total components: %d", len(allResults)))
-	printVSAInfo(os.Stdout, fmt.Sprintf("Successful: %d", successCount))
-	printVSAInfo(os.Stdout, fmt.Sprintf("Failed: %d", failureCount))
-	if fallbackCount > 0 {
-		printVSAInfo(os.Stdout, fmt.Sprintf("Used fallback: %d", fallbackCount))
+	diffPart := parts[1]
+	// Extract numbers - handle both "1 added, 0 removed, 0 changed" and "1 added, 0 removed, 0 changed;"
+	_, err := fmt.Sscanf(diffPart, "%d added, %d removed, %d changed", &added, &removed, &changed)
+	if err != nil {
+		// If parsing fails, still return hasDiff=true to indicate policy mismatch exists
+		return 0, 0, 0, true
+	}
+	return added, removed, changed, true
+}
+
+// processVSAResult processes a VSA validation result and updates the image status and aggregated data
+func processVSAResult(vsaResult *vsa.ValidationResult, imgStatus *ImageStatus, data *AllSectionsData, shortDigest string) {
+	if vsaResult.Passed {
+		imgStatus.VSAStatus = "PASSED"
+		data.VSAPassed++
+	} else {
+		reason := extractFallbackReason(vsaResult)
+		imgStatus.VSAStatus = fmt.Sprintf("FAILED(reason=%s)", reason)
+		data.VSAFailed++
+		data.FallbackReasons[reason] = true
+	}
+
+	// Aggregate signature status
+	// When SignatureVerified is false, mark as NOT VERIFIED
+	// This covers both cases: signature verification failure and retrieval failure (no VSA to verify)
+	if !vsaResult.SignatureVerified {
+		data.SignatureStatus = "NOT VERIFIED"
+	}
+
+	// Aggregate predicate status
+	if vsaResult.PredicateOutcome == "passed" {
+		data.PredicatePassed++
+	} else if vsaResult.PredicateOutcome != "" {
+		data.PredicateFailed++
+	}
+
+	// Check for policy diff using structured fields (preferred) or message parsing (fallback)
+	added, removed, changed, hasDiff := parsePolicyDiffFromMessage(vsaResult)
+	if hasDiff {
+		data.HasPolicyDiff = true
+		data.AffectedImages = append(data.AffectedImages, shortDigest)
+		data.PolicyDiffCounts[shortDigest] = PolicyDiffCounts{
+			Added: added, Removed: removed, Changed: changed,
+		}
+		data.PolicyMismatches++
+	} else if vsaResult.Passed {
+		data.PolicyMatches++
 	}
 }
 
-// displayFallbackResult displays fallback validation results
-func displayFallbackResult(result vsa.ComponentResult) {
-	printVSAInfo(os.Stdout, "  🔄 Fallback validation used")
-	if err := result.UnifiedResult.PrintConsole(os.Stdout); err != nil {
-		printVSAWarning(os.Stdout, fmt.Sprintf("  Failed to display fallback results: %v", err))
+// aggregateAllSectionsData - Single pass aggregation, collects all data needed
+func aggregateAllSectionsData(allResults []vsa.ComponentResult) AllSectionsData {
+	data := AllSectionsData{
+		TotalImages:      len(allResults),
+		FallbackReasons:  make(map[string]bool),
+		PolicyDiffCounts: make(map[string]PolicyDiffCounts),
+		SignatureStatus:  "VERIFIED", // Default, will be overridden if any not verified
+	}
+
+	// Single iteration - collect everything at once
+	for i, result := range allResults {
+		shortDigest := shortenImageDigest(result.ImageRef)
+
+		// Collect image status
+		imgStatus := ImageStatus{
+			Index:  i + 1,
+			Digest: shortDigest,
+		}
+
+		// Process VSA result (always process if available, even if there's an error)
+		if result.Result != nil {
+			processVSAResult(result.Result, &imgStatus, &data, shortDigest)
+		} else if result.Error != nil {
+			// If there's an error but no Result, create a status from the error
+			reason := extractReasonFromMessage(result.Error.Error())
+			imgStatus.VSAStatus = fmt.Sprintf("FAILED(reason=%s)", reason)
+			data.VSAFailed++
+			data.FallbackReasons[reason] = true
+			// When VSA retrieval fails, signature cannot be verified
+			data.SignatureStatus = "NOT VERIFIED"
+		}
+
+		// Handle fallback
+		if result.FallbackResult != nil {
+			data.FallbackUsed = true
+			data.FallbackCount++
+			data.FallbackResults = append(data.FallbackResults, *result.FallbackResult)
+
+			if result.FallbackResult.Component.Success {
+				imgStatus.FallbackStatus = "PASSED"
+				data.FallbackPassed++
+			} else {
+				imgStatus.FallbackStatus = "FAILED"
+				data.FallbackFailed++
+			}
+		} else {
+			data.FallbackNotUsed++
+		}
+
+		data.ImageStatuses = append(data.ImageStatuses, imgStatus)
+	}
+
+	// Determine overall result
+	// Overall passes if: all VSA passed, OR fallback was used and at least one fallback passed
+	data.OverallPassed = (data.VSAPassed == data.TotalImages) ||
+		(data.FallbackUsed && data.FallbackPassed > 0)
+
+	return data
+}
+
+// buildHeaderDisplay creates a HeaderDisplay from a timestamp
+func buildHeaderDisplay(timestamp time.Time) HeaderDisplay {
+	return HeaderDisplay{
+		Title:     "VALIDATE VSA RESULT",
+		Timestamp: timestamp.Format(time.RFC3339),
 	}
 }
 
-// displayVSASuccessResult displays VSA success results
-func displayVSASuccessResult(result vsa.ComponentResult, data *validateVSAData) {
-	printVSAStatus(os.Stdout, fmt.Sprintf("Passed: %s", result.Result.Message), "success")
-	if result.Result.SignatureVerified {
-		printVSAInfo(os.Stdout, "   🔐 Signature verified")
-	} else if !data.ignoreSignatureVerification {
-		printVSAWarning(os.Stdout, "   Signature verification requested but not performed")
+// String formats the header for display
+func (h HeaderDisplay) String() string {
+	return fmt.Sprintf("=== %s — %s ===\n", h.Title, h.Timestamp)
+}
+
+// buildResultDisplay creates a ResultDisplay from AllSectionsData
+func buildResultDisplay(data AllSectionsData) ResultDisplay {
+	result := ResultDisplay{
+		ImageCount: data.TotalImages,
 	}
-	if result.Result.PredicateOutcome != "" {
-		printVSAInfo(os.Stdout, fmt.Sprintf("   Predicate Status: %s", result.Result.PredicateOutcome))
+
+	// Set overall status
+	if data.OverallPassed {
+		result.Overall = "✅ PASSED"
+	} else {
+		result.Overall = "❌ FAILED"
+	}
+
+	// Set fallback status
+	if data.FallbackUsed {
+		if data.FallbackCount == data.TotalImages {
+			result.Fallback = "used for all images"
+		} else {
+			result.Fallback = "used for some images"
+		}
+	}
+
+	// Build image status lines
+	result.ImageLines = make([]string, 0, len(data.ImageStatuses))
+	for _, img := range data.ImageStatuses {
+		statusLine := fmt.Sprintf("    [%d] …%s  VSA=%s", img.Index, img.Digest, img.VSAStatus)
+		if img.FallbackStatus != "" {
+			statusLine += fmt.Sprintf("  Fallback=%s", img.FallbackStatus)
+		}
+		result.ImageLines = append(result.ImageLines, statusLine)
+	}
+
+	return result
+}
+
+// String formats the Result section for display
+func (r ResultDisplay) String() string {
+	var b strings.Builder
+	b.WriteString("Result\n")
+	b.WriteString(fmt.Sprintf("  Overall: %s\n", r.Overall))
+
+	if r.Fallback != "" {
+		b.WriteString(fmt.Sprintf("  Fallback: %s\n", r.Fallback))
+	}
+
+	b.WriteString(fmt.Sprintf("  Images (%d):\n", r.ImageCount))
+	for _, line := range r.ImageLines {
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+// buildVSASummaryDisplay creates a VSASummaryDisplay from AllSectionsData
+func buildVSASummaryDisplay(data AllSectionsData) VSASummaryDisplay {
+	summary := VSASummaryDisplay{
+		Signature: data.SignatureStatus,
+	}
+
+	// Build predicate status
+	totalPredicates := data.PredicatePassed + data.PredicateFailed
+	if totalPredicates == 0 {
+		summary.Predicate = "(no predicate data)"
+	} else if data.PredicateFailed == 0 {
+		summary.Predicate = fmt.Sprintf("passed (%d/%d)", data.PredicatePassed, totalPredicates)
+	} else if data.PredicatePassed == 0 {
+		summary.Predicate = fmt.Sprintf("failed (%d/%d)", data.PredicateFailed, totalPredicates)
+	} else {
+		summary.Predicate = fmt.Sprintf("mixed (passed: %d, failed: %d)", data.PredicatePassed, data.PredicateFailed)
+	}
+
+	// Build policy status
+	totalPolicyChecks := data.PolicyMatches + data.PolicyMismatches
+	if totalPolicyChecks == 0 {
+		summary.Policy = "(no policy data)"
+	} else if data.PolicyMismatches == 0 {
+		summary.Policy = "matches (no differences)"
+	} else {
+		// Aggregate policy diff counts
+		totals := aggregatePolicyDiffTotals(data.PolicyDiffCounts)
+		summary.Policy = fmt.Sprintf("mismatches on %d/%d images (adds=%d, removes=%d, changes=%d)",
+			data.PolicyMismatches, totalPolicyChecks, totals.Added, totals.Removed, totals.Changed)
+	}
+
+	// Build fallback reasons
+	if len(data.FallbackReasons) > 0 {
+		var reasons []string
+		for reason := range data.FallbackReasons {
+			reasons = append(reasons, reason)
+		}
+		sort.Strings(reasons)
+		summary.FallbackReasons = strings.Join(reasons, ", ")
+	}
+
+	return summary
+}
+
+// String formats the VSA Summary section for display
+func (v VSASummaryDisplay) String() string {
+	var b strings.Builder
+	b.WriteString("VSA Summary\n")
+	b.WriteString(fmt.Sprintf("  Signature: %s\n", v.Signature))
+	b.WriteString(fmt.Sprintf("  Predicate: %s\n", v.Predicate))
+	b.WriteString(fmt.Sprintf("  Policy: %s\n", v.Policy))
+
+	if v.FallbackReasons != "" {
+		b.WriteString(fmt.Sprintf("  Fallback reason(s): %s\n", v.FallbackReasons))
+	}
+
+	return b.String()
+}
+
+// buildPolicyDiffDisplay creates a PolicyDiffDisplay from AllSectionsData
+// Returns nil if there is no policy diff
+func buildPolicyDiffDisplay(data AllSectionsData) *PolicyDiffDisplay {
+	if !data.HasPolicyDiff {
+		return nil
+	}
+
+	diff := &PolicyDiffDisplay{
+		AffectedImages: strings.Join(data.AffectedImages, ", "),
+	}
+
+	// Aggregate policy diff counts across all affected images
+	totals := aggregatePolicyDiffTotals(data.PolicyDiffCounts)
+
+	// Build added line
+	if totals.Added > 0 {
+		diff.Added = fmt.Sprintf("[include] %d", totals.Added)
+	} else {
+		diff.Added = noPolicyDiff
+	}
+
+	// Build removed line
+	if totals.Removed > 0 {
+		diff.Removed = fmt.Sprintf("%d", totals.Removed)
+	} else {
+		diff.Removed = noPolicyDiff
+	}
+
+	// Build changed line
+	if totals.Changed > 0 {
+		diff.Changed = fmt.Sprintf("%d", totals.Changed)
+	} else {
+		diff.Changed = noPolicyDiff
+	}
+
+	return diff
+}
+
+// String formats the Policy Diff section for display
+func (p PolicyDiffDisplay) String() string {
+	var b strings.Builder
+	b.WriteString("Policy Diff (summary)\n")
+	b.WriteString(fmt.Sprintf("  Affected images: [%s]\n", p.AffectedImages))
+	b.WriteString(fmt.Sprintf("  Added:   %s\n", p.Added))
+	b.WriteString(fmt.Sprintf("  Removed: %s\n", p.Removed))
+	b.WriteString(fmt.Sprintf("  Changed: %s\n", p.Changed))
+	return b.String()
+}
+
+// aggregatePolicyDiffTotals aggregates policy diff counts across all images
+func aggregatePolicyDiffTotals(diffCounts map[string]PolicyDiffCounts) PolicyDiffCounts {
+	var totals PolicyDiffCounts
+	for _, counts := range diffCounts {
+		totals.Added += counts.Added
+		totals.Removed += counts.Removed
+		totals.Changed += counts.Changed
+	}
+	return totals
+}
+
+// buildFallbackReportData builds report data for fallback validation results
+func buildFallbackReportData(fallbackResults []validate_utils.Result, vsaData *validateVSAData) (validate_utils.ReportData, error) {
+	components, manyPolicyInput, err := validate_utils.CollectComponentResults(
+		fallbackResults,
+		func(r validate_utils.Result) error {
+			return fmt.Errorf("error validating image %s of component %s: %w",
+				r.Component.ContainerImage, r.Component.Name, r.Err)
+		},
+	)
+	if err != nil {
+		return validate_utils.ReportData{}, fmt.Errorf("failed to collect fallback components: %w", err)
+	}
+
+	return validate_utils.ReportData{
+		Snapshot:      vsaData.images,
+		Components:    components,
+		Policy:        vsaData.fallbackContext.FallbackPolicy,
+		PolicyInputs:  manyPolicyInput,
+		Expansion:     nil,
+		ShowSuccesses: false,
+		ShowWarnings:  true,
+	}, nil
+}
+
+// displayFallbackImageSection - Displays fallback validate image output using WriteReport
+func displayFallbackImageSection(allData AllSectionsData, vsaData *validateVSAData, cmd *cobra.Command) error {
+	// Only print header for text output format (or when no format is specified, which defaults to text)
+	if shouldPrintFallbackHeader(vsaData.output) {
+		fmt.Println("=== FALLBACK: VALIDATE IMAGE ===")
+	}
+
+	reportData, err := buildFallbackReportData(allData.FallbackResults, vsaData)
+	if err != nil {
+		return err
+	}
+
+	// Output options - if no fallback-specific formats, default to text on stdout
+	outputOpts := validate_utils.ReportOutputOptions{
+		Output:     vsaData.output, // Empty = stdout (via cmd.OutOrStdout())
+		NoColor:    vsaData.noColor,
+		ForceColor: vsaData.forceColor,
+	}
+
+	// WriteReport generates the verbatim validate image output
+	_, err = validate_utils.WriteReport(reportData, outputOpts, cmd)
+	return err
+}
+
+// shouldPrintFallbackHeader determines if the fallback header should be printed
+// The header should only be printed when using text format or when no format is specified
+// (which defaults to text in WriteReport)
+func shouldPrintFallbackHeader(outputFormats []string) bool {
+	// If no output formats specified, WriteReport defaults to text
+	if len(outputFormats) == 0 {
+		return true
+	}
+
+	// Check if "text" format is in the output formats
+	return validate_utils.ContainsOutputFormat(outputFormats, "text")
+}
+
+// toVSASectionsReport converts ComponentResultsDisplay to VSASectionsReport
+func (d ComponentResultsDisplay) toVSASectionsReport() VSASectionsReport {
+	report := VSASectionsReport{
+		Header: HeaderReport{
+			Title:     d.Header.Title,
+			Timestamp: d.Header.Timestamp,
+		},
+		Result: ResultReport{
+			Overall:    d.Result.Overall,
+			Fallback:   d.Result.Fallback,
+			ImageCount: d.Result.ImageCount,
+			Images:     d.Result.ImageLines,
+		},
+		VSASummary: VSASummaryReport{
+			Signature:       d.VSASummary.Signature,
+			Predicate:       d.VSASummary.Predicate,
+			Policy:          d.VSASummary.Policy,
+			FallbackReasons: d.VSASummary.FallbackReasons,
+		},
+	}
+
+	if d.PolicyDiff != nil {
+		report.PolicyDiff = &PolicyDiffReport{
+			AffectedImages: d.PolicyDiff.AffectedImages,
+			Added:          d.PolicyDiff.Added,
+			Removed:        d.PolicyDiff.Removed,
+			Changed:        d.PolicyDiff.Changed,
+		}
+	}
+
+	return report
+}
+
+// toFormat converts VSASectionsReport or ComponentResultsDisplay to the specified format
+// For text format, uses ComponentResultsDisplay to leverage existing String() methods
+func (d ComponentResultsDisplay) toFormat(format string) ([]byte, error) {
+	switch format {
+	case "json":
+		report := d.toVSASectionsReport()
+		data, err := json.MarshalIndent(&report, "", "  ")
+		if err != nil {
+			return nil, err
+		}
+		return data, nil
+	case "yaml":
+		report := d.toVSASectionsReport()
+		data, err := yaml.Marshal(&report)
+		if err != nil {
+			return nil, err
+		}
+		return data, nil
+	case "text":
+		return d.toText(), nil
+	default:
+		return nil, fmt.Errorf("unsupported format: %s (supported: json, yaml, text)", format)
 	}
 }
 
-// displayVSAFailureResult displays VSA failure results
-func displayVSAFailureResult(result vsa.ComponentResult, data *validateVSAData) {
-	if result.Result.SignatureVerified {
-		printVSAInfo(os.Stdout, "  🔐 Signature verified")
-	} else if !data.ignoreSignatureVerification {
-		printVSAWarning(os.Stdout, "Signature verification requested but not performed")
+// toText converts ComponentResultsDisplay to text format using existing String() methods
+// This reuses the existing formatting logic and avoids code duplication
+func (d ComponentResultsDisplay) toText() []byte {
+	var b strings.Builder
+	b.WriteString(d.Header.String())
+	b.WriteString("\n")
+	b.WriteString(d.Result.String())
+	b.WriteString("\n")
+	b.WriteString(d.VSASummary.String())
+	b.WriteString("\n")
+	if d.PolicyDiff != nil {
+		b.WriteString(d.PolicyDiff.String())
+		b.WriteString("\n")
 	}
-	if result.Result.PredicateOutcome != "" {
-		printVSAInfo(os.Stdout, fmt.Sprintf("  Predicate Status: %s", result.Result.PredicateOutcome))
-	}
-	printVSAStatus(os.Stdout, fmt.Sprintf("Failed: %s", result.Result.Message), "failure")
+	return []byte(b.String())
 }
 
-// handleSnapshotOutput handles output formatting for snapshot validation
-func handleSnapshotOutput(allResults []vsa.ComponentResult, data *validateVSAData, fs afero.Fs) error {
-	if len(data.output) > 0 || len(data.outputFile) > 0 {
-		report := createVSAReport(allResults, data)
-		return writeOutputToFormats(report, data, fs)
+// WriteAll writes ComponentResultsDisplay to all specified output formats
+func (d ComponentResultsDisplay) WriteAll(outputFormats []string, fs afero.Fs, cmd *cobra.Command) error {
+	// If no output formats specified, default to text on stdout
+	if len(outputFormats) == 0 {
+		outputFormats = []string{"text"}
 	}
+
+	for _, outputSpec := range outputFormats {
+		parts := strings.SplitN(outputSpec, "=", 2)
+		format := parts[0]
+		file := ""
+		if len(parts) > 1 {
+			file = parts[1]
+		}
+
+		data, err := d.toFormat(format)
+		if err != nil {
+			return fmt.Errorf("failed to convert to %s: %w", format, err)
+		}
+
+		var writer io.Writer = cmd.OutOrStdout()
+		if file != "" {
+			f, err := fs.Create(file)
+			if err != nil {
+				return fmt.Errorf("failed to create output file %s: %w", file, err)
+			}
+			defer f.Close()
+			writer = f
+		}
+
+		if _, err := writer.Write(data); err != nil {
+			return fmt.Errorf("failed to write %s output: %w", format, err)
+		}
+
+		// Add newline if not present
+		if !strings.HasSuffix(string(data), "\n") {
+			if _, err := writer.Write([]byte("\n")); err != nil {
+				return fmt.Errorf("failed to write newline: %w", err)
+			}
+		}
+	}
+
 	return nil
+}
+
+// displayComponentResults displays the validation results for each component
+// Uses the new modular section-based approach
+// Supports yaml, json, and text output formats based on the output flag
+func displayComponentResults(allResults []vsa.ComponentResult, data *validateVSAData, cmd *cobra.Command) error {
+	// Single aggregation pass - collect everything once
+	allData := aggregateAllSectionsData(allResults)
+
+	// Build display struct
+	display := ComponentResultsDisplay{
+		Header:     buildHeaderDisplay(time.Now()),
+		Result:     buildResultDisplay(allData),
+		VSASummary: buildVSASummaryDisplay(allData),
+		PolicyDiff: buildPolicyDiffDisplay(allData),
+	}
+
+	// Check if output formats are specified for VSA sections
+	// Filter output formats to only json, yaml, text (exclude other formats like appstudio, etc.)
+	vsaOutputFormats := filterVSAOutputFormats(data.output)
+
+	if len(vsaOutputFormats) > 0 {
+		// Use format system for structured output (json/yaml/text)
+		fs := utils.FS(cmd.Context())
+		if err := display.WriteAll(vsaOutputFormats, fs, cmd); err != nil {
+			return fmt.Errorf("failed to write VSA sections output: %w", err)
+		}
+	} else {
+		// Default: display as text to stdout using existing String() methods
+		// This reuses the same formatting logic as the structured output
+		fmt.Print(display.Header.String())
+		fmt.Println()
+
+		fmt.Print(display.Result.String())
+		fmt.Println()
+
+		fmt.Print(display.VSASummary.String())
+		fmt.Println()
+
+		// Conditional sections
+		if display.PolicyDiff != nil {
+			fmt.Print(display.PolicyDiff.String())
+			fmt.Println()
+		}
+	}
+
+	if allData.FallbackUsed {
+		if err := displayFallbackImageSection(allData, data, cmd); err != nil {
+			return err
+		}
+		fmt.Println()
+	}
+
+	return nil
+}
+
+// filterVSAOutputFormats filters output formats to only include json, yaml, and text
+// Other formats (like appstudio, summary, etc.) are handled by handleSnapshotOutput
+func filterVSAOutputFormats(outputFormats []string) []string {
+	var filtered []string
+	for _, format := range outputFormats {
+		parts := strings.SplitN(format, "=", 2)
+		formatName := parts[0]
+		if formatName == "json" || formatName == "yaml" || formatName == "text" {
+			filtered = append(filtered, format)
+		}
+	}
+	return filtered
+}
+
+// isFailureResult determines if a result represents a failure
+func isFailureResult(result vsa.ComponentResult) bool {
+	resultType := classifyResult(result)
+	switch resultType {
+	case ResultTypeError, ResultTypeVSAFailure, ResultTypeUnexpected:
+		return true
+	case ResultTypeFallback:
+		return result.FallbackResult == nil || !result.FallbackResult.Component.Success
+	default:
+		return false
+	}
 }
 
 // checkStrictMode checks if validation should fail based on strict mode
@@ -759,10 +1321,7 @@ func checkStrictMode(allResults []vsa.ComponentResult, data *validateVSAData) er
 	var allErrors error
 
 	for _, result := range allResults {
-		resultType := classifyResult(result)
-		if resultType == ResultTypeError || resultType == ResultTypeVSAFailure ||
-			(resultType == ResultTypeFallback && !result.UnifiedResult.OverallSuccess) ||
-			resultType == ResultTypeUnexpected {
+		if isFailureResult(result) {
 			failureCount++
 			if result.Error != nil {
 				allErrors = errors.Join(allErrors, result.Error)
@@ -770,38 +1329,22 @@ func checkStrictMode(allResults []vsa.ComponentResult, data *validateVSAData) er
 		}
 	}
 
-	if failureCount > 0 {
-		if allErrors != nil {
-			return fmt.Errorf("snapshot validation failed for %d components: %w", failureCount, allErrors)
-		}
-		return fmt.Errorf("snapshot validation failed for %d components", failureCount)
+	if failureCount == 0 {
+		return nil
 	}
 
-	return nil
+	if allErrors != nil {
+		return fmt.Errorf("snapshot validation failed for %d components: %w", failureCount, allErrors)
+	}
+	return fmt.Errorf("snapshot validation failed for %d components", failureCount)
 }
 
 // validateImageFallbackWithWorkerContext performs image validation using worker-specific evaluators
 // This ensures thread safety while reusing evaluators within the worker
-func validateImageFallbackWithWorkerContext(ctx context.Context, data *validateVSAData, imageRef string, componentName string, workerFallbackContext *vsa.WorkerFallbackContext) (*output.Output, error) {
-	log.Debugf("🔄 Starting fallback validation for image: %s", imageRef)
+func validateImageFallbackWithWorkerContext(ctx context.Context, data *validateVSAData, comp app.SnapshotComponent, workerFallbackContext *vsa.WorkerFallbackContext) (*output.Output, error) {
+	log.Debugf("🔄 Starting fallback validation for image: %s", comp.ContainerImage)
 
-	// Use provided component name or default to "fallback-component"
-	name := "fallback-component"
-	if componentName != "" {
-		name = componentName
-	}
-	log.Debugf("🔄 Fallback: Using component name: %s", name)
-
-	// Create a minimal SnapshotComponent for single image validation
-	comp := app.SnapshotComponent{
-		ContainerImage: imageRef,
-		Name:           name,
-	}
-
-	// Create a minimal SnapshotSpec
-	spec := &app.SnapshotSpec{
-		Components: []app.SnapshotComponent{comp},
-	}
+	log.Debugf("🔄 Fallback: Using component name: %s", comp.Name)
 
 	// Use precomputed fallback context and worker-specific evaluators
 	if data.fallbackContext == nil {
@@ -812,23 +1355,21 @@ func validateImageFallbackWithWorkerContext(ctx context.Context, data *validateV
 		return nil, fmt.Errorf("worker fallback context not initialized - this should not happen")
 	}
 
+	if data.snapshot == nil {
+		return nil, fmt.Errorf("snapshot spec not available - this should not happen")
+	}
+
 	log.Debugf("🔄 Fallback: Using precomputed policy configuration: %s", data.fallbackContext.PolicyConfiguration)
 	log.Debugf("🔄 Fallback: Using worker evaluators: %d", len(workerFallbackContext.Evaluators))
 
 	// Perform image validation using precomputed context and worker-specific evaluators
 	log.Debugf("🔄 Fallback: Starting image validation...")
 	log.Debugf("🔄 Fallback: Using fallback policy: %s", data.fallbackContext.FallbackPolicy)
-	result, err := image.ValidateImage(ctx, comp, spec, data.fallbackContext.FallbackPolicy, workerFallbackContext.Evaluators, data.info)
+	result, err := image.ValidateImage(ctx, comp, data.snapshot, data.fallbackContext.FallbackPolicy, workerFallbackContext.Evaluators, data.info)
 	if err != nil {
 		log.Debugf("🔄 Fallback: Image validation failed with error: %v", err)
 		return nil, err
 	}
-
-	log.Debugf("🔄 Fallback: Image validation completed")
-	log.Debugf("🔄 Fallback: Exit code: %d", result.ExitCode)
-	log.Debugf("🔄 Fallback: Violations: %d", len(result.Violations()))
-	log.Debugf("🔄 Fallback: Warnings: %d", len(result.Warnings()))
-	log.Debugf("🔄 Fallback: Successes: %d", len(result.Successes()))
 
 	return result, nil
 }
@@ -838,17 +1379,34 @@ func processSnapshotComponentWithWorkerContext(ctx context.Context, component ap
 	// Extract digest from ContainerImage
 	digest, err := vsa.ExtractDigestFromImageRef(component.ContainerImage)
 	if err != nil {
+		// Extract digest errors don't trigger fallback (invalid input)
 		return createErrorResult(component, fmt.Errorf("failed to extract digest: %w", err))
 	}
 
 	// Perform VSA validation
 	result, err := performVSAValidation(ctx, digest, data)
+
+	// Create ValidationResult from error if needed (for proper display)
 	if err != nil {
-		return createErrorResult(component, fmt.Errorf("VSA validation failed: %w", err))
+		// Create a ValidationResult from the error for proper display
+		errorResult := createValidationResultFromError(err)
+
+		// Check if fallback should be triggered BEFORE returning error
+		if data.fallbackToImageValidation && shouldTriggerFallbackForComponent(err, errorResult) {
+			return handleComponentFallback(ctx, component, data, errorResult, workerFallbackContext)
+		}
+
+		// Return error result with ValidationResult for proper display
+		return vsa.ComponentResult{
+			ComponentName: component.Name,
+			ImageRef:      component.ContainerImage,
+			Result:        errorResult,
+			Error:         fmt.Errorf("VSA validation failed: %w", err),
+		}
 	}
 
 	// Handle fallback if enabled and needed
-	if data.fallbackToImageValidation && shouldTriggerFallbackForComponent(err, result) {
+	if data.fallbackToImageValidation && shouldTriggerFallbackForComponent(nil, result) {
 		return handleComponentFallback(ctx, component, data, result, workerFallbackContext)
 	}
 
@@ -891,7 +1449,6 @@ func shouldTriggerFallbackForComponent(err error, result *vsa.ValidationResult) 
 
 // handleComponentFallback handles fallback validation for a component
 func handleComponentFallback(ctx context.Context, component app.SnapshotComponent, data *validateVSAData, result *vsa.ValidationResult, workerFallbackContext *vsa.WorkerFallbackContext) vsa.ComponentResult {
-	imageRef := component.ContainerImage
 	predicateStatus := ""
 	if result != nil {
 		predicateStatus = result.PredicateOutcome
@@ -904,7 +1461,7 @@ func handleComponentFallback(ctx context.Context, component app.SnapshotComponen
 	}
 
 	// Perform image validation
-	fallbackOutput, fallbackErr := validateImageFallbackWithWorkerContext(ctx, data, imageRef, component.Name, workerFallbackContext)
+	fallbackOutput, fallbackErr := validateImageFallbackWithWorkerContext(ctx, data, component, workerFallbackContext)
 	if fallbackErr != nil {
 		return createErrorResult(component, fmt.Errorf("fallback image validation failed: %w", fallbackErr))
 	}
@@ -912,181 +1469,64 @@ func handleComponentFallback(ctx context.Context, component app.SnapshotComponen
 	// Set the fallback output
 	fallbackResult.FallbackOutput = fallbackOutput
 
-	// Create unified result with fallback
-	unifiedResult := vsa.BuildUnifiedValidationResult(fallbackResult.VSAResult, fallbackResult.FallbackOutput, true, imageRef)
+	// Create validate_utils.Result for fallback (same as validate image command)
+	// Use defaults for showSuccesses and outputFormats to match validate image behavior
+	// Note: VSA command doesn't have these flags, so we use defaults (showSuccesses=false, empty outputFormats)
+	fallbackValidationResult := validate_utils.PopulateResultFromOutput(
+		fallbackOutput,
+		nil, // err is nil here since we already checked it above
+		component,
+		false,       // showSuccesses - default to false if not specified
+		data.output, // outputFormats - use the same as VSA command output
+	)
 
 	return vsa.ComponentResult{
-		ComponentName: component.Name,
-		ImageRef:      component.ContainerImage,
-		Result:        result, // Keep original VSA result for compatibility
-		Error:         nil,
-		UnifiedResult: unifiedResult, // Add fallback result
+		ComponentName:  component.Name,
+		ImageRef:       component.ContainerImage,
+		Result:         result, // Keep original VSA result for VSA display
+		Error:          nil,
+		FallbackResult: &fallbackValidationResult, // Store fallback result for WriteReport compatibility
 	}
 }
 
 // createErrorResult creates a ComponentResult with an error
 func createErrorResult(component app.SnapshotComponent, err error) vsa.ComponentResult {
+	// Create ValidationResult from error for proper display
+	errorResult := createValidationResultFromError(err)
 	return vsa.ComponentResult{
 		ComponentName: component.Name,
 		ImageRef:      component.ContainerImage,
+		Result:        errorResult,
 		Error:         err,
 	}
 }
 
-// OutputFormatter defines the interface for objects that can be formatted for output
-type OutputFormatter interface {
-	PrintJSON(writer io.Writer) error
-	PrintText(writer io.Writer) error
-}
-
-// UnifiedResultAdapter adapts VSAValidationResult to OutputFormatter interface
-type UnifiedResultAdapter struct {
-	result *vsa.VSAValidationResult
-}
-
-// PrintJSON outputs the unified result as JSON
-func (a *UnifiedResultAdapter) PrintJSON(writer io.Writer) error {
-	return a.result.PrintJSON(writer)
-}
-
-// PrintText outputs the unified result as text (using PrintConsole)
-func (a *UnifiedResultAdapter) PrintText(writer io.Writer) error {
-	return a.result.PrintConsole(writer)
-}
-
-// VSAReport represents the output structure for VSA validation results
-type VSAReport struct {
-	Timestamp      string                `json:"timestamp"`
-	TotalResults   int                   `json:"total_results"`
-	SuccessCount   int                   `json:"success_count"`
-	FailureCount   int                   `json:"failure_count"`
-	FallbackCount  int                   `json:"fallback_count,omitempty"`
-	Results        []vsa.ComponentResult `json:"results"`
-	OverallSuccess bool                  `json:"overall_success"`
-}
-
-// PrintJSON outputs the report in JSON format
-func (r *VSAReport) PrintJSON(writer io.Writer) error {
-	encoder := json.NewEncoder(writer)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(r)
-}
-
-// PrintText outputs the report in text format
-func (r *VSAReport) PrintText(writer io.Writer) error {
-	fmt.Fprintf(writer, "VSA Validation Report\n")
-	fmt.Fprintf(writer, "====================\n")
-	fmt.Fprintf(writer, "Timestamp: %s\n", r.Timestamp)
-	fmt.Fprintf(writer, "Total Results: %d\n", r.TotalResults)
-	fmt.Fprintf(writer, "Successful: %d\n", r.SuccessCount)
-	fmt.Fprintf(writer, "Failed: %d\n", r.FailureCount)
-	if r.FallbackCount > 0 {
-		fmt.Fprintf(writer, "Used Fallback: %d\n", r.FallbackCount)
-	}
-	fmt.Fprintf(writer, "Overall Success: %t\n", r.OverallSuccess)
-	fmt.Fprintf(writer, "\nDetailed Results:\n")
-
-	for _, result := range r.Results {
-		fmt.Fprintf(writer, "\nComponent: %s\n", result.ComponentName)
-		fmt.Fprintf(writer, "  Image: %s\n", result.ImageRef)
-
-		if result.Error != nil {
-			fmt.Fprintf(writer, "  ❌ Error: %v\n", result.Error)
-		} else if result.UnifiedResult != nil {
-			fmt.Fprintf(writer, "  🔄 Fallback used\n")
-			if result.UnifiedResult.OverallSuccess {
-				fmt.Fprintf(writer, "  ✅ Fallback succeeded\n")
-			} else {
-				fmt.Fprintf(writer, "  ❌ Fallback failed\n")
-			}
-		} else if result.Result != nil {
-			if result.Result.Passed {
-				fmt.Fprintf(writer, "  ✅ VSA validation passed\n")
-			} else {
-				fmt.Fprintf(writer, "  ❌ VSA validation failed: %s\n", result.Result.Message)
-			}
-		}
+// createValidationResultFromError creates a ValidationResult from an error
+// This ensures proper display of VSA status even when validation fails
+func createValidationResultFromError(err error) *vsa.ValidationResult {
+	if err == nil {
+		return nil
 	}
 
-	return nil
-}
+	// Determine reason code from error message
+	reasonCode := retrievalFailedRC
+	errMsg := err.Error()
 
-// writeOutputToFormats writes the given formatter to all specified output formats
-func writeOutputToFormats(formatter OutputFormatter, data *validateVSAData, fs afero.Fs) error {
-	// Handle deprecated outputFile flag
-	if len(data.outputFile) > 0 {
-		data.output = append(data.output, fmt.Sprintf("json=%s", data.outputFile))
+	// Check for specific error types
+	if strings.Contains(errMsg, "timeout") || strings.Contains(errMsg, "exceeded allowed execution time") {
+		reasonCode = retrievalFailedRC
+	} else if strings.Contains(errMsg, "no entries found") || strings.Contains(errMsg, "not found") {
+		reasonCode = "no_vsa"
+	} else if strings.Contains(errMsg, "signature") {
+		reasonCode = retrievalFailedRC
 	}
 
-	// Output to all specified formats
-	for _, outputSpec := range data.output {
-		parts := strings.SplitN(outputSpec, "=", 2)
-		format := parts[0]
-		file := ""
-		if len(parts) > 1 {
-			file = parts[1]
-		}
-
-		var writer io.Writer = os.Stdout
-		if file != "" {
-			f, err := fs.Create(file)
-			if err != nil {
-				return fmt.Errorf("failed to create output file %s: %w", file, err)
-			}
-			defer f.Close()
-			writer = f
-		}
-
-		switch format {
-		case "json":
-			err := formatter.PrintJSON(writer)
-			if err != nil {
-				return fmt.Errorf("failed to output JSON: %w", err)
-			}
-		case "text", "console":
-			err := formatter.PrintText(writer)
-			if err != nil {
-				return fmt.Errorf("failed to output text: %w", err)
-			}
-		default:
-			return fmt.Errorf("unsupported output format: %s", format)
-		}
-	}
-
-	return nil
-}
-
-// createVSAReport creates a report structure from VSA validation results
-func createVSAReport(results []vsa.ComponentResult, data *validateVSAData) *VSAReport {
-	successCount := 0
-	failureCount := 0
-	fallbackCount := 0
-
-	for _, result := range results {
-		if result.Error != nil {
-			failureCount++
-		} else if result.UnifiedResult != nil {
-			fallbackCount++
-			if result.UnifiedResult.OverallSuccess {
-				successCount++
-			} else {
-				failureCount++
-			}
-		} else if result.Result != nil && result.Result.Passed {
-			successCount++
-		} else if result.Result != nil && !result.Result.Passed {
-			failureCount++
-		}
-	}
-
-	return &VSAReport{
-		Timestamp:      time.Now().UTC().Format(time.RFC3339),
-		TotalResults:   len(results),
-		SuccessCount:   successCount,
-		FailureCount:   failureCount,
-		FallbackCount:  fallbackCount,
-		Results:        results,
-		OverallSuccess: failureCount == 0,
+	return &vsa.ValidationResult{
+		Passed:            false,
+		Message:           errMsg,
+		SignatureVerified: false, // When retrieval fails, signature cannot be verified
+		PredicateOutcome:  "",
+		ReasonCode:        reasonCode,
 	}
 }
 
@@ -1106,7 +1546,7 @@ func classifyResult(result vsa.ComponentResult) ResultType {
 	if result.Error != nil {
 		return ResultTypeError
 	}
-	if result.UnifiedResult != nil {
+	if result.FallbackResult != nil {
 		return ResultTypeFallback
 	}
 	if result.Result != nil && result.Result.Passed {

@@ -52,6 +52,7 @@ import (
 	"github.com/conforma/cli/internal/utils"
 	"github.com/conforma/cli/internal/utils/oci"
 	"github.com/conforma/cli/internal/utils/oci/fake"
+	validate_utils "github.com/conforma/cli/internal/validate"
 	"github.com/conforma/cli/internal/validate/vsa"
 )
 
@@ -1399,7 +1400,7 @@ func TestContainsData(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := containsOutput(test.input, "data")
+		result := validate_utils.ContainsOutputFormat(test.input, "data")
 		assert.Equal(t, test.expected, result, test.name)
 	}
 }
@@ -1422,7 +1423,7 @@ func TestContainsAttestation(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := containsOutput(test.input, "attestation")
+		result := validate_utils.ContainsOutputFormat(test.input, "attestation")
 		assert.Equal(t, test.expected, result, test.name)
 	}
 }
