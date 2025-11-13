@@ -126,8 +126,6 @@ acceptance: ## Run all acceptance tests
 	cp -R . "$$ACCEPTANCE_WORKDIR"; \
 	cd "$$ACCEPTANCE_WORKDIR" && \
 	$(MAKE) build && \
-	export COVERAGE_FILEPATH="$$ACCEPTANCE_WORKDIR"; \
-	export COVERAGE_FILENAME="-acceptance"; \
 	export GOCOVERDIR="$${ACCEPTANCE_WORKDIR}/coverage"; \
 	cd acceptance && go test -timeout $(ACCEPTANCE_TIMEOUT) ./... ; go tool covdata textfmt -i=$${GOCOVERDIR} -o="$(ROOT_DIR)/coverage-acceptance.out"
 
