@@ -307,3 +307,55 @@ time="${TIMESTAMP}" level=warning msg="invalid storage config 'invalid-backend@s
 [VSA generation with multiple storage backends:stderr - 1]
 
 ---
+
+[VSA generation without upload backends shows warning:stdout - 1]
+{
+  "success": true,
+  "components": [
+    {
+      "name": "Unnamed",
+      "containerImage": "${REGISTRY}/acceptance/vsa-no-upload-image@sha256:${REGISTRY_acceptance/vsa-no-upload-image:latest_DIGEST}",
+      "source": {},
+      "success": true,
+      "signatures": [
+        {
+          "keyid": "",
+          "sig": "${IMAGE_SIGNATURE_acceptance/vsa-no-upload-image}"
+        }
+      ],
+      "attestations": [
+        {
+          "type": "https://in-toto.io/Statement/v0.1",
+          "predicateType": "https://slsa.dev/provenance/v0.2",
+          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
+          "signatures": [
+            {
+              "keyid": "",
+              "sig": "${ATTESTATION_SIGNATURE_acceptance/vsa-no-upload-image}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "key": "${vsa-no-upload_PUBLIC_KEY_JSON}",
+  "policy": {
+    "sources": [
+      {
+        "policy": [
+          "git::${GITHOST}/git/vsa-no-upload-policy.git?ref=${LATEST_COMMIT}"
+        ]
+      }
+    ],
+    "rekorUrl": "${REKOR}",
+    "publicKey": "${vsa-no-upload_PUBLIC_KEY}"
+  },
+  "ec-version": "${EC_VERSION}",
+  "effective-time": "${TIMESTAMP}"
+}
+---
+
+[VSA generation without upload backends shows warning:stderr - 1]
+time="${TIMESTAMP}" level=error msg="[VSA] VSA files generated but not uploaded (no --vsa-upload backends specified)"
+
+---

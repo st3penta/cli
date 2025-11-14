@@ -824,6 +824,21 @@ func createTrackBundleFile(ctx context.Context, name string, content *godog.DocS
 	return createGenericFile(ctx, name, content)
 }
 
+// theLogOutputShouldContain checks if the log output (stderr) contains the expected text
+func theLogOutputShouldContain(ctx context.Context, expected string) error {
+	status, err := ecStatusFrom(ctx)
+	if err != nil {
+		return err
+	}
+
+	stderr := status.stderr.String()
+	if !strings.Contains(stderr, expected) {
+		return fmt.Errorf("expected log output to contain:\n%s\nbut stderr was:\n%s", expected, stderr)
+	}
+
+	return nil
+}
+
 // AddStepsTo adds Gherkin steps to the godog ScenarioContext
 func AddStepsTo(sc *godog.ScenarioContext) {
 	sc.Step(`^ec command is run with "(.+)"$`, ecCommandIsRunWith)
@@ -831,6 +846,7 @@ func AddStepsTo(sc *godog.ScenarioContext) {
 	sc.Step(`^the standard output should contain$`, theStandardOutputShouldContain)
 	sc.Step(`^the standard output should match baseline file "(.+)"$`, theStandardOutputShouldMatchBaseline)
 	sc.Step(`^the standard error should contain$`, theStandardErrorShouldContain)
+	sc.Step(`^the log output should contain "([^"]*)"$`, theLogOutputShouldContain)
 	sc.Step(`^the environment variable is set "([^"]*)"$`, theEnvironmentVarilableIsSet)
 	sc.Step(`^the output should match the snapshot$`, matchSnapshot)
 	sc.Step(`^the "([^"]*)" file should match the snapshot$`, matchFileSnapshot)

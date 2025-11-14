@@ -171,3 +171,55 @@ Feature: VSA generation and storage
     When ec command is run with "validate image --image ${REGISTRY}/acceptance/vsa-existing-image@sha256:${REGISTRY_acceptance/vsa-existing-image:latest_DIGEST} --policy acceptance/vsa-existing-ec-policy --public-key ${vsa-existing_PUBLIC_KEY} --rekor-url ${REKOR} --vsa-expiration 24h --output json"
     Then the exit status should be 0
     Then the output should match the snapshot
+
+  Scenario: VSA generation without upload backends shows warning
+    Given a key pair named "vsa-no-upload"
+    Given an image named "acceptance/vsa-no-upload-image"
+    Given a valid image signature of "acceptance/vsa-no-upload-image" image signed by the "vsa-no-upload" key
+    Given a valid Rekor entry for image signature of "acceptance/vsa-no-upload-image"
+    Given a valid attestation of "acceptance/vsa-no-upload-image" signed by the "vsa-no-upload" key
+    Given a valid Rekor entry for attestation of "acceptance/vsa-no-upload-image"
+    Given a git repository named "vsa-no-upload-policy" with
+      | main.rego | examples/happy_day.rego |
+    Given policy configuration named "vsa-no-upload-ec-policy" with specification
+    """
+    {
+      "sources": [
+        {
+          "policy": [
+            "git::https://${GITHOST}/git/vsa-no-upload-policy.git"
+          ]
+        }
+      ]
+    }
+    """
+    When ec command is run with "validate image --image ${REGISTRY}/acceptance/vsa-no-upload-image --policy acceptance/vsa-no-upload-ec-policy --public-key ${vsa-no-upload_PUBLIC_KEY} --rekor-url ${REKOR} --vsa --vsa-signing-key ${vsa-no-upload_PRIVATE_KEY} --vsa-expiration 0 --output json"
+    Then the exit status should be 0
+    Then the output should match the snapshot
+    And the log output should contain "[VSA] VSA files generated but not uploaded (no --vsa-upload backends specified)"
+
+  Scenario: VSA upload failure handling
+    Given a key pair named "vsa-upload-fail"
+    Given an image named "acceptance/vsa-upload-fail-image"
+    Given a valid image signature of "acceptance/vsa-upload-fail-image" image signed by the "vsa-upload-fail" key
+    Given a valid Rekor entry for image signature of "acceptance/vsa-upload-fail-image"
+    Given a valid attestation of "acceptance/vsa-upload-fail-image" signed by the "vsa-upload-fail" key
+    Given a valid Rekor entry for attestation of "acceptance/vsa-upload-fail-image"
+    Given a git repository named "vsa-upload-fail-policy" with
+      | main.rego | examples/happy_day.rego |
+    Given policy configuration named "vsa-upload-fail-ec-policy" with specification
+    """
+    {
+      "sources": [
+        {
+          "policy": [
+            "git::https://${GITHOST}/git/vsa-upload-fail-policy.git"
+          ]
+        }
+      ]
+    }
+    """
+    Given Rekor upload should fail
+    When ec command is run with "validate image --image ${REGISTRY}/acceptance/vsa-upload-fail-image --policy acceptance/vsa-upload-fail-ec-policy --public-key ${vsa-upload-fail_PUBLIC_KEY} --rekor-url ${REKOR} --vsa --vsa-signing-key ${vsa-upload-fail_PRIVATE_KEY} --vsa-upload rekor@${REKOR} --vsa-expiration 0 --output json"
+    Then the exit status should be 0
+    And the log output should contain "[VSA] Failed to upload in-toto 0.0.2 entry"
