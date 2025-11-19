@@ -133,6 +133,108 @@ test_version_extraction() {
     fi
 }
 
+# List all available tests from feature files
+list_tests() {
+    local feature_pattern="${1:-}"
+    local scenario_pattern="${2:-}"
+    
+    print_status "Listing available features and scenarios..."
+    
+    # Check if features directory exists
+    if [ ! -d "features" ]; then
+        print_error "features directory not found in $(pwd)"
+        exit 1
+    fi
+    
+    local feature_count=0
+    local scenario_count=0
+    local current_feature=""
+    local current_file=""
+    
+    # Find all .feature files
+    local feature_files
+    if [ -n "$feature_pattern" ]; then
+        feature_files=$(find features -name "*.feature" -type f | grep -i "$feature_pattern" | sort)
+    else
+        feature_files=$(find features -name "*.feature" -type f | sort)
+    fi
+    
+    if [ -z "$feature_files" ]; then
+        print_warning "No feature files found matching pattern: ${feature_pattern:-'*'}"
+        return 0
+    fi
+    
+    echo
+    
+    # Parse each feature file
+    while IFS= read -r feature_file; do
+        if [ ! -f "$feature_file" ]; then
+            continue
+        fi
+        
+        current_file=$(basename "$feature_file")
+        local feature_name=""
+        local feature_description=""
+        local show_this_feature=false
+        local in_feature=false
+        local next_line_is_description=false
+        
+        # Read the feature file line by line
+        while IFS= read -r line || [ -n "$line" ]; do
+            # Check for Feature: line
+            if [[ "$line" =~ ^Feature:[[:space:]]*(.+) ]]; then
+                feature_name="${BASH_REMATCH[1]}"
+                feature_count=$((feature_count + 1))
+                in_feature=true
+                next_line_is_description=true
+                
+                # Check if we should show this feature
+                if [ -z "$feature_pattern" ] || echo "$feature_name" | grep -qi "$feature_pattern"; then
+                    show_this_feature=true
+                    echo
+                    echo -e "${GREEN}Feature:${NC} $feature_name"
+                    echo -e "  ${CYAN}File:${NC} $current_file"
+                fi
+            # Check for description line (first non-empty line after Feature:)
+            elif [ "$next_line_is_description" = true ] && [ "$in_feature" = true ]; then
+                if [[ ! "$line" =~ ^[[:space:]]*$ ]] && [[ ! "$line" =~ ^[[:space:]]*(Background|Scenario|Given|When|Then|And|But) ]]; then
+                    if [ "$show_this_feature" = true ]; then
+                        echo -e "  ${CYAN}Description:${NC} $line"
+                    fi
+                    next_line_is_description=false
+                fi
+            # Check for Scenario: line
+            elif [[ "$line" =~ ^[[:space:]]*Scenario:[[:space:]]*(.+) ]] && [ "$in_feature" = true ]; then
+                local scenario_name="${BASH_REMATCH[1]}"
+                scenario_count=$((scenario_count + 1))
+                next_line_is_description=false
+                
+                # Show scenario if feature matches and scenario matches pattern
+                if [ "$show_this_feature" = true ]; then
+                    if [ -z "$scenario_pattern" ] || echo "$scenario_name" | grep -qi "$scenario_pattern"; then
+                        echo -e "  ${YELLOW}  Scenario:${NC} $scenario_name"
+                    fi
+                fi
+            elif [ "$next_line_is_description" = true ] && [[ "$line" =~ ^[[:space:]]*$ ]]; then
+                # Empty line, continue looking for description
+                continue
+            else
+                next_line_is_description=false
+            fi
+        done < "$feature_file"
+    done <<< "$feature_files"
+    
+    echo
+    echo
+    print_success "Found $feature_count feature(s) and $scenario_count scenario(s)"
+    echo
+    print_status "To run a specific feature/scenario, use:"
+    print_status "  $0 'FeatureName'                    # Run all scenarios in a feature"
+    print_status "  $0 'FeatureName/ScenarioName'        # Run a specific scenario"
+    print_status "  $0 'FeaturePattern'                  # Run features matching pattern"
+    print_status "  $0 'FeaturePattern/ScenarioPattern' # Run scenarios matching pattern"
+}
+
 # Run specific test or all tests
 run_tests() {
     local test_pattern="${1:-}"
@@ -226,20 +328,26 @@ show_usage() {
     echo
     echo "OPTIONS:"
     echo "  -h, --help              Show this help message"
+    echo "  -l, --list [PATTERN]    List all available features and scenarios"
+    echo "                          Pattern can be 'FeatureName' or 'FeatureName/ScenarioName'"
     echo "  -p, --parallel N        Set parallelism level (default: 1)"
     echo "  -t, --timeout DURATION  Set timeout (default: 60m)"
     echo "  -c, --cleanup           Clean up test resources before running"
     echo "  -d, --debug             Enable debug mode with verbose output"
     echo
     echo "TEST_PATTERN:"
-    echo "  Optional pattern to run specific tests (e.g., 'TestFeatures/conftest')"
+    echo "  Optional pattern to run specific tests (e.g., 'FeatureName/ScenarioName')"
     echo
     echo "Examples:"
-    echo "  $0                                    # Run all tests"
-    echo "  $0 -p 2 -t 30m                      # Run with 2 parallel, 30min timeout"
-    echo "  $0 'TestFeatures/conftest'           # Run only conftest tests"
-    echo "  $0 -c 'TestFeatures/OPA'             # Clean up and run OPA tests"
-    echo "  $0 -d 'TestFeatures/json_output'    # Run with debug output"
+    echo "  $0 -l                                    # List all features and scenarios"
+    echo "  $0 -l 'validate'                         # List features matching 'validate'"
+    echo "  $0 -l 'validate_image/happy day'         # List specific scenario"
+    echo "  $0                                       # Run all tests"
+    echo "  $0 -p 2 -t 30m                          # Run with 2 parallel, 30min timeout"
+    echo "  $0 'validate_image'                      # Run all scenarios in a feature"
+    echo "  $0 'validate_image/happy day'            # Run a specific scenario"
+    echo "  $0 -c 'validate_image'                   # Clean up and run feature"
+    echo "  $0 -d 'validate_image/happy day'         # Run with debug output"
 }
 
 # Parse command line arguments
@@ -249,12 +357,35 @@ parse_args() {
     local timeout="60m"
     local test_pattern=""
     local debug=false
+    local list_only=false
+    local list_pattern=""
+    local list_feature_pattern=""
+    local list_scenario_pattern=""
     
     while [[ $# -gt 0 ]]; do
         case $1 in
             -h|--help)
                 show_usage
                 exit 0
+                ;;
+            -l|--list)
+                list_only=true
+                # Check if next argument is a pattern (not another option)
+                if [[ $# -gt 1 ]] && [[ ! "$2" =~ ^- ]]; then
+                    list_pattern="$2"
+                    shift 2
+                else
+                    shift
+                fi
+                # Also check if there's a scenario pattern (Feature/Scenario format)
+                if [[ -n "$list_pattern" ]] && [[ "$list_pattern" =~ ^([^/]+)/(.+)$ ]]; then
+                    # Pattern contains /, so split it
+                    list_feature_pattern="${BASH_REMATCH[1]}"
+                    list_scenario_pattern="${BASH_REMATCH[2]}"
+                else
+                    list_feature_pattern="$list_pattern"
+                    list_scenario_pattern=""
+                fi
                 ;;
             -p|--parallel)
                 parallel="$2"
@@ -278,7 +409,12 @@ parse_args() {
                 exit 1
                 ;;
             *)
-                test_pattern="$1"
+                # If we're listing, treat this as a pattern; otherwise as test pattern
+                if [ "$list_only" = true ]; then
+                    list_pattern="$1"
+                else
+                    test_pattern="$1"
+                fi
                 shift
                 ;;
         esac
@@ -288,6 +424,12 @@ parse_args() {
     if [ "$debug" = true ]; then
         print_debug "Debug mode enabled"
         set -x  # Enable bash debug mode
+    fi
+    
+    # If listing, do that and exit
+    if [ "$list_only" = true ]; then
+        list_tests "$list_feature_pattern" "$list_scenario_pattern"
+        exit 0
     fi
     
     # Run cleanup if requested
@@ -301,6 +443,20 @@ parse_args() {
 
 # Main execution
 main() {
+    # Check if we're just listing tests (quick check without full setup)
+    for arg in "$@"; do
+        if [[ "$arg" == "-l" ]] || [[ "$arg" == "--list" ]]; then
+            echo "=========================================="
+            echo "  Listing Acceptance Tests"
+            echo "=========================================="
+            echo
+            
+            # Skip setup for listing - it's not needed
+            parse_args "$@"
+            exit 0
+        fi
+    done
+    
     echo "=========================================="
     echo "  Running Acceptance Tests"
     echo "=========================================="
