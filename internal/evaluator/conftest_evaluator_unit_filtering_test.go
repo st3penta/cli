@@ -257,3 +257,293 @@ func TestCheckResultsTrim(t *testing.T) {
 		})
 	}
 }
+
+// TestIsResultIncludedWithComponentName tests the isResultIncluded method
+// with the componentName parameter to ensure component-based filtering works correctly.
+// This test exercises the legacy fallback path for backward compatibility.
+func TestIsResultIncludedWithComponentName(t *testing.T) {
+	tests := []struct {
+		name          string
+		result        Result
+		imageRef      string
+		componentName string
+		include       *Criteria
+		exclude       *Criteria
+		expected      bool
+	}{
+		{
+			name: "include by component name",
+			result: Result{
+				Metadata: map[string]any{"code": "test.check_a"},
+			},
+			imageRef:      "quay.io/test/image@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			componentName: "my-component",
+			include: &Criteria{
+				digestItems: map[string][]string{},
+				componentItems: map[string][]string{
+					"my-component": {"test.check_a"},
+				},
+				defaultItems: []string{},
+			},
+			exclude: &Criteria{
+				digestItems:    map[string][]string{},
+				componentItems: map[string][]string{},
+				defaultItems:   []string{},
+			},
+			expected: true,
+		},
+		{
+			name: "exclude by component name",
+			result: Result{
+				Metadata: map[string]any{"code": "test.check_b"},
+			},
+			imageRef:      "quay.io/test/image@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			componentName: "my-component",
+			include: &Criteria{
+				digestItems:    map[string][]string{},
+				componentItems: map[string][]string{},
+				defaultItems:   []string{"*"},
+			},
+			exclude: &Criteria{
+				digestItems: map[string][]string{},
+				componentItems: map[string][]string{
+					"my-component": {"test.check_b"},
+				},
+				defaultItems: []string{},
+			},
+			expected: false,
+		},
+		{
+			name: "component-specific include overrides global exclude",
+			result: Result{
+				Metadata: map[string]any{"code": "test.check_c"},
+			},
+			imageRef:      "quay.io/test/image@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			componentName: "my-component",
+			include: &Criteria{
+				digestItems: map[string][]string{},
+				componentItems: map[string][]string{
+					"my-component": {"test.check_c"},
+				},
+				defaultItems: []string{},
+			},
+			exclude: &Criteria{
+				digestItems:    map[string][]string{},
+				componentItems: map[string][]string{},
+				defaultItems:   []string{"test"},
+			},
+			expected: true,
+		},
+		{
+			name: "different component - not included",
+			result: Result{
+				Metadata: map[string]any{"code": "test.check_d"},
+			},
+			imageRef:      "quay.io/test/image@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			componentName: "other-component",
+			include: &Criteria{
+				digestItems: map[string][]string{},
+				componentItems: map[string][]string{
+					"my-component": {"test.check_d"},
+				},
+				defaultItems: []string{},
+			},
+			exclude: &Criteria{
+				digestItems:    map[string][]string{},
+				componentItems: map[string][]string{},
+				defaultItems:   []string{},
+			},
+			expected: false,
+		},
+		{
+			name: "empty component name - uses only global criteria",
+			result: Result{
+				Metadata: map[string]any{"code": "test.check_e"},
+			},
+			imageRef:      "quay.io/test/image@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			componentName: "",
+			include: &Criteria{
+				digestItems: map[string][]string{},
+				componentItems: map[string][]string{
+					"my-component": {"test.check_e"},
+				},
+				defaultItems: []string{"*"},
+			},
+			exclude: &Criteria{
+				digestItems:    map[string][]string{},
+				componentItems: map[string][]string{},
+				defaultItems:   []string{},
+			},
+			expected: true, // Matches global "*"
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			evaluator := conftestEvaluator{
+				include: tt.include,
+				exclude: tt.exclude,
+			}
+			missingIncludes := map[string]bool{}
+			got := evaluator.isResultIncluded(tt.result, tt.imageRef, tt.componentName, missingIncludes)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+// TestComputeSuccessesLegacyFallback tests the computeSuccesses method with nil unifiedFilter
+// to exercise the legacy fallback path that uses isResultIncluded directly.
+// This ensures backward compatibility and provides coverage for the legacy code path.
+func TestComputeSuccessesLegacyFallback(t *testing.T) {
+	tests := []struct {
+		name            string
+		result          Outcome
+		rules           policyRules
+		imageRef        string
+		componentName   string
+		missingIncludes map[string]bool
+		include         *Criteria
+		exclude         *Criteria
+		expectedCount   int
+		expectedCodes   []string
+	}{
+		{
+			name: "include success by component name - legacy path",
+			result: Outcome{
+				Namespace: "test",
+				Failures:  []Result{},
+				Warnings:  []Result{},
+				Skipped:   []Result{},
+			},
+			rules: policyRules{
+				"test.success_rule": {
+					Code:      "test.success_rule",
+					Package:   "test",
+					ShortName: "success_rule",
+					Title:     "Success Rule",
+				},
+			},
+			imageRef:        "quay.io/test/image@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			componentName:   "my-component",
+			missingIncludes: map[string]bool{},
+			include: &Criteria{
+				digestItems: map[string][]string{},
+				componentItems: map[string][]string{
+					"my-component": {"test.success_rule"},
+				},
+				defaultItems: []string{},
+			},
+			exclude: &Criteria{
+				digestItems:    map[string][]string{},
+				componentItems: map[string][]string{},
+				defaultItems:   []string{},
+			},
+			expectedCount: 1,
+			expectedCodes: []string{"test.success_rule"},
+		},
+		{
+			name: "exclude success by component name - legacy path",
+			result: Outcome{
+				Namespace: "test",
+				Failures:  []Result{},
+				Warnings:  []Result{},
+				Skipped:   []Result{},
+			},
+			rules: policyRules{
+				"test.excluded_rule": {
+					Code:      "test.excluded_rule",
+					Package:   "test",
+					ShortName: "excluded_rule",
+					Title:     "Excluded Rule",
+				},
+			},
+			imageRef:        "quay.io/test/image@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			componentName:   "my-component",
+			missingIncludes: map[string]bool{},
+			include: &Criteria{
+				digestItems:    map[string][]string{},
+				componentItems: map[string][]string{},
+				defaultItems:   []string{"*"},
+			},
+			exclude: &Criteria{
+				digestItems: map[string][]string{},
+				componentItems: map[string][]string{
+					"my-component": {"test.excluded_rule"},
+				},
+				defaultItems: []string{},
+			},
+			expectedCount: 0,
+			expectedCodes: []string{},
+		},
+		{
+			name: "multiple rules with mixed inclusion - legacy path",
+			result: Outcome{
+				Namespace: "test",
+				Failures:  []Result{},
+				Warnings:  []Result{},
+				Skipped:   []Result{},
+			},
+			rules: policyRules{
+				"test.included_rule": {
+					Code:      "test.included_rule",
+					Package:   "test",
+					ShortName: "included_rule",
+					Title:     "Included Rule",
+				},
+				"test.excluded_rule": {
+					Code:      "test.excluded_rule",
+					Package:   "test",
+					ShortName: "excluded_rule",
+					Title:     "Excluded Rule",
+				},
+			},
+			imageRef:        "quay.io/test/image@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			componentName:   "my-component",
+			missingIncludes: map[string]bool{},
+			include: &Criteria{
+				digestItems: map[string][]string{},
+				componentItems: map[string][]string{
+					"my-component": {"test.included_rule"},
+				},
+				defaultItems: []string{},
+			},
+			exclude: &Criteria{
+				digestItems:    map[string][]string{},
+				componentItems: map[string][]string{},
+				defaultItems:   []string{},
+			},
+			expectedCount: 1,
+			expectedCodes: []string{"test.included_rule"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			evaluator := conftestEvaluator{
+				include: tt.include,
+				exclude: tt.exclude,
+			}
+
+			// Call computeSuccesses with nil unifiedFilter to exercise the legacy path
+			successes := evaluator.computeSuccesses(
+				tt.result,
+				tt.rules,
+				tt.imageRef,
+				tt.componentName,
+				tt.missingIncludes,
+				nil, // nil unifiedFilter triggers the legacy fallback path
+			)
+
+			assert.Equal(t, tt.expectedCount, len(successes), "unexpected number of successes")
+
+			// Verify the expected codes are present
+			actualCodes := make([]string, 0, len(successes))
+			for _, success := range successes {
+				if code, ok := success.Metadata[metadataCode].(string); ok {
+					actualCodes = append(actualCodes, code)
+				}
+			}
+			assert.ElementsMatch(t, tt.expectedCodes, actualCodes, "unexpected success codes")
+		})
+	}
+}
