@@ -183,6 +183,28 @@ func DetermineInputSpec(ctx context.Context, input Input) (*app.SnapshotSpec, *E
 }
 
 func readSnapshotSource(input []byte) (app.SnapshotSpec, error) {
+	var v map[string]interface{}
+
+	// Since JSON is a subset of YAML, yaml.Unmarshal can be used directly.
+	if err := yaml.Unmarshal(input, &v); err != nil {
+		log.Debugf("Problem parsing application snapshot from file %s", input)
+		return app.SnapshotSpec{}, fmt.Errorf("unable to parse Snapshot specification from %s: %w", input, err)
+	}
+
+	// Extract the "spec" key from YAML, if present, to use as the snapshot.
+	if spec, ok := v["spec"]; ok {
+		v, ok = spec.(map[string]interface{})
+		if !ok {
+			return app.SnapshotSpec{}, fmt.Errorf("spec is not a valid map structure")
+		}
+		// Marshal the spec back to bytes for unmarshaling into SnapshotSpec
+		specBytes, err := yaml.Marshal(v)
+		if err != nil {
+			return app.SnapshotSpec{}, fmt.Errorf("unable to marshal spec: %w", err)
+		}
+		input = specBytes
+	}
+
 	var file app.SnapshotSpec
 	err := yaml.Unmarshal(input, &file)
 	if err != nil {
