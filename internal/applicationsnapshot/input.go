@@ -187,8 +187,8 @@ func readSnapshotSource(input []byte) (app.SnapshotSpec, error) {
 
 	// Since JSON is a subset of YAML, yaml.Unmarshal can be used directly.
 	if err := yaml.Unmarshal(input, &v); err != nil {
-		log.Debugf("Problem parsing application snapshot from file %s", input)
-		return app.SnapshotSpec{}, fmt.Errorf("unable to parse Snapshot specification from %s: %w", input, err)
+		log.Debugf("Problem parsing application snapshot from input: %v", err)
+		return app.SnapshotSpec{}, fmt.Errorf("unable to parse Snapshot specification from input: %w", err)
 	}
 
 	// Extract the "spec" key from YAML, if present, to use as the snapshot.
