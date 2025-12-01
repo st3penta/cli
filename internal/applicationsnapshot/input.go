@@ -183,37 +183,27 @@ func DetermineInputSpec(ctx context.Context, input Input) (*app.SnapshotSpec, *E
 }
 
 func readSnapshotSource(input []byte) (app.SnapshotSpec, error) {
-	var v map[string]interface{}
-
-	// Since JSON is a subset of YAML, yaml.Unmarshal can be used directly.
-	if err := yaml.Unmarshal(input, &v); err != nil {
-		log.Debugf("Problem parsing application snapshot from input: %v", err)
-		return app.SnapshotSpec{}, fmt.Errorf("unable to parse Snapshot specification from input: %w", err)
+	// Define a temporary struct to capture the wrapped spec
+	var wrapper struct {
+		Spec *app.SnapshotSpec `yaml:"spec"`
 	}
 
-	// Extract the "spec" key from YAML, if present, to use as the snapshot.
-	if spec, ok := v["spec"]; ok {
-		v, ok = spec.(map[string]interface{})
-		if !ok {
-			return app.SnapshotSpec{}, fmt.Errorf("spec is not a valid map structure")
-		}
-		// Marshal the spec back to bytes for unmarshaling into SnapshotSpec
-		specBytes, err := yaml.Marshal(v)
-		if err != nil {
-			return app.SnapshotSpec{}, fmt.Errorf("unable to marshal spec: %w", err)
-		}
-		input = specBytes
+	// Attempt to unmarshal into the wrapper to check for cluster record format
+	if err := yaml.Unmarshal(input, &wrapper); err == nil && wrapper.Spec != nil {
+		// If successful and spec exists, return it directly
+		log.Debugf("Read application snapshot from cluster record format")
+		return *wrapper.Spec, nil
 	}
 
-	var file app.SnapshotSpec
-	err := yaml.Unmarshal(input, &file)
-	if err != nil {
+	// Fallback: unmarshal directly into SnapshotSpec for backward compatibility
+	var spec app.SnapshotSpec
+	if err := yaml.Unmarshal(input, &spec); err != nil {
 		log.Debugf("Problem parsing application snapshot from file %s", input)
 		return app.SnapshotSpec{}, fmt.Errorf("unable to parse Snapshot specification from %s: %w", input, err)
 	}
 
 	log.Debugf("Read application snapshot from file %s", input)
-	return file, nil
+	return spec, nil
 }
 
 // For an image index, remove the original component and replace it with an expanded component with all its image manifests

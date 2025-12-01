@@ -285,15 +285,14 @@ func TestReadSnapshotFile(t *testing.T) {
 		}
 		// Simulate a cluster record format with .spec wrapper in YAML
 		clusterRecord := `apiVersion: appstudio.redhat.com/v1alpha1
-							kind: Snapshot
-							metadata:
-							name: vsa-demo-app-x9xln
-							namespace: user-ns2
-							spec:
-							components:
-								- name: Named
-								containerImage: registry.io/repository/image:tag
-							`
+kind: Snapshot
+metadata:
+  name: vsa-demo-app-x9xln
+  namespace: user-ns2
+spec:
+  components:
+    - name: Named
+      containerImage: registry.io/repository/image:tag`
 
 		content := []byte(clusterRecord)
 		got, err := readSnapshotSource(content)
