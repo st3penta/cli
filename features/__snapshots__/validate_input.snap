@@ -29,6 +29,22 @@
 [valid policy URL:stderr - 1]
 
 ---
+[valid policy URL with text output:stdout - 1]
+Success: true
+Result: SUCCESS
+Violations: 0, Warnings: 0, Successes: 1
+Input File: pipeline_definition.yaml
+
+Results:
+[32m✓[0m [32m[Success] main.acceptor[0m
+  FilePath: pipeline_definition.yaml
+
+
+---
+
+[valid policy URL with text output:stderr - 1]
+
+---
 
 [policy with multiple sources:stdout - 1]
 {
