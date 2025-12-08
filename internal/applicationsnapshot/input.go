@@ -195,7 +195,8 @@ func readSnapshotSource(input []byte) (app.SnapshotSpec, error) {
 		return *wrapper.Spec, nil
 	}
 
-	// Fallback: unmarshal directly into SnapshotSpec for backward compatibility
+	// If we didn't find a snapshot under the .spec top level key then
+	// assume we're looking at the bare snapshot data
 	var spec app.SnapshotSpec
 	if err := yaml.Unmarshal(input, &spec); err != nil {
 		log.Debugf("Problem parsing application snapshot from file %s", input)
