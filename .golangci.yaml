@@ -33,11 +33,4 @@ linters-settings:
       - prefix(github.com/conforma/cli)
 
 issues:
-  exclude-rules:
-    # Some function in acceptance, e.g. ImageReferenceInStubRegistry, take a string parameter which
-    # is used in call to a string format call, e.g. fmt.Sprintf(...). Golinter started complaining
-    # starting on version v1.60. Since these are acceptance tests, there isn't a lot of harm in
-    # allowing this.
-    - path: acceptance
-      linters: [govet]
-      text: "printf: non-constant format string in call"
+  exclude-rules: []
