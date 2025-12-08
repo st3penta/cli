@@ -183,7 +183,8 @@ func DetermineInputSpec(ctx context.Context, input Input) (*app.SnapshotSpec, *E
 }
 
 func readSnapshotSource(input []byte) (app.SnapshotSpec, error) {
-	// Define a temporary struct to capture the wrapped spec
+	// Define a temporary struct to capture the wrapped spec so we
+	// can read snapshot data correctly from a cluster record
 	var wrapper struct {
 		Spec *app.SnapshotSpec `yaml:"spec"`
 	}
