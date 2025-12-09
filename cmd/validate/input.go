@@ -43,8 +43,10 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 		effectiveTime       string
 		filePaths           []string
 		filterType          string
+		forceColor          bool
 		info                bool
 		namespaces          []string
+		noColor             bool
 		output              []string
 		policy              policy.Policy
 		policyConfiguration string
@@ -213,6 +215,8 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 				return err
 			}
 
+			utils.SetColorEnabled(data.noColor, data.forceColor)
+
 			p := format.NewTargetParser(input.Text, format.Options{ShowSuccesses: showSuccesses, ShowWarnings: showWarnings}, cmd.OutOrStdout(), utils.FS(cmd.Context()))
 			if err := report.WriteAll(data.output, p); err != nil {
 				return err
@@ -263,6 +267,12 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 		Filter type to use for policy evaluation. Options: "include-exclude" (default) or "ec-policy".
 		- "include-exclude": Uses traditional include/exclude filtering without pipeline intentions
 		- "ec-policy": Uses Enterprise Contract policy filtering with pipeline intention support`))
+
+	cmd.Flags().BoolVar(&data.noColor, "no-color", false, hd.Doc(`
+		Disable color when using text output even when the current terminal supports it`))
+
+	cmd.Flags().BoolVar(&data.forceColor, "color", false, hd.Doc(`
+		Enable color when using text output even when the current terminal does not support it`))
 
 	if err := cmd.MarkFlagRequired("file"); err != nil {
 		panic(err)
