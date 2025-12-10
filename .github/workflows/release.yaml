@@ -104,8 +104,7 @@ jobs:
       - name: Download go dependencies
         run: |
           go mod download
-          (cd tools && go mod download)
-          (cd acceptance && go mod download)
+          (cd tools/kubectl && go mod download)
 
       - name: Build distribution
         run: make dist
