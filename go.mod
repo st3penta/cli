@@ -7,7 +7,7 @@ require (
 	github.com/CycloneDX/cyclonedx-go v0.9.2
 	github.com/MakeNowJust/heredoc v1.0.0
 	github.com/Maldris/go-billy-afero v0.0.0-20200815120323-e9d3de59c99a
-	github.com/conforma/crds/api v0.1.0
+	github.com/conforma/crds/api v0.1.7
 	github.com/conforma/go-gather v1.0.2
 	github.com/docker/docker v28.2.2+incompatible
 	github.com/evanphx/json-patch v5.9.0+incompatible

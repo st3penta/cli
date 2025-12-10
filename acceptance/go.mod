@@ -4,7 +4,7 @@ go 1.24.6
 
 require (
 	cuelang.org/go v0.11.1
-	github.com/conforma/crds/api v0.1.0
+	github.com/conforma/crds/api v0.1.7
 	github.com/cucumber/godog v0.15.0
 	github.com/cyberphone/json-canonicalization v0.0.0-20231217050601-ba74d44ecf5f
 	github.com/doiit/picocolors v1.0.1
