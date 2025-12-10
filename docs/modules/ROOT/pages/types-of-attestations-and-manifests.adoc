@@ -222,7 +222,7 @@ Tekton task bundles are OCI artifacts that package Tekton Task and Pipeline defi
 
 * Retrieved when using `ec track bundle` command
 * Task definitions extracted from bundle layers
-* Used to track which images are used in Tekton pipelines
+* Used to track which task images are used in Tekton pipelines
 * Can be referenced in Application Snapshots
 
 **Storage:**
