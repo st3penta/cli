@@ -233,6 +233,97 @@ func TestReadSnapshotFile(t *testing.T) {
 		expected := fmt.Errorf("unable to parse Snapshot specification from %s: %w", spec, wrapped)
 		assert.Error(t, err, expected)
 	})
+
+	t.Run("Snapshot with .spec wrapper (cluster record format)", func(t *testing.T) {
+		snapshotSpec := app.SnapshotSpec{
+			Components: []app.SnapshotComponent{
+				{
+					Name:           "Named",
+					ContainerImage: "registry.io/repository/image:tag",
+				},
+			},
+		}
+		fs := afero.NewMemMapFs()
+		// Simulate a cluster record format with .spec wrapper
+		clusterRecord := `{
+			"apiVersion": "appstudio.redhat.com/v1alpha1",
+			"kind": "Snapshot",
+			"metadata": {
+				"name": "vsa-demo-app-x9xln",
+				"namespace": "user-ns2"
+			},
+			"spec": {
+				"components": [
+					{
+						"name": "Named",
+						"containerImage": "registry.io/repository/image:tag"
+					}
+				]
+			}
+		}`
+
+		err := afero.WriteFile(fs, "/cluster-record.json", []byte(clusterRecord), 0644)
+		if err != nil {
+			t.Fatalf("Setup failure: could not write file: %v", err)
+		}
+
+		content, err := afero.ReadFile(fs, "/cluster-record.json")
+		assert.NoError(t, err)
+		got, err := readSnapshotSource(content)
+		assert.NoError(t, err)
+		assert.Equal(t, snapshotSpec, got)
+	})
+
+	t.Run("Snapshot with .spec wrapper in YAML format", func(t *testing.T) {
+		snapshotSpec := app.SnapshotSpec{
+			Components: []app.SnapshotComponent{
+				{
+					Name:           "Named",
+					ContainerImage: "registry.io/repository/image:tag",
+				},
+			},
+		}
+		// Simulate a cluster record format with .spec wrapper in YAML
+		clusterRecord := `apiVersion: appstudio.redhat.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: vsa-demo-app-x9xln
+  namespace: user-ns2
+spec:
+  components:
+    - name: Named
+      containerImage: registry.io/repository/image:tag`
+
+		content := []byte(clusterRecord)
+		got, err := readSnapshotSource(content)
+		assert.NoError(t, err)
+		assert.Equal(t, snapshotSpec, got)
+	})
+
+	t.Run("Snapshot without .spec wrapper (backward compatibility)", func(t *testing.T) {
+		snapshotSpec := app.SnapshotSpec{
+			Components: []app.SnapshotComponent{
+				{
+					Name:           "Named",
+					ContainerImage: "registry.io/repository/image:tag",
+				},
+			},
+		}
+		// Direct SnapshotSpec without wrapper (existing behavior)
+		directSpec := `{
+			"components": [
+				{
+					"name": "Named",
+					"containerImage": "registry.io/repository/image:tag"
+				}
+			]
+		}`
+
+		content := []byte(directSpec)
+		got, err := readSnapshotSource(content)
+		assert.NoError(t, err)
+		assert.Equal(t, snapshotSpec, got)
+	})
 }
 
 func TestExpandImageIndex(t *testing.T) {

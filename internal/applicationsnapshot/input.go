@@ -183,15 +183,29 @@ func DetermineInputSpec(ctx context.Context, input Input) (*app.SnapshotSpec, *E
 }
 
 func readSnapshotSource(input []byte) (app.SnapshotSpec, error) {
-	var file app.SnapshotSpec
-	err := yaml.Unmarshal(input, &file)
-	if err != nil {
+	// Define a temporary struct to capture the wrapped spec so we
+	// can read snapshot data correctly from a cluster record
+	var wrapper struct {
+		Spec *app.SnapshotSpec `yaml:"spec"`
+	}
+
+	// Attempt to unmarshal into the wrapper to check for cluster record format
+	if err := yaml.Unmarshal(input, &wrapper); err == nil && wrapper.Spec != nil {
+		// If successful and spec exists, return it directly
+		log.Debugf("Read application snapshot from cluster record format")
+		return *wrapper.Spec, nil
+	}
+
+	// If we didn't find a snapshot under the .spec top level key then
+	// assume we're looking at the bare snapshot data
+	var spec app.SnapshotSpec
+	if err := yaml.Unmarshal(input, &spec); err != nil {
 		log.Debugf("Problem parsing application snapshot from file %s", input)
 		return app.SnapshotSpec{}, fmt.Errorf("unable to parse Snapshot specification from %s: %w", input, err)
 	}
 
 	log.Debugf("Read application snapshot from file %s", input)
-	return file, nil
+	return spec, nil
 }
 
 // For an image index, remove the original component and replace it with an expanded component with all its image manifests
