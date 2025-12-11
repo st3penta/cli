@@ -25,6 +25,7 @@ import (
 	"github.com/sigstore/cosign/v2/pkg/oci"
 
 	"github.com/conforma/cli/internal/signature"
+	"github.com/conforma/cli/pkg/schema"
 )
 
 const (
@@ -62,6 +63,14 @@ func SLSAProvenanceFromSignature(sig oci.Signature) (Attestation, error) {
 	signatures, err := createEntitySignatures(sig, payload)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create signed entity: %w", err)
+	}
+
+	// Validate against SLSA v0.2 schema
+	var schemaValidation any
+	if err := json.Unmarshal(embedded, &schemaValidation); err == nil {
+		if err := schema.SLSA_Provenance_v0_2.Validate(schemaValidation); err != nil {
+			return nil, fmt.Errorf("attestation does not conform to SLSA v0.2 schema: %w", err)
+		}
 	}
 
 	return slsaProvenance{statement: statement, data: embedded, signatures: signatures}, nil

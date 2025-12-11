@@ -19,7 +19,6 @@
 package attestation
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -141,9 +140,55 @@ func TestSLSAProvenanceFromSignatureV1(t *testing.T) {
 			err: errors.New("unsupported attestation predicate type: kaboom"),
 		},
 		{
+			name: "schema validation fails - missing subject",
+			setup: func(l *mockSignature) {
+				payload := encode(`{
+					"_type": "https://in-toto.io/Statement/v0.1",
+					"predicateType": "https://slsa.dev/provenance/v1",
+					"predicate": {
+						"buildDefinition": {
+							"buildType": "https://my.build.type",
+							"externalParameters": {}
+						},
+						"runDetails": {
+							"builder": {"id": "https://my.builder"}
+						}
+					}
+				}`)
+				l.On("MediaType").Return(types.MediaType(ct.DssePayloadType), nil)
+				l.On("Uncompressed").Return(buffy(fmt.Sprintf(`{"payload":"%s"}`, payload)), nil)
+				l.On("Base64Signature").Return("", nil)
+				l.On("Cert").Return(signature.ParseChainguardReleaseCert(), nil)
+				l.On("Chain").Return(signature.ParseSigstoreChainCert(), nil)
+			},
+			err: errors.New("attestation does not conform to SLSA v1.0 schema: jsonschema: '' does not validate with https://slsa.dev/provenance/v1#/required: missing properties: 'subject'"),
+		},
+		{
+			name: "schema validation fails - missing buildDefinition",
+			setup: func(l *mockSignature) {
+				payload := encode(`{
+					"_type": "https://in-toto.io/Statement/v0.1",
+					"subject": [{"name": "example.com/test", "digest": {"sha256": "abc123"}}],
+					"predicateType": "https://slsa.dev/provenance/v1",
+					"predicate": {
+						"runDetails": {
+							"builder": {"id": "https://my.builder"}
+						}
+					}
+				}`)
+				l.On("MediaType").Return(types.MediaType(ct.DssePayloadType), nil)
+				l.On("Uncompressed").Return(buffy(fmt.Sprintf(`{"payload":"%s"}`, payload)), nil)
+				l.On("Base64Signature").Return("", nil)
+				l.On("Cert").Return(signature.ParseChainguardReleaseCert(), nil)
+				l.On("Chain").Return(signature.ParseSigstoreChainCert(), nil)
+			},
+			err: errors.New("attestation does not conform to SLSA v1.0 schema: jsonschema: '/predicate' does not validate with https://slsa.dev/provenance/v1#/properties/predicate/required: missing properties: 'buildDefinition'"),
+		},
+		{
 			name: "cannot create entity signature",
 			data: `{
 				"_type": "https://in-toto.io/Statement/v0.1",
+				"subject": [{"name": "example.com/test", "digest": {"sha256": "abc123"}}],
 				"predicateType": "https://slsa.dev/provenance/v1",
 				"predicate": {
 					"buildDefinition": {
@@ -158,6 +203,7 @@ func TestSLSAProvenanceFromSignatureV1(t *testing.T) {
 			setup: func(l *mockSignature) {
 				payload := encode(`{
 					"_type": "https://in-toto.io/Statement/v0.1",
+					"subject": [{"name": "example.com/test", "digest": {"sha256": "abc123"}}],
 					"predicateType": "https://slsa.dev/provenance/v1",
 					"predicate": {
 						"buildDefinition": {
@@ -179,6 +225,7 @@ func TestSLSAProvenanceFromSignatureV1(t *testing.T) {
 			name: "valid with signature from payload",
 			data: `{
 				"_type": "https://in-toto.io/Statement/v0.1",
+				"subject": [{"name": "example.com/test", "digest": {"sha256": "abc123"}}],
 				"predicateType": "https://slsa.dev/provenance/v1",
 				"predicate": {
 					"buildDefinition": {
@@ -195,6 +242,7 @@ func TestSLSAProvenanceFromSignatureV1(t *testing.T) {
 				sig2 := `{"keyid": "key-id-2", "sig": "sig-2"}`
 				payload := encode(`{
 					"_type": "https://in-toto.io/Statement/v0.1",
+					"subject": [{"name": "example.com/test", "digest": {"sha256": "abc123"}}],
 					"predicateType": "https://slsa.dev/provenance/v1",
 					"predicate": {
 						"buildDefinition": {
