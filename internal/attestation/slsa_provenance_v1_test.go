@@ -245,43 +245,6 @@ func TestSLSAProvenanceFromSignatureV1(t *testing.T) {
 	}
 }
 
-func TestMarshalV1(t *testing.T) {
-	sig := mockSignature{&mock.Mock{}}
-
-	sig1 := `{"keyid": "ignored-1", "sig": "ignored-1"}`
-	sig2 := `{"keyid": "ignored-2", "sig": "ignored-2"}`
-	payload := encode(`{
-		"_type": "https://in-toto.io/Statement/v0.1",
-		"predicateType": "https://slsa.dev/provenance/v1",
-		"predicate": {
-			"buildDefinition": {
-				"buildType": "https://my.build.type",
-				"externalParameters": {}
-			},
-			"runDetails": {
-				"builder": {"id": "https://my.builder"}
-			}
-		}
-	}`)
-	sig.On("MediaType").Return(types.MediaType(ct.DssePayloadType), nil)
-	sig.On("Uncompressed").Return(buffy(
-		fmt.Sprintf(`{"payload": "%s", "signatures": [%s, %s]}`, payload, sig1, sig2),
-	), nil)
-	sig.On("Base64Signature").Return("sig-from-cert", nil)
-	sig.On("Cert").Return(signature.ParseChainguardReleaseCert(), nil)
-	sig.On("Chain").Return(signature.ParseSigstoreChainCert(), nil)
-
-	att, err := SLSAProvenanceFromSignatureV1(sig)
-
-	require.NoError(t, err)
-
-	j, err := json.Marshal(att)
-
-	require.NoError(t, err)
-
-	snaps.MatchJSON(t, j)
-}
-
 func TestSLSAProvenanceV1_Subject(t *testing.T) {
 	mockSubject1 := in_toto.Subject{
 		Name: "registry.io/example/image@sha256:abc123",

@@ -97,21 +97,3 @@ func (a slsaProvenanceV1) Signatures() []signature.EntitySignature {
 func (a slsaProvenanceV1) Subject() []in_toto.Subject {
 	return a.statement.Subject
 }
-
-// Todo: It seems odd that this does not contain the statement.
-// (See also the equivalent method in attestation.go)
-func (a slsaProvenanceV1) MarshalJSON() ([]byte, error) {
-	val := struct {
-		Type               string                      `json:"type"`
-		PredicateType      string                      `json:"predicateType"`
-		PredicateBuildType string                      `json:"predicateBuildType"`
-		Signatures         []signature.EntitySignature `json:"signatures"`
-	}{
-		Type:               a.statement.Type,
-		PredicateType:      a.statement.PredicateType,
-		PredicateBuildType: a.statement.Predicate.BuildDefinition.BuildType,
-		Signatures:         a.signatures,
-	}
-
-	return json.Marshal(val)
-}
