@@ -63,13 +63,29 @@ func TestPrivateKeyFromKeyRef(t *testing.T) {
 			expectErr: false,
 		},
 		{
-			name:   "k8s secret with multiple keys (no key field specified)",
+			name:   "k8s secret with multiple keys (no key field specified, defaults to cosign.key)",
 			keyRef: "k8s://test-namespace/multi-key-secret",
 			setup: func(fs afero.Fs, ctx context.Context) {
 				// This will be handled in the test loop
 			},
 			expectErr: true,
-			errMsg:    "contains multiple keys, please specify the key field",
+			errMsg:    "key field \"cosign.key\" not found in secret",
+		},
+		{
+			name:   "k8s secret with default cosign.key field",
+			keyRef: "k8s://test-namespace/cosign-key-secret",
+			setup: func(fs afero.Fs, ctx context.Context) {
+				// This will be handled in the test loop
+			},
+			expectErr: false,
+		},
+		{
+			name:   "k8s secret with cosign.key among multiple keys (defaults to cosign.key)",
+			keyRef: "k8s://test-namespace/mixed-secret",
+			setup: func(fs afero.Fs, ctx context.Context) {
+				// This will be handled in the test loop
+			},
+			expectErr: false,
 		},
 		{
 			name:      "invalid k8s format",
@@ -127,6 +143,28 @@ func TestPrivateKeyFromKeyRef(t *testing.T) {
 							"key2": []byte("key2 content"),
 						},
 					})
+				} else if tt.keyRef == "k8s://test-namespace/cosign-key-secret" {
+					secrets = append(secrets, &v1.Secret{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "cosign-key-secret",
+							Namespace: "test-namespace",
+						},
+						Data: map[string][]byte{
+							"cosign.key": []byte("default cosign key content"),
+						},
+					})
+				} else if tt.keyRef == "k8s://test-namespace/mixed-secret" {
+					secrets = append(secrets, &v1.Secret{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "mixed-secret",
+							Namespace: "test-namespace",
+						},
+						Data: map[string][]byte{
+							"cosign.key":  []byte("mixed secret cosign key content"),
+							"other-key":   []byte("other key content"),
+							"another-key": []byte("another key content"),
+						},
+					})
 				}
 
 				if len(secrets) > 0 {
@@ -158,6 +196,10 @@ func TestPrivateKeyFromKeyRef(t *testing.T) {
 					assert.Equal(t, []byte("single key content"), keyBytes)
 				} else if tt.keyRef == "k8s://test-namespace/test-secret/private-key" {
 					assert.Equal(t, []byte("test private key content"), keyBytes)
+				} else if tt.keyRef == "k8s://test-namespace/cosign-key-secret" {
+					assert.Equal(t, []byte("default cosign key content"), keyBytes)
+				} else if tt.keyRef == "k8s://test-namespace/mixed-secret" {
+					assert.Equal(t, []byte("mixed secret cosign key content"), keyBytes)
 				}
 			}
 		})

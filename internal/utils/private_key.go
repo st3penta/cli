@@ -18,6 +18,8 @@ package utils
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/spf13/afero"
 )
@@ -26,7 +28,16 @@ import (
 // This follows the same pattern as cosignSig.PublicKeyFromKeyRef but for private keys.
 // Supported formats:
 // - File path: "/path/to/private-key.pem"
+// - Kubernetes secret: "k8s://namespace/secret-name"
 // - Kubernetes secret: "k8s://namespace/secret-name/key-field"
 func PrivateKeyFromKeyRef(ctx context.Context, keyRef string, fs afero.Fs) ([]byte, error) {
-	return KeyFromKeyRef(ctx, keyRef, fs)
+	// If the key-field is not specified assume it is "cosign.key"
+	adjustedKeyRef := keyRef
+	if strings.HasPrefix(keyRef, "k8s://") {
+		parts := strings.Split(strings.TrimPrefix(keyRef, "k8s://"), "/")
+		if len(parts) == 2 {
+			adjustedKeyRef = fmt.Sprintf("%s/cosign.key", keyRef)
+		}
+	}
+	return KeyFromKeyRef(ctx, adjustedKeyRef, fs)
 }
