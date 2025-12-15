@@ -8,9 +8,9 @@ Attestations are cryptographically signed statements about software artifacts. T
 
 === a. Provenance Attestations
 
-Provenance attestations describe how a software artifact was built. Conforma primarily supports SLSA (Supply-chain Levels for Software Artifacts) Provenance v0.2.
+Provenance attestations describe how a software artifact was built. Conforma supports SLSA (Supply-chain Levels for Software Artifacts) Provenance v1.0 and v0.2.
 
-**Predicate Type:** `https://slsa.dev/provenance/v0.2`
+**Predicate Type:** `https://slsa.dev/provenance/v1` or `https://slsa.dev/provenance/v0.2`
 
 **Structure:**
 
