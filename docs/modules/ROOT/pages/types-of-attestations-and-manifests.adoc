@@ -6,6 +6,15 @@ Conforma interacts with various types of attestations and manifests throughout t
 
 Attestations are cryptographically signed statements about software artifacts. They provide metadata and evidence about how software was built, what it contains, and who verified it. Conforma retrieves and validates attestations associated with container images.
 
+**Example Relationship:**
+[source,text]
+----
+Image: quay.io/example/app@sha256:image123
+  ├── Provenance: quay.io/example/app:sha256-image123.att (subject: sha256:image123)
+  ├── SBOM: quay.io/example/app:sha256-image123.sbom (subject: sha256:image123)
+  └── Signature: quay.io/example/app:sha256-image123.sig (references: sha256:image123)
+----
+
 === a. Provenance Attestations
 
 Provenance attestations describe how a software artifact was built. Conforma supports SLSA (Supply-chain Levels for Software Artifacts) Provenance v1.0 and v0.2.
@@ -143,6 +152,19 @@ DSSE (Dead Simple Signing Envelope) is the format used to wrap and sign attestat
 * Media type: `application/vnd.in-toto+json`
 * Linked to images by digest
 
+**Example Structure:**
+[source,text]
+----
+DSSE Envelope (OCI artifact)
+  ├── Signatures (array)
+  │   ├── Signature 1
+  │   └── Signature 2
+  └── Payload (base64-encoded)
+      └── In-toto Statement
+          ├── Subject: [{"name": "quay.io/example/app", "digest": {"sha256": "image123"}}]
+          └── Predicate: {provenance data}
+----
+
 == 2. Manifests
 
 Manifests are metadata structures that describe OCI artifacts. Conforma works with several types of manifests.
@@ -202,13 +224,17 @@ Image indexes (also called manifest lists) describe multi-platform images, conta
 * Referenced by digest
 * Platform manifests referenced within the index
 
-**Example Relationship:**
+**Example:**
 [source,text]
 ----
-Image Index (sha256:abc123)
-  ├── linux/amd64 → Image Manifest (sha256:def456)
-  ├── linux/arm64 → Image Manifest (sha256:ghi789)
-  └── linux/s390x → Image Manifest (sha256:jkl012)
+Image Index: quay.io/example/app@sha256:index123
+  ├── linux/amd64 → sha256:manifest-amd64
+  ├── linux/arm64 → sha256:manifest-arm64
+  └── windows/amd64 → sha256:manifest-win
+
+Each platform manifest can have its own attestations:
+  sha256:manifest-amd64
+    └── Provenance: sha256:manifest-amd64.att
 ----
 
 === c. Tekton Task Bundles
@@ -235,6 +261,15 @@ Tekton task bundles are OCI artifacts that package Tekton Task and Pipeline defi
 * Stored as OCI artifacts in registry
 * Referenced by tag or digest
 * Example: `quay.io/conforma/tekton-task:0.1`
+
+**Example:**
+[source,text]
+----
+Task Bundle: quay.io/conforma/tekton-task:0.1 (sha256:bundle123)
+  └── Layer: verify-task.yaml
+      └── spec.steps[].image: quay.io/conforma/cli@sha256:cli456
+          └── This image can be validated by Conforma
+----
 
 **Note:** When task bundles are created during release, image references in task definitions are pinned to specific digests, ensuring immutability.
 
@@ -265,15 +300,7 @@ All artifacts in OCI registries like Quay are linked by SHA256 digests. Understa
 * Container images and their attestations are linked by **digest**
 * Attestations are stored as separate OCI artifacts
 * The attestation's subject field references the image digest
-
-**Example:**
-[source,text]
-----
-Image: quay.io/example/app@sha256:image123
-  ├── Provenance: quay.io/example/app:sha256-image123.att (subject: sha256:image123)
-  ├── SBOM: quay.io/example/app:sha256-image123.sbom (subject: sha256:image123)
-  └── Signature: quay.io/example/app:sha256-image123.sig (references: sha256:image123)
-----
+* See the example in the <<1._Attestations,Attestations>> section above
 
 **Key Properties:**
 
@@ -289,19 +316,7 @@ Image: quay.io/example/app@sha256:image123
 * Image Index contains references to multiple platform-specific manifests
 * Each reference includes the platform (OS/arch) and the manifest digest
 * The index itself has its own digest
-
-**Example:**
-[source,text]
-----
-Image Index: quay.io/example/app@sha256:index123
-  ├── linux/amd64 → sha256:manifest-amd64
-  ├── linux/arm64 → sha256:manifest-arm64
-  └── windows/amd64 → sha256:manifest-win
-
-Each platform manifest can have its own attestations:
-  sha256:manifest-amd64
-    └── Provenance: sha256:manifest-amd64.att
-----
+* See the example in the <<b._Image_Indexes,Image Indexes>> section above
 
 **How Conforma Handles It:**
 
@@ -318,19 +333,7 @@ Each platform manifest can have its own attestations:
 * The envelope contains signatures
 * The payload contains the in-toto Statement
 * The Statement's subject references the image digest
-
-**Example Structure:**
-[source,text]
-----
-DSSE Envelope (OCI artifact)
-  ├── Signatures (array)
-  │   ├── Signature 1
-  │   └── Signature 2
-  └── Payload (base64-encoded)
-      └── In-toto Statement
-          ├── Subject: [{"name": "quay.io/example/app", "digest": {"sha256": "image123"}}]
-          └── Predicate: {provenance data}
-----
+* See the example in the <<e._Envelopes_DSSE,Envelopes (DSSE)>> section above
 
 === Tekton Bundle Relationships
 
@@ -339,15 +342,7 @@ DSSE Envelope (OCI artifact)
 * Task bundles are OCI artifacts containing Tekton resource definitions
 * Bundle layers contain YAML definitions
 * Task definitions within bundles reference container images
-
-**Example:**
-[source,text]
-----
-Task Bundle: quay.io/conforma/tekton-task:0.1 (sha256:bundle123)
-  └── Layer: verify-task.yaml
-      └── spec.steps[].image: quay.io/conforma/cli@sha256:cli456
-          └── This image can be validated by Conforma
-----
+* See the example in the <<c._Tekton_Task_Bundles,Tekton Task Bundles>> section above
 
 **Release Process:**
 
