@@ -19,6 +19,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/afero"
@@ -40,4 +41,31 @@ func PrivateKeyFromKeyRef(ctx context.Context, keyRef string, fs afero.Fs) ([]by
 		}
 	}
 	return KeyFromKeyRef(ctx, adjustedKeyRef, fs)
+}
+
+// PasswordFromKeyRef resolves a password from either environment variable or a Kubernetes secret reference.
+// This provides a unified interface for password resolution similar to PrivateKeyFromKeyRef.
+// Supported formats:
+// - Environment variable: "" (empty string uses COSIGN_PASSWORD env var)
+// - Kubernetes secret: "k8s://namespace/secret-name" (assumes "cosign.password" key)
+// - Kubernetes secret: "k8s://namespace/secret-name/key-field" (explicit key field)
+func PasswordFromKeyRef(ctx context.Context, keyRef string) ([]byte, error) {
+	// If keyRef is empty, use environment variable (backward compatibility)
+	if keyRef == "" {
+		return []byte(os.Getenv("COSIGN_PASSWORD")), nil
+	}
+
+	// If it's a Kubernetes secret reference
+	if strings.HasPrefix(keyRef, "k8s://") {
+		// If the key-field is not specified assume it is "cosign.password"
+		adjustedKeyRef := keyRef
+		parts := strings.Split(strings.TrimPrefix(keyRef, "k8s://"), "/")
+		if len(parts) == 2 {
+			adjustedKeyRef = fmt.Sprintf("%s/cosign.password", keyRef)
+		}
+		return KeyFromKeyRef(ctx, adjustedKeyRef, nil) // fs not needed for k8s secrets
+	}
+
+	// For any other format, treat it as environment variable name
+	return []byte(os.Getenv(keyRef)), nil
 }
