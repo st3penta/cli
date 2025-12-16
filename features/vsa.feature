@@ -110,9 +110,7 @@ Feature: VSA generation and storage
     Given a key pair named "vsa-expiration"
     Given an image named "acceptance/vsa-expiration-image"
     Given a valid image signature of "acceptance/vsa-expiration-image" image signed by the "vsa-expiration" key
-    Given a valid Rekor entry for image signature of "acceptance/vsa-expiration-image"
     Given a valid attestation of "acceptance/vsa-expiration-image" signed by the "vsa-expiration" key
-    Given a valid Rekor entry for attestation of "acceptance/vsa-expiration-image"
     Given VSA index search should return no results
     Given a git repository named "vsa-expiration-policy" with
       | main.rego | examples/happy_day.rego |
@@ -136,9 +134,7 @@ Feature: VSA generation and storage
     Given a key pair named "vsa-existing"
     Given an image named "acceptance/vsa-existing-image"
     Given a valid image signature of "acceptance/vsa-existing-image" image signed by the "vsa-existing" key
-    Given a valid Rekor entry for image signature of "acceptance/vsa-existing-image"
     Given a valid attestation of "acceptance/vsa-existing-image" signed by the "vsa-existing" key
-    Given a valid Rekor entry for attestation of "acceptance/vsa-existing-image"
     Given VSA index search should return valid VSA
     Given a git repository named "vsa-existing-policy" with
       | main.rego | examples/happy_day.rego |
@@ -168,9 +164,7 @@ Feature: VSA generation and storage
     Given a key pair named "vsa-no-upload"
     Given an image named "acceptance/vsa-no-upload-image"
     Given a valid image signature of "acceptance/vsa-no-upload-image" image signed by the "vsa-no-upload" key
-    Given a valid Rekor entry for image signature of "acceptance/vsa-no-upload-image"
     Given a valid attestation of "acceptance/vsa-no-upload-image" signed by the "vsa-no-upload" key
-    Given a valid Rekor entry for attestation of "acceptance/vsa-no-upload-image"
     Given a git repository named "vsa-no-upload-policy" with
       | main.rego | examples/happy_day.rego |
     Given policy configuration named "vsa-no-upload-ec-policy" with specification
@@ -194,9 +188,7 @@ Feature: VSA generation and storage
     Given a key pair named "vsa-upload-fail"
     Given an image named "acceptance/vsa-upload-fail-image"
     Given a valid image signature of "acceptance/vsa-upload-fail-image" image signed by the "vsa-upload-fail" key
-    Given a valid Rekor entry for image signature of "acceptance/vsa-upload-fail-image"
     Given a valid attestation of "acceptance/vsa-upload-fail-image" signed by the "vsa-upload-fail" key
-    Given a valid Rekor entry for attestation of "acceptance/vsa-upload-fail-image"
     Given a git repository named "vsa-upload-fail-policy" with
       | main.rego | examples/happy_day.rego |
     Given policy configuration named "vsa-upload-fail-ec-policy" with specification
