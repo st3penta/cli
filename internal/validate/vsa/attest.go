@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -67,8 +66,12 @@ func NewSigner(ctx context.Context, keyRef string, fs afero.Fs) (*Signer, error)
 		return nil, fmt.Errorf("resolve private key %q: %w", keyRef, err)
 	}
 
-	// TODO maybe: Consider another env var for the key password
-	signerVerifier, err := LoadPrivateKey(keyBytes, []byte(os.Getenv("COSIGN_PASSWORD")))
+	password, err := utils.PasswordFromKeyRef(ctx, keyRef)
+	if err != nil {
+		return nil, fmt.Errorf("resolve private key password: %w", err)
+	}
+
+	signerVerifier, err := LoadPrivateKey(keyBytes, password)
 	if err != nil {
 		return nil, fmt.Errorf("load private key: %w", err)
 	}

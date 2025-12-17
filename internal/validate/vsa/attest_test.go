@@ -446,7 +446,8 @@ func TestNewSigner_Comprehensive(t *testing.T) {
 						Namespace: "test-namespace",
 					},
 					Data: map[string][]byte{
-						"private-key": []byte("test private key content"),
+						"private-key":     []byte("test private key content"),
+						"cosign.password": []byte("test password"),
 					},
 				})
 				ctx = context.WithValue(ctx, utils.K8sClientKey, client)
