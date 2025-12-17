@@ -150,6 +150,7 @@ Feature: VSA generation and storage
       ]
     }
     """
+    Given VSA upload to Rekor should be expected
     # First, generate a VSA and upload it to Rekor
     When ec command is run with "validate image --image ${REGISTRY}/acceptance/vsa-existing-image@sha256:${REGISTRY_acceptance/vsa-existing-image:latest_DIGEST} --policy acceptance/vsa-existing-ec-policy --public-key ${vsa-existing_PUBLIC_KEY} --rekor-url ${REKOR} --vsa --vsa-signing-key ${vsa-existing_PRIVATE_KEY} --vsa-upload rekor@${REKOR} --vsa-expiration 0 --output json"
     Then the exit status should be 0
