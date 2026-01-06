@@ -73,7 +73,7 @@ func NewSigner(ctx context.Context, keyRef string, fs afero.Fs) (*Signer, error)
 
 	signerVerifier, err := LoadPrivateKey(keyBytes, password)
 	if err != nil {
-		return nil, fmt.Errorf("load private key: %w", err)
+		return nil, fmt.Errorf("load private key %q: %w", keyRef, err)
 	}
 
 	return &Signer{
