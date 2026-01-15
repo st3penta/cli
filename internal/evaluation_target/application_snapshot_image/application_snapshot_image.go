@@ -33,6 +33,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 
+	ecc "github.com/conforma/crds/api/v1alpha1"
+
 	"github.com/conforma/cli/internal/attestation"
 	"github.com/conforma/cli/internal/evaluator"
 	"github.com/conforma/cli/internal/fetchers/oci/config"
@@ -62,6 +64,7 @@ type ApplicationSnapshotImage struct {
 	files            map[string]json.RawMessage
 	component        app.SnapshotComponent
 	snapshot         app.SnapshotSpec
+	policySpec       ecc.EnterpriseContractPolicySpec
 }
 
 // NewApplicationSnapshotImage returns an ApplicationSnapshotImage struct with reference, checkOpts, and evaluator ready to use.
@@ -71,9 +74,10 @@ func NewApplicationSnapshotImage(ctx context.Context, component app.SnapshotComp
 		return nil, err
 	}
 	a := &ApplicationSnapshotImage{
-		checkOpts: *opts,
-		component: component,
-		snapshot:  snap,
+		checkOpts:  *opts,
+		component:  component,
+		snapshot:   snap,
+		policySpec: p.Spec(),
 	}
 
 	if err := a.SetImageURL(component.ContainerImage); err != nil {
