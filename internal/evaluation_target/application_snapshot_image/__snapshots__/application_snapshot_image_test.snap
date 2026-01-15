@@ -375,3 +375,80 @@
  }
 }
 ---
+
+[TestWriteInputFile/component_name_in_input - 1]
+{
+ "attestations": null,
+ "component_name": "my-component",
+ "image": {
+  "ref": "registry.io/repository/image:tag",
+  "source": {}
+ },
+ "policy_spec": {},
+ "snapshot": {
+  "application": "",
+  "artifacts": {},
+  "components": [
+   {
+    "containerImage": "registry.io/repository/image:tag",
+    "name": "",
+    "source": {}
+   },
+   {
+    "containerImage": "registry.io/other-repository/image2:tag",
+    "name": "",
+    "source": {}
+   }
+  ]
+ }
+}
+---
+
+[TestWriteInputFile/policy_spec_with_volatile_config - 1]
+{
+ "attestations": null,
+ "component_name": "test-component",
+ "image": {
+  "ref": "registry.io/repository/image:tag",
+  "source": {}
+ },
+ "policy_spec": {
+  "sources": [
+   {
+    "name": "test-source",
+    "volatileConfig": {
+     "exclude": [
+      {
+       "imageDigest": "sha256:abc123",
+       "value": "test.rule"
+      }
+     ],
+     "include": [
+      {
+       "effectiveOn": "2024-01-01T00:00:00Z",
+       "effectiveUntil": "2025-12-31T23:59:59Z",
+       "value": "tasks.required_tasks_found:clamav-scan"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ "snapshot": {
+  "application": "",
+  "artifacts": {},
+  "components": [
+   {
+    "containerImage": "registry.io/repository/image:tag",
+    "name": "",
+    "source": {}
+   },
+   {
+    "containerImage": "registry.io/other-repository/image2:tag",
+    "name": "",
+    "source": {}
+   }
+  ]
+ }
+}
+---
