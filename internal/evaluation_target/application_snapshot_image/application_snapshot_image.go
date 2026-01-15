@@ -26,14 +26,13 @@ import (
 	"path"
 	"runtime/trace"
 
+	ecc "github.com/conforma/crds/api/v1alpha1"
 	"github.com/google/go-containerregistry/pkg/name"
 	app "github.com/konflux-ci/application-api/api/v1alpha1"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	"github.com/sigstore/cosign/v2/pkg/cosign"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
-
-	ecc "github.com/conforma/crds/api/v1alpha1"
 
 	"github.com/conforma/cli/internal/attestation"
 	"github.com/conforma/cli/internal/evaluator"

@@ -2784,6 +2784,18 @@ ${__________known_PUBLIC_KEY}
       }
     ],
     "artifacts": {}
+  },
+  "component_name": "Unnamed",
+  "policy_spec": {
+    "sources": [
+      {
+        "policy": [
+          "git::${GITHOST}/git/policy-input-output-policy.git?ref=${LATEST_COMMIT}"
+        ]
+      }
+    ],
+    "rekorUrl": "${REKOR}",
+    "publicKey": "${known_PUBLIC_KEY}"
   }
 }
 ---
@@ -3147,6 +3159,17 @@ Error: success criteria not met
       }
     ],
     "artifacts": {}
+  },
+  "component_name": "Unnamed",
+  "policy_spec": {
+    "sources": [
+      {
+        "policy": [
+          "git::${GITHOST}/git/olm-manifests.git?ref=${LATEST_COMMIT}"
+        ]
+      }
+    ],
+    "publicKey": "${known_PUBLIC_KEY}"
   }
 }
 ---

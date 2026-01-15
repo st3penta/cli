@@ -28,6 +28,7 @@ import (
 	"strings"
 	"testing"
 
+	ecc "github.com/conforma/crds/api/v1alpha1"
 	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -49,8 +50,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-
-	ecc "github.com/conforma/crds/api/v1alpha1"
 
 	"github.com/conforma/cli/internal/attestation"
 	"github.com/conforma/cli/internal/policy"
