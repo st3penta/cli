@@ -35,6 +35,7 @@
   "ref": "registry.io/repository/image:tag",
   "source": {}
  },
+ "policy_spec": {},
  "snapshot": {
   "application": "",
   "artifacts": {},
@@ -94,6 +95,7 @@
   "ref": "registry.io/repository/image:tag",
   "source": {}
  },
+ "policy_spec": {},
  "snapshot": {
   "application": "",
   "artifacts": {},
@@ -151,6 +153,7 @@
   ],
   "source": {}
  },
+ "policy_spec": {},
  "snapshot": {
   "application": "",
   "artifacts": {},
@@ -182,6 +185,7 @@
   "ref": "registry.io/repository/image:tag",
   "source": {}
  },
+ "policy_spec": {},
  "snapshot": {
   "application": "",
   "artifacts": {},
@@ -216,6 +220,7 @@
   "ref": "registry.io/repository/image:tag",
   "source": {}
  },
+ "policy_spec": {},
  "snapshot": {
   "application": "",
   "artifacts": {},
@@ -275,6 +280,7 @@
   "ref": "registry.io/repository/image:tag",
   "source": {}
  },
+ "policy_spec": {},
  "snapshot": {
   "application": "",
   "artifacts": {},
@@ -318,6 +324,7 @@
   "ref": "registry.io/repository/image:tag",
   "source": {}
  },
+ "policy_spec": {},
  "snapshot": {
   "application": "",
   "artifacts": {},
@@ -349,6 +356,7 @@
    }
   }
  },
+ "policy_spec": {},
  "snapshot": {
   "application": "",
   "artifacts": {},

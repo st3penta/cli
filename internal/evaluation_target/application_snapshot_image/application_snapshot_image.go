@@ -351,10 +351,11 @@ type image struct {
 }
 
 type Input struct {
-	Attestations  []attestationData `json:"attestations"`
-	Image         image             `json:"image"`
-	AppSnapshot   app.SnapshotSpec  `json:"snapshot"`
-	ComponentName string            `json:"component_name,omitempty"`
+	Attestations  []attestationData                `json:"attestations"`
+	Image         image                            `json:"image"`
+	AppSnapshot   app.SnapshotSpec                 `json:"snapshot"`
+	ComponentName string                           `json:"component_name,omitempty"`
+	PolicySpec    ecc.EnterpriseContractPolicySpec `json:"policy_spec,omitempty"`
 }
 
 // WriteInputFile writes the JSON from the attestations to input.json in a random temp dir
@@ -380,6 +381,7 @@ func (a *ApplicationSnapshotImage) WriteInputFile(ctx context.Context) (string, 
 		},
 		AppSnapshot:   a.snapshot,
 		ComponentName: a.component.Name,
+		PolicySpec:    a.policySpec,
 	}
 
 	if a.parentRef != nil {
