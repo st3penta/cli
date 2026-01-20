@@ -560,7 +560,11 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 						generator := vsa.NewGenerator(report, comp, data.policySource, data.policy)
 
 						// Extract directory from --vsa-upload (e.g., "local@/path" -> "/path")
-						uploadDir := extractLocalPath(data.vsaUpload)
+						uploadDir, err := extractLocalPath(data.vsaUpload)
+						if err != nil {
+							log.Errorf("Failed to extract upload path: %v", err)
+							continue
+						}
 
 						writer := &vsa.Writer{
 							FS:            utils.FS(cmd.Context()),
@@ -693,14 +697,14 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 
 // extractLocalPath extracts the path from a vsa-upload spec
 // Parses "local@/path/to/dir" -> "/path/to/dir"
-// Returns "/tmp/vsa" if no valid local path is found
-func extractLocalPath(uploadSpecs []string) string {
+// Returns an error if no valid local path is found
+func extractLocalPath(uploadSpecs []string) (string, error) {
 	for _, spec := range uploadSpecs {
 		if strings.HasPrefix(spec, "local@") {
-			return strings.TrimPrefix(spec, "local@")
+			return strings.TrimPrefix(spec, "local@"), nil
 		}
 	}
-	return "/tmp/vsa"
+	return "", errors.New("--vsa-upload with a 'local@' destination is required for --vsa-format=predicate")
 }
 
 // find if the slice contains "value" output
