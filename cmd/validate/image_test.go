@@ -2057,7 +2057,7 @@ func TestGenerateVSAsPredicates_Errors(t *testing.T) {
 			"--policy", fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON),
 			"--vsa",
 			"--attestation-format", "predicate",
-			"--vsa-output-dir", "/etc/invalid-dir", // Invalid directory outside /tmp and cwd
+			"--attestation-output-dir", "/etc/invalid-dir", // Invalid directory outside /tmp and cwd
 			"--vsa-upload", "local@/tmp/vsa-predicates",
 		})
 
@@ -2093,7 +2093,7 @@ func TestGenerateVSAsPredicates_Errors(t *testing.T) {
 			"--policy", fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON),
 			"--vsa",
 			"--attestation-format", "predicate",
-			"--vsa-output-dir", "/tmp/vsa-predicates",
+			"--attestation-output-dir", "/tmp/vsa-predicates",
 			"--vsa-upload", "local@/tmp/vsa-predicates",
 		})
 
@@ -2172,7 +2172,7 @@ func TestVSAGeneration_WithOutputDir(t *testing.T) {
 				"--policy", fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON),
 				"--vsa",
 				"--attestation-format", tt.format,
-				"--vsa-output-dir", tt.outputDir,
+				"--attestation-output-dir", tt.outputDir,
 				"--vsa-upload", "local@/tmp/vsa-test",
 			}
 
