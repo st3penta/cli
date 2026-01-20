@@ -221,6 +221,65 @@ func TestWritePredicate(t *testing.T) {
 	assert.Equal(t, pred.Summary, output.Summary)
 }
 
+// TestWritePredicate_AbsolutePath tests WritePredicate with absolute path handling
+func TestWritePredicate_AbsolutePath(t *testing.T) {
+	// Set up test filesystem
+	fs := afero.NewMemMapFs()
+
+	// Create test predicate
+	pred := &Predicate{
+		Policy: ecapi.EnterpriseContractPolicySpec{
+			Name: "test-policy",
+		},
+		ImageRefs: []string{"test-image:tag"},
+		Timestamp: "2024-03-21T12:00:00Z",
+		Status:    "passed",
+		Verifier:  "conforma",
+		Summary: VSASummary{
+			Component: ComponentSummary{
+				Name:           "test-component",
+				ContainerImage: "test-image:tag",
+				Source:         nil,
+			},
+		},
+	}
+
+	// Test with absolute path
+	writer := Writer{
+		FS:            fs,
+		TempDirPrefix: "/tmp/test-vsa",
+		FilePerm:      0o600,
+	}
+
+	// Write VSA
+	vsaPath, err := writer.WritePredicate(pred)
+	require.NoError(t, err)
+
+	// Verify the directory was created and file is in the correct location
+	assert.Contains(t, vsaPath, "/tmp/test-vsa/vsa-test-component.json")
+
+	// Verify the directory exists
+	exists, err := afero.DirExists(fs, "/tmp/test-vsa")
+	assert.NoError(t, err)
+	assert.True(t, exists, "Output directory should be created")
+
+	// Read and verify contents
+	data, err := afero.ReadFile(fs, vsaPath)
+	require.NoError(t, err)
+
+	var output Predicate
+	err = json.Unmarshal(data, &output)
+	require.NoError(t, err)
+
+	// Verify fields
+	assert.Equal(t, pred.Policy, output.Policy)
+	assert.Equal(t, pred.ImageRefs, output.ImageRefs)
+	assert.Equal(t, pred.Timestamp, output.Timestamp)
+	assert.Equal(t, pred.Status, output.Status)
+	assert.Equal(t, pred.Verifier, output.Verifier)
+	assert.Equal(t, pred.Summary, output.Summary)
+}
+
 func TestGeneratePredicate(t *testing.T) {
 	// Create test data
 	report := applicationsnapshot.Report{

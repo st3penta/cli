@@ -21,7 +21,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"runtime/trace"
+	"slices"
 	"strings"
 	"time"
 
@@ -50,41 +53,7 @@ type imageValidationFunc func(context.Context, app.SnapshotComponent, *app.Snaps
 var newOPAEvaluator = evaluator.NewOPAEvaluator
 
 func validateImageCmd(validate imageValidationFunc) *cobra.Command {
-	data := struct {
-		certificateIdentity         string
-		certificateIdentityRegExp   string
-		certificateOIDCIssuer       string
-		certificateOIDCIssuerRegExp string
-		effectiveTime               string
-		extraRuleData               []string
-		filePath                    string // Deprecated: images replaced this
-		filterType                  string
-		imageRef                    string
-		info                        bool
-		input                       string // Deprecated: images replaced this
-		ignoreRekor                 bool
-		output                      []string
-		outputFile                  string
-		policy                      policy.Policy
-		policyConfiguration         string
-		policySource                string
-		publicKey                   string
-		rekorURL                    string
-		snapshot                    string
-		spec                        *app.SnapshotSpec
-		// Only used to pass the expansion info to the report. Not a cli flag.
-		expansion     *applicationsnapshot.ExpansionInfo
-		strict        bool
-		images        string
-		noColor       bool
-		forceColor    bool
-		workers       int
-		vsaEnabled    bool
-		vsaFormat     string
-		vsaSigningKey string
-		vsaUpload     []string
-		vsaExpiration time.Duration
-	}{
+	data := &imageData{
 		strict:        true,
 		workers:       5,
 		filterType:    "include-exclude", // Default to include-exclude filter
@@ -310,6 +279,19 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 				data.policy = p
 			}
 
+			// Validate VSA configuration
+			if data.vsaEnabled {
+				if !slices.Contains([]string{"dsse", "predicate"}, data.attestationFormat) {
+					allErrors = errors.Join(allErrors, fmt.Errorf("invalid --attestation-format: %s (valid: dsse, predicate)", data.attestationFormat))
+				}
+				if data.attestationFormat == "dsse" && data.vsaSigningKey == "" {
+					allErrors = errors.Join(allErrors, fmt.Errorf("--vsa-signing-key required for --attestation-format=dsse"))
+				}
+				if data.attestationFormat == "predicate" && data.vsaSigningKey != "" {
+					log.Warn("--vsa-signing-key is ignored for --attestation-format=predicate")
+				}
+			}
+
 			return
 		},
 
@@ -458,127 +440,21 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 			}
 
 			if data.vsaEnabled {
-				// Validate format
-				validFormats := []string{"dsse", "predicate"}
-				formatValid := false
-				for _, f := range validFormats {
-					if data.vsaFormat == f {
-						formatValid = true
-						break
-					}
-				}
-				if !formatValid {
-					return fmt.Errorf("invalid --vsa-format: %s (valid: %s)",
-						data.vsaFormat, strings.Join(validFormats, ", "))
+				// Validate and get output directory
+				outputDir, err := validateAttestationOutputPath(data.attestationOutputDir)
+				if err != nil {
+					return fmt.Errorf("invalid attestation output directory: %w", err)
 				}
 
-				// Validate signing key requirement
-				if data.vsaFormat == "dsse" && data.vsaSigningKey == "" {
-					return fmt.Errorf("--vsa-signing-key required for --vsa-format=dsse")
-				}
-				if data.vsaFormat == "predicate" && data.vsaSigningKey != "" {
-					log.Warn("--vsa-signing-key is ignored for --vsa-format=predicate")
-				}
-
-				if data.vsaFormat == "dsse" {
-					// EXISTING PATH: Use service for DSSE envelopes
-					signer, err := vsa.NewSigner(cmd.Context(), data.vsaSigningKey, utils.FS(cmd.Context()))
-					if err != nil {
-						log.Error(err)
+				// Dispatch to appropriate method based on format
+				switch data.attestationFormat {
+				case "dsse":
+					if err := data.generateVSAsDSSE(cmd, report, outputDir); err != nil {
 						return err
 					}
-
-					// Create VSA service
-					vsaService := vsa.NewServiceWithFS(signer, utils.FS(cmd.Context()), data.policySource, data.policy)
-
-					// Define helper functions for getting git URL and digest
-					getGitURL := func(comp applicationsnapshot.Component) string {
-						if comp.Source.GitSource != nil {
-							return comp.Source.GitSource.URL
-						}
-						return ""
-					}
-
-					getDigest := func(comp applicationsnapshot.Component) (string, error) {
-						imageRef, err := name.ParseReference(comp.ContainerImage)
-						if err != nil {
-							return "", fmt.Errorf("failed to parse image reference %s: %v", comp.ContainerImage, err)
-						}
-
-						digest, err := oci.NewClient(cmd.Context()).ResolveDigest(imageRef)
-						if err != nil {
-							return "", fmt.Errorf("failed to resolve digest for image %s: %v", comp.ContainerImage, err)
-						}
-
-						return digest, nil
-					}
-
-					// Process all VSAs using the service
-					vsaResult, err := vsaService.ProcessAllVSAs(cmd.Context(), report, getGitURL, getDigest)
-					if err != nil {
-						log.Errorf("Failed to process VSAs: %v", err)
-						// Don't return error here, continue with the rest of the command
-					} else {
-						// Upload VSAs to configured storage backends
-						if len(data.vsaUpload) > 0 {
-							log.Infof("[VSA] Starting upload to %d storage backend(s)", len(data.vsaUpload))
-
-							// Upload component VSA envelopes
-							for imageRef, envelopePath := range vsaResult.ComponentEnvelopes {
-								uploadErr := vsa.UploadVSAEnvelope(cmd.Context(), envelopePath, data.vsaUpload, signer)
-								if uploadErr != nil {
-									log.Errorf("[VSA] Upload failed for component %s: %v", imageRef, uploadErr)
-								} else {
-									log.Infof("[VSA] Uploaded Component VSA")
-								}
-							}
-
-							// Upload snapshot VSA envelope if it exists
-							if vsaResult.SnapshotEnvelope != "" {
-								uploadErr := vsa.UploadVSAEnvelope(cmd.Context(), vsaResult.SnapshotEnvelope, data.vsaUpload, signer)
-								if uploadErr != nil {
-									log.Errorf("[VSA] Upload failed for snapshot: %v", uploadErr)
-								} else {
-									log.Infof("[VSA] Uploaded Snapshot VSA")
-								}
-							}
-						} else {
-							// No upload backends configured - inform user about next steps
-							totalFiles := len(vsaResult.ComponentEnvelopes)
-							if vsaResult.SnapshotEnvelope != "" {
-								totalFiles++
-							}
-
-							if totalFiles > 0 {
-								log.Errorf("[VSA] VSA files generated but not uploaded (no --vsa-upload backends specified)")
-							}
-						}
-					}
-				} else if data.vsaFormat == "predicate" {
-					// NEW PATH: Generate predicates only
-					for _, comp := range report.Components {
-						generator := vsa.NewGenerator(report, comp, data.policySource, data.policy)
-
-						// Extract directory from --vsa-upload (e.g., "local@/path" -> "/path")
-						uploadDir, err := extractLocalPath(data.vsaUpload)
-						if err != nil {
-							log.Errorf("Failed to extract upload path: %v", err)
-							continue
-						}
-
-						writer := &vsa.Writer{
-							FS:            utils.FS(cmd.Context()),
-							TempDirPrefix: uploadDir,
-							FilePerm:      0o600,
-						}
-
-						predicatePath, err := vsa.GenerateAndWritePredicate(cmd.Context(), generator, writer)
-						if err != nil {
-							log.Errorf("Failed to generate predicate for %s: %v", comp.ContainerImage, err)
-							continue
-						}
-
-						log.Infof("[VSA] Generated predicate for %s at %s", comp.ContainerImage, predicatePath)
+				case "predicate":
+					if err := data.generateVSAsPredicates(cmd, report, outputDir); err != nil {
+						return err
 					}
 				}
 			}
@@ -681,10 +557,11 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 		- "ec-policy": Uses Enterprise Contract policy filtering with pipeline intention support`))
 
 	cmd.Flags().BoolVar(&data.vsaEnabled, "vsa", false, "Generate a Verification Summary Attestation (VSA) for each validated image.")
-	cmd.Flags().StringVar(&data.vsaFormat, "vsa-format", "dsse", "VSA output format: dsse (signed envelope), predicate (raw JSON)")
+	cmd.Flags().StringVar(&data.attestationFormat, "attestation-format", "dsse", "Attestation output format: dsse (signed envelope), predicate (raw JSON)")
 	cmd.Flags().StringVar(&data.vsaSigningKey, "vsa-signing-key", "", "Path to the private key for signing the VSA. Supports file paths and Kubernetes secret references (k8s://namespace/secret-name/key-field).")
 	cmd.Flags().StringSliceVar(&data.vsaUpload, "vsa-upload", nil, "Storage backends for VSA upload. Format: backend@url?param=value. Examples: rekor@https://rekor.sigstore.dev, local@./vsa-dir")
 	cmd.Flags().DurationVar(&data.vsaExpiration, "vsa-expiration", data.vsaExpiration, "Expiration threshold for existing VSAs. If a valid VSA exists and is newer than this threshold, validation will be skipped. (default 168h)")
+	cmd.Flags().StringVar(&data.attestationOutputDir, "attestation-output-dir", "", "Directory for attestation output files. Defaults to a temp directory under /tmp. Must be under /tmp or the current working directory.")
 
 	if len(data.input) > 0 || len(data.filePath) > 0 || len(data.images) > 0 {
 		if err := cmd.MarkFlagRequired("image"); err != nil {
@@ -695,16 +572,179 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 	return cmd
 }
 
-// extractLocalPath extracts the path from a vsa-upload spec
-// Parses "local@/path/to/dir" -> "/path/to/dir"
-// Returns an error if no valid local path is found
-func extractLocalPath(uploadSpecs []string) (string, error) {
-	for _, spec := range uploadSpecs {
-		if strings.HasPrefix(spec, "local@") {
-			return strings.TrimPrefix(spec, "local@"), nil
+// validateAttestationOutputPath validates and returns the absolute path for attestation output.
+// If path is empty, defaults to a temp directory under /tmp with "vsa-" prefix.
+// If path is provided, validates it's under /tmp or current working directory.
+func validateAttestationOutputPath(path string) (string, error) {
+	// Default to temp directory if not provided
+	if path == "" {
+		return "vsa-", nil
+	}
+
+	// Clean and get absolute path
+	cleanPath := filepath.Clean(path)
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path for %s: %w", path, err)
+	}
+
+	// Get current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current working directory: %w", err)
+	}
+
+	// Check if path is under /tmp
+	tmpDir := filepath.Clean("/tmp")
+	if strings.HasPrefix(absPath, tmpDir+string(filepath.Separator)) || absPath == tmpDir {
+		return absPath, nil
+	}
+
+	// Check if path is under current working directory
+	if strings.HasPrefix(absPath, cwd+string(filepath.Separator)) || absPath == cwd {
+		return absPath, nil
+	}
+
+	return "", fmt.Errorf("attestation output directory must be under /tmp or current working directory, got: %s", absPath)
+}
+
+// imageData is the struct that holds all image validation command data
+type imageData struct {
+	certificateIdentity         string
+	certificateIdentityRegExp   string
+	certificateOIDCIssuer       string
+	certificateOIDCIssuerRegExp string
+	effectiveTime               string
+	extraRuleData               []string
+	filePath                    string
+	filterType                  string
+	imageRef                    string
+	info                        bool
+	input                       string
+	ignoreRekor                 bool
+	output                      []string
+	outputFile                  string
+	policy                      policy.Policy
+	policyConfiguration         string
+	policySource                string
+	publicKey                   string
+	rekorURL                    string
+	snapshot                    string
+	spec                        *app.SnapshotSpec
+	expansion                   *applicationsnapshot.ExpansionInfo
+	strict                      bool
+	images                      string
+	noColor                     bool
+	forceColor                  bool
+	workers                     int
+	vsaEnabled                  bool
+	attestationFormat           string
+	vsaSigningKey               string
+	vsaUpload                   []string
+	vsaExpiration               time.Duration
+	attestationOutputDir        string
+}
+
+// generateVSAsDSSE generates DSSE VSA envelopes for all validated components
+func (data *imageData) generateVSAsDSSE(cmd *cobra.Command, report applicationsnapshot.Report, outputDir string) error {
+	// Use service for DSSE envelopes
+	signer, err := vsa.NewSigner(cmd.Context(), data.vsaSigningKey, utils.FS(cmd.Context()))
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	// Create VSA service with output directory
+	vsaService := vsa.NewServiceWithFS(signer, utils.FS(cmd.Context()), data.policySource, data.policy, outputDir)
+
+	// Define helper functions for getting git URL and digest
+	getGitURL := func(comp applicationsnapshot.Component) string {
+		if comp.Source.GitSource != nil {
+			return comp.Source.GitSource.URL
+		}
+		return ""
+	}
+
+	getDigest := func(comp applicationsnapshot.Component) (string, error) {
+		imageRef, err := name.ParseReference(comp.ContainerImage)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse image reference %s: %v", comp.ContainerImage, err)
+		}
+
+		digest, err := oci.NewClient(cmd.Context()).ResolveDigest(imageRef)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve digest for image %s: %v", comp.ContainerImage, err)
+		}
+
+		return digest, nil
+	}
+
+	// Process all VSAs using the service
+	vsaResult, err := vsaService.ProcessAllVSAs(cmd.Context(), report, getGitURL, getDigest)
+	if err != nil {
+		log.Errorf("Failed to process VSAs: %v", err)
+		// Don't return error here, continue with the rest of the command
+	} else {
+		// Upload VSAs to configured storage backends
+		if len(data.vsaUpload) > 0 {
+			log.Infof("[VSA] Starting upload to %d storage backend(s)", len(data.vsaUpload))
+
+			// Upload component VSA envelopes
+			for imageRef, envelopePath := range vsaResult.ComponentEnvelopes {
+				uploadErr := vsa.UploadVSAEnvelope(cmd.Context(), envelopePath, data.vsaUpload, signer)
+				if uploadErr != nil {
+					log.Errorf("[VSA] Upload failed for component %s: %v", imageRef, uploadErr)
+				} else {
+					log.Infof("[VSA] Uploaded Component VSA")
+				}
+			}
+
+			// Upload snapshot VSA envelope if it exists
+			if vsaResult.SnapshotEnvelope != "" {
+				uploadErr := vsa.UploadVSAEnvelope(cmd.Context(), vsaResult.SnapshotEnvelope, data.vsaUpload, signer)
+				if uploadErr != nil {
+					log.Errorf("[VSA] Upload failed for snapshot: %v", uploadErr)
+				} else {
+					log.Infof("[VSA] Uploaded Snapshot VSA")
+				}
+			}
+		} else {
+			// No upload backends configured - inform user about next steps
+			totalFiles := len(vsaResult.ComponentEnvelopes)
+			if vsaResult.SnapshotEnvelope != "" {
+				totalFiles++
+			}
+
+			if totalFiles > 0 {
+				log.Errorf("[VSA] VSA files generated but not uploaded (no --vsa-upload backends specified)")
+			}
 		}
 	}
-	return "", errors.New("--vsa-upload with a 'local@' destination is required for --vsa-format=predicate")
+
+	return nil
+}
+
+// generateVSAsPredicates generates raw VSA predicates for all validated components
+func (data *imageData) generateVSAsPredicates(cmd *cobra.Command, report applicationsnapshot.Report, outputDir string) error {
+	for _, comp := range report.Components {
+		generator := vsa.NewGenerator(report, comp, data.policySource, data.policy)
+
+		writer := &vsa.Writer{
+			FS:            utils.FS(cmd.Context()),
+			TempDirPrefix: outputDir,
+			FilePerm:      0o600,
+		}
+
+		predicatePath, err := vsa.GenerateAndWritePredicate(cmd.Context(), generator, writer)
+		if err != nil {
+			log.Errorf("Failed to generate predicate for %s: %v", comp.ContainerImage, err)
+			continue
+		}
+
+		log.Infof("[VSA] Generated predicate for %s at %s", comp.ContainerImage, predicatePath)
+	}
+
+	return nil
 }
 
 // find if the slice contains "value" output

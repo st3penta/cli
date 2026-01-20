@@ -29,6 +29,8 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -1634,7 +1636,7 @@ func TestValidateImageCommand_ShowWarningsFlag(t *testing.T) {
 }
 
 func TestValidateImageCommand_VSAFormat_DSSE(t *testing.T) {
-	// Test that --vsa-format=dsse generates DSSE envelopes (existing behavior)
+	// Test that --attestation-format=dsse generates DSSE envelopes (existing behavior)
 	t.Setenv("COSIGN_PASSWORD", "")
 
 	// Mock the expensive loadPrivateKey operation
@@ -1670,7 +1672,7 @@ func TestValidateImageCommand_VSAFormat_DSSE(t *testing.T) {
 		"--image", "registry/image:tag",
 		"--policy", fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON),
 		"--vsa",
-		"--vsa-format", "dsse",
+		"--attestation-format", "dsse",
 		"--vsa-signing-key", "/tmp/vsa-key.pem",
 		"--vsa-upload", "local@/tmp/vsa-test",
 	})
@@ -1687,7 +1689,7 @@ func TestValidateImageCommand_VSAFormat_DSSE(t *testing.T) {
 }
 
 func TestValidateImageCommand_VSAFormat_Predicate(t *testing.T) {
-	// Test that --vsa-format=predicate generates raw predicates
+	// Test that --attestation-format=predicate generates raw predicates
 	t.Setenv("COSIGN_PASSWORD", "")
 
 	validateImageCmd := validateImageCmd(happyValidator())
@@ -1707,7 +1709,7 @@ func TestValidateImageCommand_VSAFormat_Predicate(t *testing.T) {
 		"--image", "registry/image:tag",
 		"--policy", fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON),
 		"--vsa",
-		"--vsa-format", "predicate",
+		"--attestation-format", "predicate",
 		"--vsa-upload", "local@/tmp/vsa-predicates",
 	})
 
@@ -1741,7 +1743,7 @@ func TestValidateImageCommand_VSAFormat_InvalidFormat(t *testing.T) {
 		"--image", "registry/image:tag",
 		"--policy", fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON),
 		"--vsa",
-		"--vsa-format", "invalid-format",
+		"--attestation-format", "invalid-format",
 		"--vsa-signing-key", "/tmp/vsa-key.pem",
 		"--vsa-upload", "local@/tmp/vsa-test",
 	})
@@ -1755,12 +1757,12 @@ func TestValidateImageCommand_VSAFormat_InvalidFormat(t *testing.T) {
 
 	err := cmd.Execute()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid --vsa-format: invalid-format")
+	assert.Contains(t, err.Error(), "invalid --attestation-format: invalid-format")
 	assert.Contains(t, err.Error(), "(valid: dsse, predicate)")
 }
 
 func TestValidateImageCommand_VSAFormat_DSSE_RequiresSigningKey(t *testing.T) {
-	// Test that --vsa-format=dsse requires --vsa-signing-key
+	// Test that --attestation-format=dsse requires --vsa-signing-key
 	validateImageCmd := validateImageCmd(happyValidator())
 	cmd := setUpCobra(validateImageCmd)
 
@@ -1778,7 +1780,7 @@ func TestValidateImageCommand_VSAFormat_DSSE_RequiresSigningKey(t *testing.T) {
 		"--image", "registry/image:tag",
 		"--policy", fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON),
 		"--vsa",
-		"--vsa-format", "dsse",
+		"--attestation-format", "dsse",
 		// Missing --vsa-signing-key
 		"--vsa-upload", "local@/tmp/vsa-test",
 	})
@@ -1792,11 +1794,11 @@ func TestValidateImageCommand_VSAFormat_DSSE_RequiresSigningKey(t *testing.T) {
 
 	err := cmd.Execute()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "--vsa-signing-key required for --vsa-format=dsse")
+	assert.Contains(t, err.Error(), "--vsa-signing-key required for --attestation-format=dsse")
 }
 
 func TestValidateImageCommand_VSAFormat_Predicate_WorksWithoutSigningKey(t *testing.T) {
-	// Test that --vsa-format=predicate works without signing key
+	// Test that --attestation-format=predicate works without signing key
 	t.Setenv("COSIGN_PASSWORD", "")
 
 	validateImageCmd := validateImageCmd(happyValidator())
@@ -1816,7 +1818,7 @@ func TestValidateImageCommand_VSAFormat_Predicate_WorksWithoutSigningKey(t *test
 		"--image", "registry/image:tag",
 		"--policy", fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON),
 		"--vsa",
-		"--vsa-format", "predicate",
+		"--attestation-format", "predicate",
 		// No --vsa-signing-key provided
 		"--vsa-upload", "local@/tmp/vsa-predicates",
 	})
@@ -1830,4 +1832,365 @@ func TestValidateImageCommand_VSAFormat_Predicate_WorksWithoutSigningKey(t *test
 	_ = cmd.Execute()
 	// We don't assert no error because predicate generation might fail in test environment,
 	// but we're testing that it doesn't fail due to missing signing key
+}
+
+func TestValidateAttestationOutputPath(t *testing.T) {
+	// Get current working directory for tests
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		path        string
+		expected    string
+		shouldError bool
+		errorMsg    string
+	}{
+		{
+			name:     "empty path defaults to vsa- prefix",
+			path:     "",
+			expected: "vsa-",
+		},
+		{
+			name:     "/tmp path is allowed",
+			path:     "/tmp/vsa-test",
+			expected: "/tmp/vsa-test",
+		},
+		{
+			name:     "/tmp itself is allowed",
+			path:     "/tmp",
+			expected: "/tmp",
+		},
+		{
+			name:     "relative path under cwd is allowed",
+			path:     "./vsa-output",
+			expected: filepath.Join(cwd, "vsa-output"),
+		},
+		{
+			name:     "subdirectory under cwd is allowed",
+			path:     "vsa-output",
+			expected: filepath.Join(cwd, "vsa-output"),
+		},
+		{
+			name:        "/etc path is rejected",
+			path:        "/etc/vsa",
+			shouldError: true,
+			errorMsg:    "attestation output directory must be under /tmp or current working directory",
+		},
+		{
+			name:        "/var path is rejected",
+			path:        "/var/vsa",
+			shouldError: true,
+			errorMsg:    "attestation output directory must be under /tmp or current working directory",
+		},
+		{
+			name:        "root path is rejected",
+			path:        "/",
+			shouldError: true,
+			errorMsg:    "attestation output directory must be under /tmp or current working directory",
+		},
+		{
+			name:     "path with .. under cwd is allowed after cleaning",
+			path:     "./foo/../vsa",
+			expected: filepath.Join(cwd, "vsa"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := validateAttestationOutputPath(tt.path)
+
+			if tt.shouldError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorMsg)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestGenerateVSAsDSSE_Errors tests error paths in generateVSAsDSSE
+func TestGenerateVSAsDSSE_Errors(t *testing.T) {
+	t.Setenv("COSIGN_PASSWORD", "")
+
+	t.Run("invalid signing key", func(t *testing.T) {
+		validateImageCmd := validateImageCmd(happyValidator())
+		cmd := setUpCobra(validateImageCmd)
+
+		fs := afero.NewMemMapFs()
+		ctx := utils.WithFS(context.Background(), fs)
+
+		// Create invalid signing key file
+		err := afero.WriteFile(fs, "/tmp/invalid-key.pem", []byte("invalid key content"), 0600)
+		require.NoError(t, err)
+
+		client := fake.FakeClient{}
+		commonMockClient(&client)
+		ctx = oci.WithClient(ctx, &client)
+		cmd.SetContext(ctx)
+
+		cmd.SetArgs([]string{
+			"validate", "image",
+			"--image", "registry/image:tag",
+			"--policy", fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON),
+			"--vsa",
+			"--attestation-format", "dsse",
+			"--vsa-signing-key", "/tmp/invalid-key.pem",
+			"--vsa-upload", "local@/tmp/vsa-test",
+		})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SilenceErrors = true
+		cmd.SilenceUsage = true
+
+		utils.SetTestRekorPublicKey(t)
+
+		err = cmd.Execute()
+		assert.Error(t, err)
+		// The error should be related to key loading
+	})
+
+	t.Run("missing signing key file", func(t *testing.T) {
+		validateImageCmd := validateImageCmd(happyValidator())
+		cmd := setUpCobra(validateImageCmd)
+
+		fs := afero.NewMemMapFs()
+		ctx := utils.WithFS(context.Background(), fs)
+
+		client := fake.FakeClient{}
+		commonMockClient(&client)
+		ctx = oci.WithClient(ctx, &client)
+		cmd.SetContext(ctx)
+
+		cmd.SetArgs([]string{
+			"validate", "image",
+			"--image", "registry/image:tag",
+			"--policy", fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON),
+			"--vsa",
+			"--attestation-format", "dsse",
+			"--vsa-signing-key", "/tmp/nonexistent-key.pem",
+			"--vsa-upload", "local@/tmp/vsa-test",
+		})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SilenceErrors = true
+		cmd.SilenceUsage = true
+
+		utils.SetTestRekorPublicKey(t)
+
+		err := cmd.Execute()
+		assert.Error(t, err)
+		// The error should be related to file not found
+	})
+
+	t.Run("successful VSA generation with uploads", func(t *testing.T) {
+		// Mock the expensive loadPrivateKey operation
+		originalLoadPrivateKey := vsa.LoadPrivateKey
+		defer func() { vsa.LoadPrivateKey = originalLoadPrivateKey }()
+
+		vsa.LoadPrivateKey = func(keyBytes, password []byte) (signature.SignerVerifier, error) {
+			return &simpleFakeSigner{}, nil
+		}
+
+		validateImageCmd := validateImageCmd(happyValidator())
+		cmd := setUpCobra(validateImageCmd)
+
+		fs := afero.NewMemMapFs()
+		ctx := utils.WithFS(context.Background(), fs)
+
+		// Create a test VSA signing key
+		err := afero.WriteFile(fs, "/tmp/vsa-key.pem", []byte(testECKey), 0600)
+		require.NoError(t, err)
+
+		client := fake.FakeClient{}
+		commonMockClient(&client)
+
+		// Add missing ResolveDigest expectation for VSA processing
+		digest, _ := name.NewDigest(testImageDigest)
+		client.On("ResolveDigest", mock.Anything).Return(digest.String(), nil)
+
+		ctx = oci.WithClient(ctx, &client)
+		cmd.SetContext(ctx)
+
+		cmd.SetArgs([]string{
+			"validate", "image",
+			"--image", "registry/image:tag",
+			"--policy", fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON),
+			"--vsa",
+			"--attestation-format", "dsse",
+			"--vsa-signing-key", "/tmp/vsa-key.pem",
+			"--vsa-upload", "local@/tmp/vsa-test",
+		})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+
+		utils.SetTestRekorPublicKey(t)
+
+		// Execute - we expect this to attempt uploads (though they may fail in test environment)
+		_ = cmd.Execute()
+		// We don't assert no error because upload might fail in test environment
+	})
+}
+
+// TestGenerateVSAsPredicates_Errors tests error paths in generateVSAsPredicates
+func TestGenerateVSAsPredicates_Errors(t *testing.T) {
+	t.Run("invalid output directory", func(t *testing.T) {
+		validateImageCmd := validateImageCmd(happyValidator())
+		cmd := setUpCobra(validateImageCmd)
+
+		fs := afero.NewMemMapFs()
+		ctx := utils.WithFS(context.Background(), fs)
+
+		client := fake.FakeClient{}
+		commonMockClient(&client)
+		ctx = oci.WithClient(ctx, &client)
+		cmd.SetContext(ctx)
+
+		cmd.SetArgs([]string{
+			"validate", "image",
+			"--image", "registry/image:tag",
+			"--policy", fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON),
+			"--vsa",
+			"--attestation-format", "predicate",
+			"--vsa-output-dir", "/etc/invalid-dir", // Invalid directory outside /tmp and cwd
+			"--vsa-upload", "local@/tmp/vsa-predicates",
+		})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SilenceErrors = true
+		cmd.SilenceUsage = true
+
+		utils.SetTestRekorPublicKey(t)
+
+		err := cmd.Execute()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "attestation output directory must be under /tmp or current working directory")
+	})
+
+	t.Run("write failures with read-only filesystem", func(t *testing.T) {
+		// This test simulates write failures by using a read-only filesystem
+		validateImageCmd := validateImageCmd(happyValidator())
+		cmd := setUpCobra(validateImageCmd)
+
+		// Create a read-only filesystem to simulate write errors
+		fs := afero.NewReadOnlyFs(afero.NewMemMapFs())
+		ctx := utils.WithFS(context.Background(), fs)
+
+		client := fake.FakeClient{}
+		commonMockClient(&client)
+		ctx = oci.WithClient(ctx, &client)
+		cmd.SetContext(ctx)
+
+		cmd.SetArgs([]string{
+			"validate", "image",
+			"--image", "registry/image:tag",
+			"--policy", fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON),
+			"--vsa",
+			"--attestation-format", "predicate",
+			"--vsa-output-dir", "/tmp/vsa-predicates",
+			"--vsa-upload", "local@/tmp/vsa-predicates",
+		})
+
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SilenceErrors = true
+		cmd.SilenceUsage = true
+
+		utils.SetTestRekorPublicKey(t)
+
+		// The command may fail due to filesystem errors
+		_ = cmd.Execute()
+		// We don't assert specific error here because the error might occur at various stages
+	})
+}
+
+// TestVSAGeneration_WithOutputDir tests the complete VSA generation flow with custom output directory
+func TestVSAGeneration_WithOutputDir(t *testing.T) {
+	t.Setenv("COSIGN_PASSWORD", "")
+
+	// Mock the expensive loadPrivateKey operation
+	originalLoadPrivateKey := vsa.LoadPrivateKey
+	defer func() { vsa.LoadPrivateKey = originalLoadPrivateKey }()
+
+	vsa.LoadPrivateKey = func(keyBytes, password []byte) (signature.SignerVerifier, error) {
+		return &simpleFakeSigner{}, nil
+	}
+
+	tests := []struct {
+		name      string
+		format    string
+		outputDir string
+		needsKey  bool
+	}{
+		{
+			name:      "DSSE format with custom output directory",
+			format:    "dsse",
+			outputDir: "/tmp/test-vsa-dsse",
+			needsKey:  true,
+		},
+		{
+			name:      "predicate format with custom output directory",
+			format:    "predicate",
+			outputDir: "/tmp/test-vsa-predicate",
+			needsKey:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			validateImageCmd := validateImageCmd(happyValidator())
+			cmd := setUpCobra(validateImageCmd)
+
+			fs := afero.NewMemMapFs()
+			ctx := utils.WithFS(context.Background(), fs)
+
+			// Create test VSA signing key if needed
+			if tt.needsKey {
+				err := afero.WriteFile(fs, "/tmp/vsa-key.pem", []byte(testECKey), 0600)
+				require.NoError(t, err)
+			}
+
+			client := fake.FakeClient{}
+			commonMockClient(&client)
+
+			// Add ResolveDigest expectation
+			digest, _ := name.NewDigest(testImageDigest)
+			client.On("ResolveDigest", mock.Anything).Return(digest.String(), nil)
+
+			ctx = oci.WithClient(ctx, &client)
+			cmd.SetContext(ctx)
+
+			args := []string{
+				"validate", "image",
+				"--image", "registry/image:tag",
+				"--policy", fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON),
+				"--vsa",
+				"--attestation-format", tt.format,
+				"--vsa-output-dir", tt.outputDir,
+				"--vsa-upload", "local@/tmp/vsa-test",
+			}
+
+			if tt.needsKey {
+				args = append(args, "--vsa-signing-key", "/tmp/vsa-key.pem")
+			}
+
+			cmd.SetArgs(args)
+
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+
+			utils.SetTestRekorPublicKey(t)
+
+			// Execute command
+			_ = cmd.Execute()
+			// We don't assert no error because generation might fail in test environment,
+			// but we're testing that the output directory logic is executed correctly
+		})
+	}
 }

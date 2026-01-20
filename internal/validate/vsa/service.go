@@ -39,15 +39,17 @@ type Service struct {
 	fs           afero.Fs
 	policySource string
 	policy       PublicKeyProvider
+	outputDir    string
 }
 
 // NewServiceWithFS creates a new VSA service with the given signer and filesystem
-func NewServiceWithFS(signer *Signer, fs afero.Fs, policySource string, policy PublicKeyProvider) *Service {
+func NewServiceWithFS(signer *Signer, fs afero.Fs, policySource string, policy PublicKeyProvider, outputDir string) *Service {
 	return &Service{
 		signer:       signer,
 		fs:           fs,
 		policySource: policySource,
 		policy:       policy,
+		outputDir:    outputDir,
 	}
 }
 
@@ -56,7 +58,7 @@ func (s *Service) ProcessComponentVSA(ctx context.Context, report applicationsna
 	generator := NewGenerator(report, comp, s.policySource, s.policy)
 	writer := &Writer{
 		FS:            s.fs,
-		TempDirPrefix: "vsa-",
+		TempDirPrefix: s.outputDir,
 		FilePerm:      0o600,
 	}
 

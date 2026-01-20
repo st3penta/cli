@@ -197,9 +197,9 @@ spec:
       description: Enable VSA generation
       default: "false"
 
-    - name: VSA_FORMAT
+    - name: ATTESTATION_FORMAT
       type: string
-      description: "VSA format: dsse (signed envelope) or predicate (raw JSON)"
+      description: "Attestation format: dsse (signed envelope) or predicate (raw JSON)"
       default: "dsse"
 
     - name: VSA_SIGNING_KEY
@@ -323,9 +323,9 @@ spec:
 
         # Add VSA arguments if enabled
         if [[ "$(params.ENABLE_VSA)" == "true" ]]; then
-          EC_ARGS+=(--vsa --vsa-format=$(params.VSA_FORMAT))
+          EC_ARGS+=(--vsa --attestation-format=$(params.ATTESTATION_FORMAT))
 
-          if [[ "$(params.VSA_FORMAT)" == "dsse" ]]; then
+          if [[ "$(params.ATTESTATION_FORMAT)" == "dsse" ]]; then
             if [[ -z "$(params.VSA_SIGNING_KEY)" ]]; then
               echo "ERROR: VSA_SIGNING_KEY required for format=dsse"
               exit 1

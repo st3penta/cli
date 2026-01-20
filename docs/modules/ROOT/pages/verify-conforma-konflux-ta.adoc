@@ -91,7 +91,7 @@ paths can be provided by using the `:` separator.
 *ENABLE_VSA* (`string`):: Enable VSA generation
 +
 *Default*: `false`
-*VSA_FORMAT* (`string`):: VSA format: dsse (signed envelope) or predicate (raw JSON)
+*ATTESTATION_FORMAT* (`string`):: Attestation format: dsse (signed envelope) or predicate (raw JSON)
 +
 *Default*: `dsse`
 *VSA_SIGNING_KEY* (`string`):: Signing key for format=dsse (k8s:// or file:// URL)
