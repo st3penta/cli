@@ -110,6 +110,8 @@ Use a regular expression to match certificate attributes.
 
 == Options
 
+--attestation-format:: Attestation output format: dsse (signed envelope), predicate (raw JSON) (Default: dsse)
+--attestation-output-dir:: Directory for attestation output files. Defaults to a temp directory under /tmp. Must be under /tmp or the current working directory.
 --certificate-identity:: URL of the certificate identity for keyless verification
 --certificate-identity-regexp:: Regular expression for the URL of the certificate identity for keyless verification
 --certificate-oidc-issuer:: URL of the certificate OIDC issuer for keyless verification

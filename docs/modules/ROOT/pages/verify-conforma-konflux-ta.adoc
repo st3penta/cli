@@ -88,8 +88,21 @@ paths can be provided by using the `:` separator.
 *RETRY_MAX_WAIT* (`string`):: Maximum wait time between retries (e.g., "3s", "10s")
 +
 *Default*: `3s`
+*ENABLE_VSA* (`string`):: Enable VSA generation
++
+*Default*: `false`
+*ATTESTATION_FORMAT* (`string`):: Attestation format: dsse (signed envelope) or predicate (raw JSON)
++
+*Default*: `dsse`
+*VSA_SIGNING_KEY* (`string`):: Signing key for format=dsse (k8s:// or file:// URL)
+*VSA_UPLOAD* (`string`):: VSA upload destination
++
+*Default*: `local@/var/workdir/vsa`
+*ociStorage* (`string`):: OCI storage URL for trusted artifacts
 
 == Results
 
 [horizontal]
 *TEST_OUTPUT*:: Short summary of the policy evaluation for each image
+*VSA_GENERATED*:: Whether VSAs were generated (true/false)
+*sourceDataArtifact*:: Trusted Artifact URI containing VSA files

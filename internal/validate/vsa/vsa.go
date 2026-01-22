@@ -348,10 +348,22 @@ func (w *Writer) WritePredicate(predicate *Predicate) (string, error) {
 		return "", fmt.Errorf("failed to marshal VSA predicate: %w", err)
 	}
 
-	// Create temp directory
-	tempDir, err := afero.TempDir(w.FS, "", w.TempDirPrefix)
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp directory: %w", err)
+	// Create or use directory based on whether TempDirPrefix is an absolute path
+	var tempDir string
+	if filepath.IsAbs(w.TempDirPrefix) {
+		// TempDirPrefix is an absolute path - use it directly
+		tempDir = w.TempDirPrefix
+		// Ensure the directory exists
+		if err := w.FS.MkdirAll(tempDir, 0o755); err != nil {
+			return "", fmt.Errorf("failed to create output directory: %w", err)
+		}
+	} else {
+		// TempDirPrefix is a prefix - create temp directory
+		var err error
+		tempDir, err = afero.TempDir(w.FS, "", w.TempDirPrefix)
+		if err != nil {
+			return "", fmt.Errorf("failed to create temp directory: %w", err)
+		}
 	}
 
 	// Write to file with same naming convention as old VSA
