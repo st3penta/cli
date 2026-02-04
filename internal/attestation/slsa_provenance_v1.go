@@ -52,7 +52,8 @@ func SLSAProvenanceFromSignatureV1(sig oci.Signature) (Attestation, error) {
 		return nil, fmt.Errorf("malformed attestation data: %w", err)
 	}
 
-	if statement.Type != in_toto.StatementInTotoV01 {
+	if statement.Type != in_toto.StatementInTotoV1 &&
+		statement.Type != in_toto.StatementInTotoV01 { // StatementInTotoV01 is needed to deal with this tekton chains bug: https://github.com/tektoncd/chains/issues/920
 		return nil, fmt.Errorf("unsupported attestation type: %s", statement.Type)
 	}
 
