@@ -91,7 +91,9 @@ func (f fakeAtt) Digest() map[string]string {
 	return map[string]string{}
 }
 
+//nolint:staticcheck
 func (f fakeAtt) Subject() []in_toto.Subject {
+	//nolint:staticcheck
 	return []in_toto.Subject{}
 }
 
@@ -100,6 +102,7 @@ type opts func(*fakeAtt)
 func createSimpleAttestation(statement *in_toto.ProvenanceStatementSLSA02, o ...opts) attestation.Attestation {
 	if statement == nil {
 		statement = &in_toto.ProvenanceStatementSLSA02{
+			//nolint:staticcheck
 			StatementHeader: in_toto.StatementHeader{
 				Type:          in_toto.StatementInTotoV01,
 				PredicateType: v02.PredicateSLSAProvenance,
@@ -367,9 +370,11 @@ func TestSyntaxValidationWithoutAttestations(t *testing.T) {
 // but I wasn't able to figure it out.)
 func TestSyntaxValidation(t *testing.T) {
 	valid := createSimpleAttestation(&in_toto.ProvenanceStatementSLSA02{
+		//nolint:staticcheck
 		StatementHeader: in_toto.StatementHeader{
 			Type:          in_toto.StatementInTotoV01,
 			PredicateType: v02.PredicateSLSAProvenance,
+			//nolint:staticcheck
 			Subject: []in_toto.Subject{
 				{
 					Name: "hello",
@@ -388,6 +393,7 @@ func TestSyntaxValidation(t *testing.T) {
 	})
 
 	invalid := createSimpleAttestation(&in_toto.ProvenanceStatementSLSA02{
+		//nolint:staticcheck
 		StatementHeader: in_toto.StatementHeader{
 			Type:          in_toto.StatementInTotoV01,
 			PredicateType: v02.PredicateSLSAProvenance,
@@ -605,15 +611,19 @@ func TestValidateAttestationSignatureClaims(t *testing.T) {
 	assert.NotNil(t, claimVerifier)
 
 	cases := []struct {
-		name      string
+		name string
+		//nolint:staticcheck
 		statement in_toto.Statement
 		digest    v1.Hash
 		err       error
 	}{
 		{
 			name: "happy day",
+			//nolint:staticcheck
 			statement: in_toto.Statement{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
+					//nolint:staticcheck
 					Subject: []in_toto.Subject{
 						{
 							Digest: map[string]string{
@@ -627,8 +637,11 @@ func TestValidateAttestationSignatureClaims(t *testing.T) {
 		},
 		{
 			name: "happy day - multiple digests",
+			//nolint:staticcheck
 			statement: in_toto.Statement{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
+					//nolint:staticcheck
 					Subject: []in_toto.Subject{
 						{
 							Digest: map[string]string{
@@ -643,8 +656,11 @@ func TestValidateAttestationSignatureClaims(t *testing.T) {
 		},
 		{
 			name: "no digests",
+			//nolint:staticcheck
 			statement: in_toto.Statement{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
+					//nolint:staticcheck
 					Subject: []in_toto.Subject{},
 				},
 			},
@@ -653,8 +669,11 @@ func TestValidateAttestationSignatureClaims(t *testing.T) {
 		},
 		{
 			name: "mismatched digests",
+			//nolint:staticcheck
 			statement: in_toto.Statement{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
+					//nolint:staticcheck
 					Subject: []in_toto.Subject{
 						{
 							Digest: map[string]string{
@@ -668,7 +687,8 @@ func TestValidateAttestationSignatureClaims(t *testing.T) {
 			err:    errors.New("no matching subject digest found"),
 		},
 		{
-			name:      "empty statement",
+			name: "empty statement",
+			//nolint:staticcheck
 			statement: in_toto.Statement{},
 			digest:    v1.Hash{Algorithm: "sha256", Hex: "dabbad00"},
 			err:       errors.New("no matching subject digest found"),
@@ -930,9 +950,11 @@ func TestValidateAttestationSignature(t *testing.T) {
 
 	// Create valid SLSA v0.2 statement
 	slsaV02Statement := in_toto.ProvenanceStatementSLSA02{
+		//nolint:staticcheck
 		StatementHeader: in_toto.StatementHeader{
 			Type:          in_toto.StatementInTotoV01,
 			PredicateType: v02.PredicateSLSAProvenance,
+			//nolint:staticcheck
 			Subject: []in_toto.Subject{
 				{
 					Name: "test-image",
@@ -951,6 +973,7 @@ func TestValidateAttestationSignature(t *testing.T) {
 	}
 
 	// Create valid SLSA v1.0 statement
+	//nolint:staticcheck
 	slsaV1Statement := in_toto.ProvenanceStatementSLSA1{
 		StatementHeader: in_toto.StatementHeader{
 			Type:          in_toto.StatementInTotoV01,
@@ -964,12 +987,16 @@ func TestValidateAttestationSignature(t *testing.T) {
 				},
 			},
 		},
+		//nolint:staticcheck
 		Predicate: slsav1.ProvenancePredicate{
+			//nolint:staticcheck
 			BuildDefinition: slsav1.ProvenanceBuildDefinition{
 				BuildType:          "https://tekton.dev/attestations/chains/pipelinerun@v2",
 				ExternalParameters: json.RawMessage(`{}`),
 			},
+			//nolint:staticcheck
 			RunDetails: slsav1.ProvenanceRunDetails{
+				//nolint:staticcheck
 				Builder: slsav1.Builder{
 					ID: "https://tekton.dev/chains/v2",
 				},
@@ -978,10 +1005,13 @@ func TestValidateAttestationSignature(t *testing.T) {
 	}
 
 	// Create valid SPDX statement
+	//nolint:staticcheck
 	spdxStatement := in_toto.Statement{
+		//nolint:staticcheck
 		StatementHeader: in_toto.StatementHeader{
 			Type:          in_toto.StatementInTotoV01,
 			PredicateType: "https://spdx.dev/Document",
+			//nolint:staticcheck
 			Subject: []in_toto.Subject{
 				{
 					Name: "test-image",
@@ -995,6 +1025,7 @@ func TestValidateAttestationSignature(t *testing.T) {
 	}
 
 	// Create statement with unknown predicate type
+	//nolint:staticcheck
 	unknownStatement := in_toto.Statement{
 		StatementHeader: in_toto.StatementHeader{
 			Type:          in_toto.StatementInTotoV01,
@@ -1013,6 +1044,7 @@ func TestValidateAttestationSignature(t *testing.T) {
 
 	// Create invalid SLSA v0.2 statement (missing builder ID)
 	invalidSLSAV02Statement := in_toto.ProvenanceStatementSLSA02{
+		//nolint:staticcheck
 		StatementHeader: in_toto.StatementHeader{
 			Type:          in_toto.StatementInTotoV01,
 			PredicateType: v02.PredicateSLSAProvenance,
@@ -1034,6 +1066,7 @@ func TestValidateAttestationSignature(t *testing.T) {
 	}
 
 	// Create invalid SLSA v1.0 statement (missing required fields)
+	//nolint:staticcheck
 	invalidSLSAV1Statement := in_toto.ProvenanceStatementSLSA1{
 		StatementHeader: in_toto.StatementHeader{
 			Type:          in_toto.StatementInTotoV01,
@@ -1047,12 +1080,16 @@ func TestValidateAttestationSignature(t *testing.T) {
 				},
 			},
 		},
+		//nolint:staticcheck
 		Predicate: slsav1.ProvenancePredicate{
+			//nolint:staticcheck
 			BuildDefinition: slsav1.ProvenanceBuildDefinition{
 				BuildType:          "https://tekton.dev/attestations/chains/pipelinerun@v2",
 				ExternalParameters: json.RawMessage(`{}`),
 			},
+			//nolint:staticcheck
 			RunDetails: slsav1.ProvenanceRunDetails{
+				//nolint:staticcheck
 				Builder: slsav1.Builder{
 					ID: "invalid-not-a-uri",
 				},

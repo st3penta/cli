@@ -335,12 +335,14 @@ func TestSLSAProvenanceFromSignatureV1(t *testing.T) {
 }
 
 func TestSLSAProvenanceV1_Subject(t *testing.T) {
+	//nolint:staticcheck
 	mockSubject1 := in_toto.Subject{
 		Name: "registry.io/example/image@sha256:abc123",
 		Digest: map[string]string{
 			"sha256": "abc123def456",
 		},
 	}
+	//nolint:staticcheck
 	mockSubject2 := in_toto.Subject{
 		Name: "registry.io/example/artifact@sha256:def456",
 		Digest: map[string]string{
@@ -350,36 +352,50 @@ func TestSLSAProvenanceV1_Subject(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
+		name string
+		//nolint:staticcheck
 		statement in_toto.ProvenanceStatementSLSA1
+		//nolint:staticcheck
 		expected  []in_toto.Subject
 		wantPanic bool
 	}{
 		{
 			name: "returns single subject successfully",
+			//nolint:staticcheck
 			statement: in_toto.ProvenanceStatementSLSA1{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
+					//nolint:staticcheck
 					Subject: []in_toto.Subject{mockSubject1},
 				},
 			},
+			//nolint:staticcheck
 			expected: []in_toto.Subject{mockSubject1},
 		},
 		{
 			name: "returns multiple subjects successfully",
+			//nolint:staticcheck
 			statement: in_toto.ProvenanceStatementSLSA1{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
+					//nolint:staticcheck
 					Subject: []in_toto.Subject{mockSubject1, mockSubject2},
 				},
 			},
+			//nolint:staticcheck
 			expected: []in_toto.Subject{mockSubject1, mockSubject2},
 		},
 		{
 			name: "returns empty slice when no subjects",
+			//nolint:staticcheck
 			statement: in_toto.ProvenanceStatementSLSA1{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
+					//nolint:staticcheck
 					Subject: []in_toto.Subject{},
 				},
 			},
+			//nolint:staticcheck
 			expected: []in_toto.Subject{},
 		},
 	}
@@ -410,8 +426,11 @@ func TestSLSAProvenanceV1_Subject(t *testing.T) {
 }
 
 func TestSLSAProvenanceV1_Type(t *testing.T) {
+	//nolint:staticcheck
 	slsa := slsaProvenanceV1{
+		//nolint:staticcheck
 		statement: in_toto.ProvenanceStatementSLSA1{
+			//nolint:staticcheck
 			StatementHeader: in_toto.StatementHeader{
 				Type:          in_toto.StatementInTotoV01,
 				PredicateType: PredicateSLSAProvenanceV1,
@@ -424,8 +443,11 @@ func TestSLSAProvenanceV1_Type(t *testing.T) {
 }
 
 func TestSLSAProvenanceV1_PredicateType(t *testing.T) {
+	//nolint:staticcheck
 	slsa := slsaProvenanceV1{
+		//nolint:staticcheck
 		statement: in_toto.ProvenanceStatementSLSA1{
+			//nolint:staticcheck
 			StatementHeader: in_toto.StatementHeader{
 				Type:          in_toto.StatementInTotoV01,
 				PredicateType: PredicateSLSAProvenanceV1,
@@ -454,18 +476,25 @@ func TestSLSAProvenanceV1_PredicateBuildType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			//nolint:staticcheck
 			slsa := slsaProvenanceV1{
+				//nolint:staticcheck
 				statement: in_toto.ProvenanceStatementSLSA1{
+					//nolint:staticcheck
 					StatementHeader: in_toto.StatementHeader{
 						Type:          in_toto.StatementInTotoV01,
 						PredicateType: PredicateSLSAProvenanceV1,
 					},
+					//nolint:staticcheck
 					Predicate: v1.ProvenancePredicate{
+						//nolint:staticcheck
 						BuildDefinition: v1.ProvenanceBuildDefinition{
 							BuildType:          tt.buildType,
 							ExternalParameters: map[string]interface{}{},
 						},
+						//nolint:staticcheck
 						RunDetails: v1.ProvenanceRunDetails{
+							//nolint:staticcheck
 							Builder: v1.Builder{
 								ID: "https://my.builder",
 							},

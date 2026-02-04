@@ -47,6 +47,7 @@ func SLSAProvenanceFromSignatureV1(sig oci.Signature) (Attestation, error) {
 		return nil, err
 	}
 
+	//nolint:staticcheck
 	var statement in_toto.ProvenanceStatementSLSA1
 	if err := json.Unmarshal(embedded, &statement); err != nil {
 		return nil, fmt.Errorf("malformed attestation data: %w", err)
@@ -77,6 +78,7 @@ func SLSAProvenanceFromSignatureV1(sig oci.Signature) (Attestation, error) {
 	return slsaProvenanceV1{statement: statement, data: embedded, signatures: signatures}, nil
 }
 
+//nolint:staticcheck
 type slsaProvenanceV1 struct {
 	statement  in_toto.ProvenanceStatementSLSA1
 	data       []byte
@@ -104,6 +106,7 @@ func (a slsaProvenanceV1) Signatures() []signature.EntitySignature {
 	return a.signatures
 }
 
+//nolint:staticcheck
 func (a slsaProvenanceV1) Subject() []in_toto.Subject {
 	return a.statement.Subject
 }

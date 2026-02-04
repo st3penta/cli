@@ -221,12 +221,14 @@ func TestProvenance_Signatures(t *testing.T) {
 }
 
 func TestProvenance_Subject(t *testing.T) {
+	//nolint:staticcheck
 	mockSubject1 := in_toto.Subject{
 		Name: "subject1",
 		Digest: map[string]string{
 			"sha256": "digest1",
 		},
 	}
+	//nolint:staticcheck
 	mockSubject2 := in_toto.Subject{
 		Name: "subject2",
 		Digest: map[string]string{
@@ -235,35 +237,46 @@ func TestProvenance_Subject(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
+		name string
+		//nolint:staticcheck
 		statement in_toto.Statement
-		expected  []in_toto.Subject
+		//nolint:staticcheck
+		expected []in_toto.Subject
 	}{
 		{
 			name: "returns single subject",
+			//nolint:staticcheck
 			statement: in_toto.Statement{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
 					Subject: []in_toto.Subject{mockSubject1},
 				},
 			},
+			//nolint:staticcheck
 			expected: []in_toto.Subject{mockSubject1},
 		},
 		{
 			name: "returns multiple subjects",
+			//nolint:staticcheck
 			statement: in_toto.Statement{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
 					Subject: []in_toto.Subject{mockSubject1, mockSubject2},
 				},
 			},
+			//nolint:staticcheck
 			expected: []in_toto.Subject{mockSubject1, mockSubject2},
 		},
 		{
 			name: "returns empty slice when no subjects",
+			//nolint:staticcheck
 			statement: in_toto.Statement{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
 					Subject: []in_toto.Subject{},
 				},
 			},
+			//nolint:staticcheck
 			expected: []in_toto.Subject{},
 		},
 	}

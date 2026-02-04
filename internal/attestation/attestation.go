@@ -38,6 +38,7 @@ type Attestation interface {
 	PredicateType() string
 	Statement() []byte
 	Signatures() []signature.EntitySignature
+	//nolint:staticcheck
 	Subject() []in_toto.Subject
 }
 
@@ -128,6 +129,7 @@ func ProvenanceFromSignature(sig oci.Signature) (Attestation, error) {
 		return nil, err
 	}
 
+	//nolint:staticcheck
 	var statement in_toto.Statement
 	if err := json.Unmarshal(embedded, &statement); err != nil {
 		return nil, fmt.Errorf("malformed attestation data: %w", err)
@@ -142,6 +144,7 @@ func ProvenanceFromSignature(sig oci.Signature) (Attestation, error) {
 }
 
 type provenance struct {
+	//nolint:staticcheck
 	statement  in_toto.Statement
 	data       []byte
 	signatures []signature.EntitySignature
@@ -163,6 +166,7 @@ func (p provenance) Signatures() []signature.EntitySignature {
 	return p.signatures
 }
 
+//nolint:staticcheck
 func (p provenance) Subject() []in_toto.Subject {
 	return p.statement.Subject
 }
