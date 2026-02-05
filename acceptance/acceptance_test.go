@@ -19,9 +19,11 @@ package acceptance
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/cucumber/godog"
@@ -59,6 +61,56 @@ var tags = flag.String("tags", "", "select scenarios to run based on tags")
 // random seed to use
 var seed = flag.Int64("seed", -1, "random seed to use for the tests")
 
+// failedScenario tracks information about a failed scenario
+type failedScenario struct {
+	Name     string
+	Location string
+	Error    error
+}
+
+// scenarioTracker tracks failed scenarios across all test runs
+type scenarioTracker struct {
+	mu              sync.Mutex
+	failedScenarios []failedScenario
+}
+
+func (st *scenarioTracker) addFailure(name, location string, err error) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.failedScenarios = append(st.failedScenarios, failedScenario{
+		Name:     name,
+		Location: location,
+		Error:    err,
+	})
+}
+
+func (st *scenarioTracker) printSummary(t *testing.T) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	if len(st.failedScenarios) == 0 {
+		return
+	}
+
+	fmt.Fprintf(os.Stderr, "\n")
+	fmt.Fprintf(os.Stderr, "========================================\n")
+	fmt.Fprintf(os.Stderr, "FAILED SCENARIOS SUMMARY (%d)\n", len(st.failedScenarios))
+	fmt.Fprintf(os.Stderr, "========================================\n")
+	for i, fs := range st.failedScenarios {
+		fmt.Fprintf(os.Stderr, "%d. %s\n", i+1, fs.Name)
+		fmt.Fprintf(os.Stderr, "   Location: %s\n", fs.Location)
+		if fs.Error != nil {
+			fmt.Fprintf(os.Stderr, "   Error: %v\n", fs.Error)
+		}
+		if i < len(st.failedScenarios)-1 {
+			fmt.Fprintf(os.Stderr, "\n")
+		}
+	}
+	fmt.Fprintf(os.Stderr, "========================================\n")
+}
+
+var tracker = &scenarioTracker{}
+
 // initializeScenario adds all steps and registers all hooks to the
 // provided godog.ScenarioContext
 func initializeScenario(sc *godog.ScenarioContext) {
@@ -80,10 +132,30 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		logger, ctx := log.LoggerFor(ctx)
 		logger.Name(sc.Name)
 
+		// Log scenario start - write to /dev/tty to bypass all output capture
+		if tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0); err == nil {
+			fmt.Fprintf(tty, "\n▶ STARTING: %s (%s)\n", sc.Name, sc.Uri)
+			tty.Close()
+		}
+
 		return context.WithValue(ctx, testenv.Scenario, sc), nil
 	})
 
 	sc.After(func(ctx context.Context, scenario *godog.Scenario, scenarioErr error) (context.Context, error) {
+		// Log scenario end with status - write to /dev/tty to bypass capture
+		if tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0); err == nil {
+			if scenarioErr != nil {
+				fmt.Fprintf(tty, "✗ FAILED: %s (%s)\n\n", scenario.Name, scenario.Uri)
+			} else {
+				fmt.Fprintf(tty, "✓ PASSED: %s (%s)\n\n", scenario.Name, scenario.Uri)
+			}
+			tty.Close()
+		}
+
+		if scenarioErr != nil {
+			tracker.addFailure(scenario.Name, scenario.Uri, scenarioErr)
+		}
+
 		_, err := testenv.Persist(ctx)
 		return ctx, err
 	})
@@ -139,8 +211,14 @@ func TestFeatures(t *testing.T) {
 		Options:              &opts,
 	}
 
-	if suite.Run() != 0 {
-		t.Fatal("failure in acceptance tests")
+	exitCode := suite.Run()
+
+	// Print summary of failed scenarios
+	tracker.printSummary(t)
+
+	if exitCode != 0 {
+		// Exit directly without t.Fatal to avoid verbose Go test output
+		os.Exit(1)
 	}
 }
 

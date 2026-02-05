@@ -20,6 +20,7 @@ package log
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync/atomic"
 
 	"sigs.k8s.io/kind/pkg/log"
@@ -58,43 +59,101 @@ type logger struct {
 	t    DelegateLogger
 }
 
+// shouldSuppress checks if a log message should be suppressed
+// Suppresses verbose container operation logs to reduce noise
+func shouldSuppress(msg string) bool {
+	suppressPatterns := []string{
+		"Creating container for image",
+		"Container created:",
+		"Starting container:",
+		"Container started:",
+		"Waiting for container id",
+		"Container is ready:",
+		"Skipping global cluster destruction",
+		"Released cluster to group",
+		"Destroying global cluster",
+		"Waiting for all consumers to finish",
+		"Last global cluster consumer finished",
+	}
+
+	for _, pattern := range suppressPatterns {
+		if strings.Contains(msg, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
 // Log logs given arguments
 func (l logger) Log(args ...any) {
-	l.t.Logf("(%010d: %s) %s", l.id, l.name, fmt.Sprint(args...))
+	msg := fmt.Sprint(args...)
+	if shouldSuppress(msg) {
+		return
+	}
+	l.t.Logf("(%010d: %s) %s", l.id, l.name, msg)
 }
 
 // Logf logs using given format and specified arguments
 func (l logger) Logf(format string, args ...any) {
-	l.t.Logf("(%010d: %s) "+format, append([]any{l.id, l.name}, args...)...)
+	msg := fmt.Sprintf(format, args...)
+	if shouldSuppress(msg) {
+		return
+	}
+	l.t.Logf("(%010d: %s) %s", l.id, l.name, msg)
 }
 
 // Printf logs using given format and specified arguments
 func (l logger) Printf(format string, args ...any) {
-	l.t.Logf("(%010d: %s) "+format, append([]any{l.id, l.name}, args...)...)
+	msg := fmt.Sprintf(format, args...)
+	if shouldSuppress(msg) {
+		return
+	}
+	l.t.Logf("(%010d: %s) %s", l.id, l.name, msg)
 }
 
 func (l logger) Warn(message string) {
+	if shouldSuppress(message) {
+		return
+	}
 	l.Logf("[WARN ] %s", message)
 }
 
 func (l logger) Warnf(format string, args ...any) {
-	l.Logf("[WARN ] "+format, args...)
+	msg := fmt.Sprintf(format, args...)
+	if shouldSuppress(msg) {
+		return
+	}
+	l.Logf("[WARN ] %s", msg)
 }
 
 func (l logger) Error(message string) {
+	if shouldSuppress(message) {
+		return
+	}
 	l.Logf("[ERROR] %s", message)
 }
 
 func (l logger) Errorf(format string, args ...any) {
-	l.Logf("[ERROR] "+format, args...)
+	msg := fmt.Sprintf(format, args...)
+	if shouldSuppress(msg) {
+		return
+	}
+	l.Logf("[ERROR] %s", msg)
 }
 
 func (l logger) Info(message string) {
+	if shouldSuppress(message) {
+		return
+	}
 	l.Logf("[INFO ] %s", message)
 }
 
 func (l logger) Infof(format string, args ...any) {
-	l.Logf("[INFO ] "+format, args...)
+	msg := fmt.Sprintf(format, args...)
+	if shouldSuppress(msg) {
+		return
+	}
+	l.Logf("[INFO ] %s", msg)
 }
 
 func (l logger) V(_ log.Level) log.InfoLogger {
