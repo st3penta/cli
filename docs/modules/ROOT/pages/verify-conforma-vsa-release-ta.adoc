@@ -50,8 +50,6 @@ registries/Rekor. Multiple paths can be provided using `:`.
 *Default*: `now`
 *EXTRA_RULE_DATA* (`string`):: Merge additional Rego variables into the policy data. Syntax: key=val,key2=val2
 
-*TIMEOUT* (`string`):: Deprecated; ignored by the task. EC is run without a timeout (use Tekton timeouts).
-
 *WORKERS* (`string`):: Number of parallel workers to use for policy evaluation.
 +
 *Default*: `4`

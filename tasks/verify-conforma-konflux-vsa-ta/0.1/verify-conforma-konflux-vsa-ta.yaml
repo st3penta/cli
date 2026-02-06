@@ -132,13 +132,6 @@ spec:
         key=val,key2=val2
       default: ""
 
-    - name: TIMEOUT
-      type: string
-      description: >
-        Deprecated; ignored by the task. EC is run without a timeout (use
-        Tekton timeouts).
-      default: ""
-
     - name: WORKERS
       type: string
       description: Number of parallel workers to use for policy evaluation.
