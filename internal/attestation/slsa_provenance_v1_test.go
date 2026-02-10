@@ -113,7 +113,7 @@ func TestSLSAProvenanceFromSignatureV1(t *testing.T) {
 			setup: func(l *mockSignature) {
 				sig1 := `{"keyid": "key-id-1", "sig": "sig-1"}`
 				payload := encode(`{{
-					"_type": "https://in-toto.io/Statement/v0.1",
+					"_type": "https://in-toto.io/Statement/v1",
 					"predicateType":"https://slsa.dev/provenance/v1",
 					"predicate":{"buildDefinition":{"buildType":"https://my.build.type","externalParameters":{}},"runDetails":{"builder":{"id":"https://my.builder"}}} }
 				}`)
@@ -129,7 +129,7 @@ func TestSLSAProvenanceFromSignatureV1(t *testing.T) {
 			setup: func(l *mockSignature) {
 				sig1 := `{"keyid": "key-id-1", "sig": "sig-1"}`
 				payload := encode(`{
-					"_type": "https://in-toto.io/Statement/v0.1",
+					"_type": "https://in-toto.io/Statement/v1",
 					"predicateType":"kaboom"
 				}`)
 				l.On("MediaType").Return(types.MediaType(ct.DssePayloadType), nil)
@@ -143,7 +143,7 @@ func TestSLSAProvenanceFromSignatureV1(t *testing.T) {
 			name: "schema validation fails - missing subject",
 			setup: func(l *mockSignature) {
 				payload := encode(`{
-					"_type": "https://in-toto.io/Statement/v0.1",
+					"_type": "https://in-toto.io/Statement/v1",
 					"predicateType": "https://slsa.dev/provenance/v1",
 					"predicate": {
 						"buildDefinition": {
@@ -167,7 +167,7 @@ func TestSLSAProvenanceFromSignatureV1(t *testing.T) {
 			name: "schema validation fails - missing buildDefinition",
 			setup: func(l *mockSignature) {
 				payload := encode(`{
-					"_type": "https://in-toto.io/Statement/v0.1",
+					"_type": "https://in-toto.io/Statement/v1",
 					"subject": [{"name": "example.com/test", "digest": {"sha256": "abc123"}}],
 					"predicateType": "https://slsa.dev/provenance/v1",
 					"predicate": {
@@ -187,7 +187,7 @@ func TestSLSAProvenanceFromSignatureV1(t *testing.T) {
 		{
 			name: "cannot create entity signature",
 			data: `{
-				"_type": "https://in-toto.io/Statement/v0.1",
+				"_type": "https://in-toto.io/Statement/v1",
 				"subject": [{"name": "example.com/test", "digest": {"sha256": "abc123"}}],
 				"predicateType": "https://slsa.dev/provenance/v1",
 				"predicate": {
@@ -202,7 +202,7 @@ func TestSLSAProvenanceFromSignatureV1(t *testing.T) {
 			}`,
 			setup: func(l *mockSignature) {
 				payload := encode(`{
-					"_type": "https://in-toto.io/Statement/v0.1",
+					"_type": "https://in-toto.io/Statement/v1",
 					"subject": [{"name": "example.com/test", "digest": {"sha256": "abc123"}}],
 					"predicateType": "https://slsa.dev/provenance/v1",
 					"predicate": {
@@ -224,7 +224,7 @@ func TestSLSAProvenanceFromSignatureV1(t *testing.T) {
 		{
 			name: "valid with signature from payload",
 			data: `{
-				"_type": "https://in-toto.io/Statement/v0.1",
+				"_type": "https://in-toto.io/Statement/v1",
 				"subject": [{"name": "example.com/test", "digest": {"sha256": "abc123"}}],
 				"predicateType": "https://slsa.dev/provenance/v1",
 				"predicate": {
@@ -241,7 +241,7 @@ func TestSLSAProvenanceFromSignatureV1(t *testing.T) {
 				sig1 := `{"keyid": "key-id-1", "sig": "sig-1"}`
 				sig2 := `{"keyid": "key-id-2", "sig": "sig-2"}`
 				payload := encode(`{
-					"_type": "https://in-toto.io/Statement/v0.1",
+					"_type": "https://in-toto.io/Statement/v1",
 					"subject": [{"name": "example.com/test", "digest": {"sha256": "abc123"}}],
 					"predicateType": "https://slsa.dev/provenance/v1",
 					"predicate": {
@@ -257,6 +257,47 @@ func TestSLSAProvenanceFromSignatureV1(t *testing.T) {
 				l.On("MediaType").Return(types.MediaType(ct.DssePayloadType), nil)
 				l.On("Uncompressed").Return(buffy(
 					fmt.Sprintf(`{"payload": "%s", "signatures": [%s, %s]}`, payload, sig1, sig2),
+				), nil)
+				l.On("Base64Signature").Return("", nil)
+				l.On("Cert").Return(signature.ParseChainguardReleaseCert(), nil)
+				l.On("Chain").Return(signature.ParseSigstoreChainCert(), nil)
+			},
+		},
+		{
+			name: "backward compatibility with v0.1 statement type",
+			data: `{
+				"_type": "https://in-toto.io/Statement/v0.1",
+				"subject": [{"name": "example.com/test", "digest": {"sha256": "abc123"}}],
+				"predicateType": "https://slsa.dev/provenance/v1",
+				"predicate": {
+					"buildDefinition": {
+						"buildType": "https://my.build.type",
+						"externalParameters": {}
+					},
+					"runDetails": {
+						"builder": {"id": "https://my.builder"}
+					}
+				}
+			}`,
+			setup: func(l *mockSignature) {
+				sig1 := `{"keyid": "key-id-1", "sig": "sig-1"}`
+				payload := encode(`{
+					"_type": "https://in-toto.io/Statement/v0.1",
+					"subject": [{"name": "example.com/test", "digest": {"sha256": "abc123"}}],
+					"predicateType": "https://slsa.dev/provenance/v1",
+					"predicate": {
+						"buildDefinition": {
+							"buildType": "https://my.build.type",
+							"externalParameters": {}
+						},
+						"runDetails": {
+							"builder": {"id": "https://my.builder"}
+						}
+					}
+				}`)
+				l.On("MediaType").Return(types.MediaType(ct.DssePayloadType), nil)
+				l.On("Uncompressed").Return(buffy(
+					fmt.Sprintf(`{"payload": "%s", "signatures": [%s]}`, payload, sig1),
 				), nil)
 				l.On("Base64Signature").Return("", nil)
 				l.On("Cert").Return(signature.ParseChainguardReleaseCert(), nil)
@@ -294,12 +335,14 @@ func TestSLSAProvenanceFromSignatureV1(t *testing.T) {
 }
 
 func TestSLSAProvenanceV1_Subject(t *testing.T) {
+	//nolint:staticcheck
 	mockSubject1 := in_toto.Subject{
 		Name: "registry.io/example/image@sha256:abc123",
 		Digest: map[string]string{
 			"sha256": "abc123def456",
 		},
 	}
+	//nolint:staticcheck
 	mockSubject2 := in_toto.Subject{
 		Name: "registry.io/example/artifact@sha256:def456",
 		Digest: map[string]string{
@@ -309,36 +352,50 @@ func TestSLSAProvenanceV1_Subject(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
+		name string
+		//nolint:staticcheck
 		statement in_toto.ProvenanceStatementSLSA1
+		//nolint:staticcheck
 		expected  []in_toto.Subject
 		wantPanic bool
 	}{
 		{
 			name: "returns single subject successfully",
+			//nolint:staticcheck
 			statement: in_toto.ProvenanceStatementSLSA1{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
+					//nolint:staticcheck
 					Subject: []in_toto.Subject{mockSubject1},
 				},
 			},
+			//nolint:staticcheck
 			expected: []in_toto.Subject{mockSubject1},
 		},
 		{
 			name: "returns multiple subjects successfully",
+			//nolint:staticcheck
 			statement: in_toto.ProvenanceStatementSLSA1{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
+					//nolint:staticcheck
 					Subject: []in_toto.Subject{mockSubject1, mockSubject2},
 				},
 			},
+			//nolint:staticcheck
 			expected: []in_toto.Subject{mockSubject1, mockSubject2},
 		},
 		{
 			name: "returns empty slice when no subjects",
+			//nolint:staticcheck
 			statement: in_toto.ProvenanceStatementSLSA1{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
+					//nolint:staticcheck
 					Subject: []in_toto.Subject{},
 				},
 			},
+			//nolint:staticcheck
 			expected: []in_toto.Subject{},
 		},
 	}
@@ -369,8 +426,11 @@ func TestSLSAProvenanceV1_Subject(t *testing.T) {
 }
 
 func TestSLSAProvenanceV1_Type(t *testing.T) {
+	//nolint:staticcheck
 	slsa := slsaProvenanceV1{
+		//nolint:staticcheck
 		statement: in_toto.ProvenanceStatementSLSA1{
+			//nolint:staticcheck
 			StatementHeader: in_toto.StatementHeader{
 				Type:          in_toto.StatementInTotoV01,
 				PredicateType: PredicateSLSAProvenanceV1,
@@ -383,8 +443,11 @@ func TestSLSAProvenanceV1_Type(t *testing.T) {
 }
 
 func TestSLSAProvenanceV1_PredicateType(t *testing.T) {
+	//nolint:staticcheck
 	slsa := slsaProvenanceV1{
+		//nolint:staticcheck
 		statement: in_toto.ProvenanceStatementSLSA1{
+			//nolint:staticcheck
 			StatementHeader: in_toto.StatementHeader{
 				Type:          in_toto.StatementInTotoV01,
 				PredicateType: PredicateSLSAProvenanceV1,
@@ -413,18 +476,25 @@ func TestSLSAProvenanceV1_PredicateBuildType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			//nolint:staticcheck
 			slsa := slsaProvenanceV1{
+				//nolint:staticcheck
 				statement: in_toto.ProvenanceStatementSLSA1{
+					//nolint:staticcheck
 					StatementHeader: in_toto.StatementHeader{
 						Type:          in_toto.StatementInTotoV01,
 						PredicateType: PredicateSLSAProvenanceV1,
 					},
+					//nolint:staticcheck
 					Predicate: v1.ProvenancePredicate{
+						//nolint:staticcheck
 						BuildDefinition: v1.ProvenanceBuildDefinition{
 							BuildType:          tt.buildType,
 							ExternalParameters: map[string]interface{}{},
 						},
+						//nolint:staticcheck
 						RunDetails: v1.ProvenanceRunDetails{
+							//nolint:staticcheck
 							Builder: v1.Builder{
 								ID: "https://my.builder",
 							},

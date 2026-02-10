@@ -49,6 +49,8 @@ func (f fakeAtt) Signatures() []signature.EntitySignature {
 	return []signature.EntitySignature{}
 }
 
+//nolint:staticcheck
 func (f fakeAtt) Subject() []in_toto.Subject {
+	//nolint:staticcheck
 	return []in_toto.Subject{}
 }

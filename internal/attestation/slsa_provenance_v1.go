@@ -47,12 +47,14 @@ func SLSAProvenanceFromSignatureV1(sig oci.Signature) (Attestation, error) {
 		return nil, err
 	}
 
+	//nolint:staticcheck
 	var statement in_toto.ProvenanceStatementSLSA1
 	if err := json.Unmarshal(embedded, &statement); err != nil {
 		return nil, fmt.Errorf("malformed attestation data: %w", err)
 	}
 
-	if statement.Type != in_toto.StatementInTotoV01 {
+	if statement.Type != in_toto.StatementInTotoV1 &&
+		statement.Type != in_toto.StatementInTotoV01 { // StatementInTotoV01 is needed to deal with this tekton chains bug: https://github.com/tektoncd/chains/issues/920
 		return nil, fmt.Errorf("unsupported attestation type: %s", statement.Type)
 	}
 
@@ -76,6 +78,7 @@ func SLSAProvenanceFromSignatureV1(sig oci.Signature) (Attestation, error) {
 	return slsaProvenanceV1{statement: statement, data: embedded, signatures: signatures}, nil
 }
 
+//nolint:staticcheck
 type slsaProvenanceV1 struct {
 	statement  in_toto.ProvenanceStatementSLSA1
 	data       []byte
@@ -103,6 +106,7 @@ func (a slsaProvenanceV1) Signatures() []signature.EntitySignature {
 	return a.signatures
 }
 
+//nolint:staticcheck
 func (a slsaProvenanceV1) Subject() []in_toto.Subject {
 	return a.statement.Subject
 }

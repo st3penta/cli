@@ -6,12 +6,12 @@
 
 [TestV1TypeMustBeInToto/case_1 - 1]
 [I#] [S#] doesn't validate with https://slsa.dev/provenance/v1#
-  [I#/_type] [S#/properties/_type/const] value must be "https://in-toto.io/Statement/v0.1"
+  [I#/_type] [S#/properties/_type/enum] value must be one of "https://in-toto.io/Statement/v1", "https://in-toto.io/Statement/v0.1"
 ---
 
 [TestV1TypeMustBeInToto/case_2 - 1]
 [I#] [S#] doesn't validate with https://slsa.dev/provenance/v1#
-  [I#/_type] [S#/properties/_type/const] value must be "https://in-toto.io/Statement/v0.1"
+  [I#/_type] [S#/properties/_type/enum] value must be one of "https://in-toto.io/Statement/v1", "https://in-toto.io/Statement/v0.1"
 ---
 
 [TestV1TypeMustBeInToto/case_3 - 1]

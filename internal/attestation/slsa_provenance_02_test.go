@@ -377,12 +377,14 @@ func buffy(data string) io.ReadCloser {
 }
 
 func TestSLSAProvenance_Subject(t *testing.T) {
+	//nolint:staticcheck
 	mockSubject1 := in_toto.Subject{
 		Name: "registry.io/example/image@sha256:abc123",
 		Digest: map[string]string{
 			"sha256": "abc123def456",
 		},
 	}
+	//nolint:staticcheck
 	mockSubject2 := in_toto.Subject{
 		Name: "registry.io/example/artifact@sha256:def456",
 		Digest: map[string]string{
@@ -394,34 +396,41 @@ func TestSLSAProvenance_Subject(t *testing.T) {
 	tests := []struct {
 		name      string
 		statement in_toto.ProvenanceStatementSLSA02
+		//nolint:staticcheck
 		expected  []in_toto.Subject
 		wantPanic bool
 	}{
 		{
 			name: "returns single subject successfully",
 			statement: in_toto.ProvenanceStatementSLSA02{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
 					Subject: []in_toto.Subject{mockSubject1},
 				},
 			},
+			//nolint:staticcheck
 			expected: []in_toto.Subject{mockSubject1},
 		},
 		{
 			name: "returns multiple subjects successfully",
 			statement: in_toto.ProvenanceStatementSLSA02{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
 					Subject: []in_toto.Subject{mockSubject1, mockSubject2},
 				},
 			},
+			//nolint:staticcheck
 			expected: []in_toto.Subject{mockSubject1, mockSubject2},
 		},
 		{
 			name: "returns empty slice when no subjects",
+			//nolint:staticcheck
 			statement: in_toto.ProvenanceStatementSLSA02{
 				StatementHeader: in_toto.StatementHeader{
 					Subject: []in_toto.Subject{},
 				},
 			},
+			//nolint:staticcheck
 			expected: []in_toto.Subject{},
 		},
 	}

@@ -177,6 +177,7 @@ func TestDetermineAttestationTime(t *testing.T) {
 	time2 := time.Date(2010, 11, 12, 13, 14, 15, 16, time.UTC)
 	att1 := fakeAtt{
 		statement: in_toto.ProvenanceStatementSLSA02{
+			//nolint:staticcheck
 			StatementHeader: in_toto.StatementHeader{
 				PredicateType: v02.PredicateSLSAProvenance,
 			},
@@ -189,6 +190,7 @@ func TestDetermineAttestationTime(t *testing.T) {
 	}
 	att2 := fakeAtt{
 		statement: in_toto.ProvenanceStatementSLSA02{
+			//nolint:staticcheck
 			StatementHeader: in_toto.StatementHeader{
 				PredicateType: v02.PredicateSLSAProvenance,
 			},
@@ -201,6 +203,7 @@ func TestDetermineAttestationTime(t *testing.T) {
 	}
 	att3 := fakeAtt{
 		statement: in_toto.ProvenanceStatementSLSA02{
+			//nolint:staticcheck
 			StatementHeader: in_toto.StatementHeader{
 				PredicateType: v02.PredicateSLSAProvenance,
 			},
@@ -231,6 +234,7 @@ func TestDetermineAttestationTime(t *testing.T) {
 	}
 }
 
+//nolint:staticcheck
 func sign(statement *in_toto.Statement) oci.Signature {
 	statementJson, err := json.Marshal(statement)
 	if err != nil {
@@ -248,20 +252,26 @@ func sign(statement *in_toto.Statement) oci.Signature {
 	return signature
 }
 
+//nolint:staticcheck
 var validSignature = sign(&in_toto.Statement{
+	//nolint:staticcheck
 	StatementHeader: in_toto.StatementHeader{
 		Type:          in_toto.StatementInTotoV01,
 		PredicateType: v02.PredicateSLSAProvenance,
+		//nolint:staticcheck
 		Subject: []in_toto.Subject{
 			{Name: imageRegistry, Digest: common.DigestSet{"sha256": imageDigest}},
 		},
 	},
 })
 
+//nolint:staticcheck
 var validAttestation = sign(&in_toto.Statement{
+	//nolint:staticcheck
 	StatementHeader: in_toto.StatementHeader{
 		Type:          in_toto.StatementInTotoV01,
 		PredicateType: v02.PredicateSLSAProvenance,
+		//nolint:staticcheck
 		Subject: []in_toto.Subject{
 			{Name: imageRegistry, Digest: common.DigestSet{"sha256": imageDigest}},
 		},

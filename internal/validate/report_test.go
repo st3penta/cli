@@ -779,6 +779,8 @@ func (m *mockAttestation) Signatures() []signature.EntitySignature {
 	return []signature.EntitySignature{}
 }
 
+//nolint:staticcheck
 func (m *mockAttestation) Subject() []in_toto.Subject {
+	//nolint:staticcheck
 	return []in_toto.Subject{}
 }

@@ -103,6 +103,7 @@ func (a slsaProvenance) Signatures() []signature.EntitySignature {
 	return a.signatures
 }
 
+//nolint:staticcheck
 func (a slsaProvenance) Subject() []in_toto.Subject {
 	return a.statement.Subject
 }

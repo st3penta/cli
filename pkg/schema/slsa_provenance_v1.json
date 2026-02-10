@@ -69,7 +69,11 @@
   "type": "object",
   "properties": {
     "_type": {
-      "const": "https://in-toto.io/Statement/v0.1"
+      "enum": [
+        "https://in-toto.io/Statement/v1",
+        "https://in-toto.io/Statement/v0.1"
+      ],
+      "$comment": "v0.1 is needed to deal with this tekton chains bug: https://github.com/tektoncd/chains/issues/920"
     },
     "subject": {
       "type": "array",

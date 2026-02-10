@@ -41,6 +41,7 @@ func TestFakeAttStatement(t *testing.T) {
 		{
 			name: "empty statement",
 			statement: in_toto.ProvenanceStatementSLSA02{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
 					Type:          in_toto.StatementInTotoV01,
 					PredicateType: v02.PredicateSLSAProvenance,
@@ -51,9 +52,11 @@ func TestFakeAttStatement(t *testing.T) {
 		{
 			name: "statement with subject",
 			statement: in_toto.ProvenanceStatementSLSA02{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
 					Type:          in_toto.StatementInTotoV01,
 					PredicateType: v02.PredicateSLSAProvenance,
+					//nolint:staticcheck
 					Subject: []in_toto.Subject{
 						{
 							Name:   "example.com/repo:tag",
@@ -67,6 +70,7 @@ func TestFakeAttStatement(t *testing.T) {
 		{
 			name: "statement with predicate",
 			statement: in_toto.ProvenanceStatementSLSA02{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
 					Type:          in_toto.StatementInTotoV01,
 					PredicateType: v02.PredicateSLSAProvenance,
@@ -83,9 +87,11 @@ func TestFakeAttStatement(t *testing.T) {
 		{
 			name: "complete statement with all fields",
 			statement: in_toto.ProvenanceStatementSLSA02{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
 					Type:          in_toto.StatementInTotoV01,
 					PredicateType: v02.PredicateSLSAProvenance,
+					//nolint:staticcheck
 					Subject: []in_toto.Subject{
 						{
 							Name:   "example.com/repo:latest",
@@ -116,6 +122,7 @@ func TestFakeAttStatement(t *testing.T) {
 		{
 			name: "statement with multiple subjects",
 			statement: in_toto.ProvenanceStatementSLSA02{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
 					Type:          in_toto.StatementInTotoV01,
 					PredicateType: v02.PredicateSLSAProvenance,
@@ -136,6 +143,7 @@ func TestFakeAttStatement(t *testing.T) {
 		{
 			name: "statement with complex build config",
 			statement: in_toto.ProvenanceStatementSLSA02{
+				//nolint:staticcheck
 				StatementHeader: in_toto.StatementHeader{
 					Type:          in_toto.StatementInTotoV01,
 					PredicateType: v02.PredicateSLSAProvenance,
@@ -227,6 +235,7 @@ func TestFakeAttGetterMethods(t *testing.T) {
 
 	t.Run("Subject", func(t *testing.T) {
 		got := fake.Subject()
+		//nolint:staticcheck
 		want := []in_toto.Subject{}
 		assert.Equal(t, want, got, "Subject() should return expected value")
 		assert.NotNil(t, got, "Subject() should not return nil")

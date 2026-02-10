@@ -64,13 +64,17 @@ func (r *Report) renderAttestations() ([]byte, error) {
 	return bytes.Join(byts, []byte{'\n'}), nil
 }
 
+//nolint:staticcheck
 func (r *Report) attestations() ([]in_toto.Statement, error) {
+	//nolint:staticcheck
 	var statements []in_toto.Statement
 	for _, c := range r.Components {
 		for _, a := range c.Attestations {
+			//nolint:staticcheck
 			var statement in_toto.Statement
 			err := json.Unmarshal(a.Statement, &statement)
 			if err != nil {
+				//nolint:staticcheck
 				return []in_toto.Statement{}, nil
 			}
 			statements = append(statements, statement)

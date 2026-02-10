@@ -126,11 +126,14 @@ func TestAttestationReport(t *testing.T) {
 }
 
 func TestAttestations(t *testing.T) {
+	//nolint:staticcheck
 	statement := in_toto.Statement{
+		//nolint:staticcheck
 		StatementHeader: in_toto.StatementHeader{
 			Type:          "my-type",
 			PredicateType: "my-predicate-type",
-			Subject:       []in_toto.Subject{},
+			//nolint:staticcheck
+			Subject: []in_toto.Subject{},
 		},
 	}
 	data, err := json.Marshal(statement)
@@ -155,6 +158,7 @@ func TestAttestations(t *testing.T) {
 	report := Report{Components: components}
 	att, err := report.attestations()
 	assert.NoError(t, err)
+	//nolint:staticcheck
 	assert.Equal(t, []in_toto.Statement{statement}, att)
 }
 
@@ -164,7 +168,9 @@ func att(data string) AttestationResult {
 	}
 }
 
+//nolint:staticcheck
 type provenance struct {
+	//nolint:staticcheck
 	statement  in_toto.Statement
 	data       []byte
 	signatures []signature.EntitySignature
@@ -186,6 +192,7 @@ func (p provenance) Statement() []byte {
 	return p.data
 }
 
+//nolint:staticcheck
 func (p provenance) Subject() []in_toto.Subject {
 	return p.statement.Subject
 }
@@ -204,6 +211,7 @@ func (s slsaProvenance) Statement() []byte {
 	return s.data
 }
 
+//nolint:staticcheck
 func (s slsaProvenance) Subject() []in_toto.Subject {
 	return s.statement.Subject
 }
@@ -222,7 +230,9 @@ func (s slsaProvenance) PredicateBuildType() string {
 }
 
 func TestNewAttestationResultWithProvenanceOnly(t *testing.T) {
+	//nolint:staticcheck
 	p := provenance{
+		//nolint:staticcheck
 		statement:  in_toto.Statement{},
 		data:       []byte("some data"),
 		signatures: []signature.EntitySignature{{KeyID: "key1"}},
