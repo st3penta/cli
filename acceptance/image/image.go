@@ -46,13 +46,13 @@ import (
 	s "github.com/google/go-containerregistry/pkg/v1/static"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/in-toto/in-toto-golang/in_toto"
-	"github.com/sigstore/cosign/v2/pkg/cosign"
-	"github.com/sigstore/cosign/v2/pkg/cosign/bundle"
-	"github.com/sigstore/cosign/v2/pkg/oci"
-	"github.com/sigstore/cosign/v2/pkg/oci/layout"
-	cosignRemote "github.com/sigstore/cosign/v2/pkg/oci/remote"
-	"github.com/sigstore/cosign/v2/pkg/oci/static"
-	cosigntypes "github.com/sigstore/cosign/v2/pkg/types"
+	"github.com/sigstore/cosign/v3/pkg/cosign"
+	"github.com/sigstore/cosign/v3/pkg/cosign/bundle"
+	"github.com/sigstore/cosign/v3/pkg/oci"
+	"github.com/sigstore/cosign/v3/pkg/oci/layout"
+	cosignRemote "github.com/sigstore/cosign/v3/pkg/oci/remote"
+	"github.com/sigstore/cosign/v3/pkg/oci/static"
+	cosigntypes "github.com/sigstore/cosign/v3/pkg/types"
 	rc "github.com/sigstore/rekor/pkg/client"
 	"github.com/sigstore/sigstore/pkg/cryptoutils"
 	"github.com/sigstore/sigstore/pkg/signature"
@@ -726,7 +726,7 @@ func createAndPushKeylessImage(ctx context.Context, imageName string) (context.C
 		return ctx, err
 	}
 
-	if err := cosignRemote.WriteSignedImageIndexImages(ref, sii); err != nil {
+	if err := cosignRemote.WriteSignedImageIndexImages(ref, sii, ""); err != nil {
 		return ctx, err
 	}
 

@@ -26,8 +26,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sigstore/cosign/v2/pkg/cosign"
-	cosigntypes "github.com/sigstore/cosign/v2/pkg/types"
+	"github.com/sigstore/cosign/v3/pkg/cosign"
+	cosigntypes "github.com/sigstore/cosign/v3/pkg/types"
 	"github.com/sigstore/sigstore/pkg/signature"
 	"github.com/sigstore/sigstore/pkg/signature/dsse"
 	sigopts "github.com/sigstore/sigstore/pkg/signature/options"
@@ -71,7 +71,7 @@ func NewSigner(ctx context.Context, keyRef string, fs afero.Fs) (*Signer, error)
 		return nil, fmt.Errorf("resolve private key password: %w", err)
 	}
 
-	signerVerifier, err := LoadPrivateKey(keyBytes, password)
+	signerVerifier, err := LoadPrivateKey(keyBytes, password, nil)
 	if err != nil {
 		return nil, fmt.Errorf("load private key %q: %w", keyRef, err)
 	}

@@ -27,8 +27,8 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
-	"github.com/sigstore/cosign/v2/pkg/cosign"
-	cosignoci "github.com/sigstore/cosign/v2/pkg/oci"
+	"github.com/sigstore/cosign/v3/pkg/cosign"
+	cosignoci "github.com/sigstore/cosign/v3/pkg/oci"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/conforma/cli/internal/utils"

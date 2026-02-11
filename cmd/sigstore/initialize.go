@@ -20,7 +20,7 @@ import (
 	"context"
 
 	hd "github.com/MakeNowJust/heredoc"
-	"github.com/sigstore/cosign/v2/cmd/cosign/cli/options"
+	"github.com/sigstore/cosign/v3/cmd/cosign/cli/options"
 	"github.com/spf13/cobra"
 )
 
@@ -44,7 +44,7 @@ func sigstoreInitializeCmd(f sigstoreInitializeFunc) *cobra.Command {
 			To provide an out-of-band trusted initial root.json, use the --root flag with a file or
 			URL reference. This will enable you to point ec to a separate TUF root.
 
-			Any updated TUF repository will be written to $HOME/.sigstore/root/.
+			Any updated TUF repository will be written to $HOME/.sigstore/root/<mirror_url>.
 
 			Trusted keys and certificate used in ec verification (e.g. verifying Fulcio issued certificates
 			with Fulcio root CA) are pulled form the trusted metadata.

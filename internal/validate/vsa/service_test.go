@@ -29,7 +29,7 @@ import (
 
 	ecc "github.com/conforma/crds/api/v1alpha1"
 	app "github.com/konflux-ci/application-api/api/v1alpha1"
-	"github.com/sigstore/cosign/v2/pkg/types"
+	"github.com/sigstore/cosign/v3/pkg/types"
 	"github.com/sigstore/sigstore/pkg/signature"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"

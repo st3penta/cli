@@ -22,7 +22,7 @@ import (
 	"fmt"
 
 	"github.com/cucumber/godog"
-	"github.com/sigstore/cosign/v2/pkg/cosign"
+	"github.com/sigstore/cosign/v3/pkg/cosign"
 	"github.com/sigstore/sigstore/pkg/signature"
 
 	"github.com/conforma/cli/acceptance/testenv"
@@ -101,7 +101,7 @@ func SignerWithKey(ctx context.Context, keyName string) (signature.SignerVerifie
 		return nil, err
 	}
 
-	return cosign.LoadPrivateKey(key.PrivateBytes, key.Password())
+	return cosign.LoadPrivateKey(key.PrivateBytes, key.Password(), nil)
 }
 
 // PublicKeysFrom returns a map of all public keys encoded in PEM format
