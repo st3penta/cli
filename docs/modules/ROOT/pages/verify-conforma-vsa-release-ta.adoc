@@ -48,7 +48,7 @@ registries/Rekor. Multiple paths can be provided using `:`.
 *EFFECTIVE_TIME* (`string`):: Run policy checks with the provided time.
 +
 *Default*: `now`
-*EXTRA_RULE_DATA* (`string`):: Merge additional Rego variables into the policy data. Syntax: key=val,key2=val2
+*EXTRA_RULE_DATA* (`string`):: Merge additional Rego variables into the policy data. Syntax: key=val,key2=val2. Note: pipeline_intention=release is always included.
 
 *WORKERS* (`string`):: Number of parallel workers to use for policy evaluation.
 +
