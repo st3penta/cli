@@ -32,6 +32,7 @@ import (
 	"math"
 	"math/big"
 	"os"
+	"os/exec"
 	"path"
 	"strings"
 	"time"
@@ -148,10 +149,27 @@ func startStubGitServer(ctx context.Context) (context.Context, error) {
 		}
 	}
 
+	// Create a minimal health check repository before starting the container
+	healthCheckDir := path.Join(repositories, "health-check.git")
+	if err := os.MkdirAll(healthCheckDir, 0755); err != nil {
+		return ctx, err
+	}
+
+	// Initialize a bare git repository for health checking
+	cmd := exec.Command("git", "init", "--bare", healthCheckDir)
+	if err := cmd.Run(); err != nil {
+		return ctx, fmt.Errorf("failed to create health check repository: %w", err)
+	}
+
 	req := testenv.TestContainersRequest(ctx, testcontainers.ContainerRequest{
 		Image:        "docker.io/ynohat/git-http-backend",
 		ExposedPorts: []string{"0.0.0.0::443/tcp"},
-		WaitingFor:   wait.ForListeningPort("443/tcp"),
+		WaitingFor: wait.ForHTTP("/git/health-check.git/info/refs?service=git-upload-pack").
+			WithPort("443/tcp").
+			WithTLS(true).
+			WithAllowInsecure(true).
+			WithStartupTimeout(30 * time.Second).
+			WithPollInterval(500 * time.Millisecond),
 		Binds: []string{
 			fmt.Sprintf("%s:/git:Z", repositories), // :Z is to allow accessing the directory under SELinux
 			fmt.Sprintf("%s/nginx.conf:/etc/nginx/nginx.conf:Z", nginxConfDir),
