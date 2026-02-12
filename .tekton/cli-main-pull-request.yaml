@@ -40,6 +40,8 @@ spec:
     value: main-pre-merge-build-args.conf
   - name: hermetic
     value: "true"
+  - name: enable-cache-proxy
+    value: "true"
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while maintaining trust after pipeline customization.
@@ -115,6 +117,10 @@ spec:
       description: List of platforms to build the container images on
       name: build-platforms
       type: array
+    - default: "true"
+      description: Enable cache proxy
+      name: enable-cache-proxy
+      type: string
     results:
     - description: ""
       name: IMAGE_URL
@@ -240,6 +246,8 @@ spec:
         value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
       - name: IMAGE_APPEND_PLATFORM
         value: "true"
+      - name: ENABLE_CACHE_PROXY
+        value: $(params.enable-cache-proxy)
       runAfter:
       - prefetch-dependencies
       taskRef:
