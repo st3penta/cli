@@ -132,12 +132,6 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		logger, ctx := log.LoggerFor(ctx)
 		logger.Name(sc.Name)
 
-		// Log scenario start - write to /dev/tty to bypass all output capture
-		if tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0); err == nil {
-			fmt.Fprintf(tty, "\n▶ STARTING: %s (%s)\n", sc.Name, sc.Uri)
-			tty.Close()
-		}
-
 		return context.WithValue(ctx, testenv.Scenario, sc), nil
 	})
 
@@ -145,9 +139,9 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		// Log scenario end with status - write to /dev/tty to bypass capture
 		if tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0); err == nil {
 			if scenarioErr != nil {
-				fmt.Fprintf(tty, "✗ FAILED: %s (%s)\n\n", scenario.Name, scenario.Uri)
+				fmt.Fprintf(tty, "✗ FAILED: %s (%s)\n", scenario.Name, scenario.Uri)
 			} else {
-				fmt.Fprintf(tty, "✓ PASSED: %s (%s)\n\n", scenario.Name, scenario.Uri)
+				fmt.Fprintf(tty, "✓ PASSED: %s (%s)\n", scenario.Name, scenario.Uri)
 			}
 			tty.Close()
 		}
