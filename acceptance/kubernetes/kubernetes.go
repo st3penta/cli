@@ -464,6 +464,7 @@ func AddStepsTo(sc *godog.ScenarioContext) {
 	sc.Step(`^an Snapshot named "([^"]*)" with (\d+) components signed with "([^"]*)" key$`, createNamedSnapshotWithManyComponents)
 	sc.Step(`^the task logs for step "([^"]*)" should match the snapshot$`, taskLogsShouldMatchTheSnapshot)
 	sc.Step(`^the task logs for step "([^"]*)" should contain "([^"]*)"$`, taskLogsShouldContain)
+	sc.Step("^the task logs for step \"([^\"]*)\" should contain `([^`]+)`$", taskLogsShouldContain)
 	sc.Step(`^the task env var for step "([^"]*)" named "([^"]*)" should be set to "([^"]*)"$`, stepEnvVarShouldBe)
 	sc.Step(`^the task results should match the snapshot$`, taskResultsShouldMatchTheSnapshot)
 	sc.Step(`^policy configuration named "([^"]*)" with (\d+) policy sources from "([^"]*)"(?:, patched with)$`, createNamedPolicyWithManySources)
