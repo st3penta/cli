@@ -203,6 +203,7 @@ func TestFeatures(t *testing.T) {
 		DefaultContext: ctx,
 		Tags:           *tags,
 		NoColors:       *noColors,
+		Strict:         true,
 	}
 
 	suite := godog.TestSuite{
