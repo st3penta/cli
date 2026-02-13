@@ -24,7 +24,7 @@ require (
 	github.com/secure-systems-lab/go-securesystemslib v0.9.1
 	github.com/sigstore/cosign/v3 v3.0.4
 	github.com/sigstore/rekor v1.4.3
-	github.com/sigstore/sigstore v1.10.3
+	github.com/sigstore/sigstore v1.10.4
 	github.com/stretchr/testify v1.11.1
 	github.com/tektoncd/cli v0.37.1
 	github.com/tektoncd/pipeline v0.70.0
