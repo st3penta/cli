@@ -6,7 +6,7 @@
 ---
 
 [Outputs are there:initialize-tuf - 1]
-{"level":"info","ts":${TIMESTAMP},"caller":"entrypoint/entrypointer.go:265","msg":"Step was skipped due to when expressions were evaluated to false."}
+${TIMESTAMP} INFO Step was skipped due to when expressions were evaluated to false.
 
 ---
 
@@ -63,7 +63,7 @@ Error: Get "http://tuf.invalid/root.json": dial tcp: lookup tuf.invalid on 10.96
 ---
 
 [Initialize TUF succeeds:initialize-tuf - 1]
-{"level":"info","ts":${TIMESTAMP},"caller":"entrypoint/entrypointer.go:265","msg":"Step was skipped due to when expressions were evaluated to false."}
+${TIMESTAMP} INFO Step was skipped due to when expressions were evaluated to false.
 
 ---
 
