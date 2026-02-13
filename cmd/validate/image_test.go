@@ -39,7 +39,7 @@ import (
 	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/google/go-containerregistry/pkg/name"
 	app "github.com/konflux-ci/application-api/api/v1alpha1"
-	"github.com/sigstore/cosign/v2/pkg/cosign"
+	"github.com/sigstore/cosign/v3/pkg/cosign"
 	"github.com/sigstore/sigstore/pkg/signature"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
@@ -1438,7 +1438,7 @@ func TestValidateImageCommand_VSAUpload_Success(t *testing.T) {
 	originalLoadPrivateKey := vsa.LoadPrivateKey
 	defer func() { vsa.LoadPrivateKey = originalLoadPrivateKey }()
 
-	vsa.LoadPrivateKey = func(keyBytes, password []byte) (signature.SignerVerifier, error) {
+	vsa.LoadPrivateKey = func(keyBytes, password []byte, _ *[]signature.LoadOption) (signature.SignerVerifier, error) {
 		return &simpleFakeSigner{}, nil
 	}
 
@@ -1499,7 +1499,7 @@ func TestValidateImageCommand_VSAUpload_NoStorageBackends(t *testing.T) {
 	originalLoadPrivateKey := vsa.LoadPrivateKey
 	defer func() { vsa.LoadPrivateKey = originalLoadPrivateKey }()
 
-	vsa.LoadPrivateKey = func(keyBytes, password []byte) (signature.SignerVerifier, error) {
+	vsa.LoadPrivateKey = func(keyBytes, password []byte, _ *[]signature.LoadOption) (signature.SignerVerifier, error) {
 		return &simpleFakeSigner{}, nil
 	}
 
@@ -1643,7 +1643,7 @@ func TestValidateImageCommand_VSAFormat_DSSE(t *testing.T) {
 	originalLoadPrivateKey := vsa.LoadPrivateKey
 	defer func() { vsa.LoadPrivateKey = originalLoadPrivateKey }()
 
-	vsa.LoadPrivateKey = func(keyBytes, password []byte) (signature.SignerVerifier, error) {
+	vsa.LoadPrivateKey = func(keyBytes, password []byte, _ *[]signature.LoadOption) (signature.SignerVerifier, error) {
 		return &simpleFakeSigner{}, nil
 	}
 
@@ -1992,7 +1992,7 @@ func TestGenerateVSAsDSSE_Errors(t *testing.T) {
 		originalLoadPrivateKey := vsa.LoadPrivateKey
 		defer func() { vsa.LoadPrivateKey = originalLoadPrivateKey }()
 
-		vsa.LoadPrivateKey = func(keyBytes, password []byte) (signature.SignerVerifier, error) {
+		vsa.LoadPrivateKey = func(keyBytes, password []byte, _ *[]signature.LoadOption) (signature.SignerVerifier, error) {
 			return &simpleFakeSigner{}, nil
 		}
 
@@ -2118,7 +2118,7 @@ func TestVSAGeneration_WithOutputDir(t *testing.T) {
 	originalLoadPrivateKey := vsa.LoadPrivateKey
 	defer func() { vsa.LoadPrivateKey = originalLoadPrivateKey }()
 
-	vsa.LoadPrivateKey = func(keyBytes, password []byte) (signature.SignerVerifier, error) {
+	vsa.LoadPrivateKey = func(keyBytes, password []byte, _ *[]signature.LoadOption) (signature.SignerVerifier, error) {
 		return &simpleFakeSigner{}, nil
 	}
 

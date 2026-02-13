@@ -168,7 +168,7 @@ func TestPrivateKeyFromKeyRef(t *testing.T) {
 				}
 
 				if len(secrets) > 0 {
-					client := fake.NewSimpleClientset()
+					client := fake.NewClientset()
 					for _, secret := range secrets {
 						_, err := client.CoreV1().Secrets(secret.Namespace).Create(ctx, secret, metav1.CreateOptions{})
 						require.NoError(t, err)
@@ -307,7 +307,7 @@ func TestPublicKeyFromKeyRef(t *testing.T) {
 				}
 
 				if len(secrets) > 0 {
-					client := fake.NewSimpleClientset()
+					client := fake.NewClientset()
 					for _, secret := range secrets {
 						_, err := client.CoreV1().Secrets(secret.Namespace).Create(ctx, secret, metav1.CreateOptions{})
 						require.NoError(t, err)

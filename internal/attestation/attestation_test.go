@@ -26,7 +26,7 @@ import (
 	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/in-toto/in-toto-golang/in_toto"
-	ct "github.com/sigstore/cosign/v2/pkg/types"
+	ct "github.com/sigstore/cosign/v3/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 

@@ -12,7 +12,7 @@ _SHELL := bash
 SHELL=$(if $@,$(info ❱ [1m$@[0m))$(_SHELL)
 ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 COPY:=The Conforma Contributors
-COSIGN_VERSION=$(shell go list -f '{{.Version}}' -m github.com/sigstore/cosign/v2)
+COSIGN_VERSION=$(shell go list -f '{{.Version}}' -m github.com/sigstore/cosign/v3)
 E2E_INSTRUMENTATION_FLAGS := $(if $(filter $(E2E_INSTRUMENTATION),true),-cover -covermode atomic)
 
 ##@ Information

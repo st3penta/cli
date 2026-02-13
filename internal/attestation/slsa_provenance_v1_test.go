@@ -27,7 +27,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/in-toto/in-toto-golang/in_toto"
 	v1 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v1"
-	ct "github.com/sigstore/cosign/v2/pkg/types"
+	ct "github.com/sigstore/cosign/v3/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"

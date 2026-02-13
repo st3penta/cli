@@ -30,7 +30,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sigstore/cosign/v2/pkg/types"
+	"github.com/sigstore/cosign/v3/pkg/types"
 	"github.com/sigstore/sigstore/pkg/signature"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
@@ -151,7 +151,7 @@ func TestNewSigner(t *testing.T) {
 			originalLoadPrivateKey := LoadPrivateKey
 			defer func() { LoadPrivateKey = originalLoadPrivateKey }()
 
-			LoadPrivateKey = func(keyBytes, password []byte) (signature.SignerVerifier, error) {
+			LoadPrivateKey = func(keyBytes, password []byte, _ *[]signature.LoadOption) (signature.SignerVerifier, error) {
 				return &fakeSigner{}, nil
 			}
 
@@ -373,7 +373,7 @@ func TestNewSigner_Comprehensive(t *testing.T) {
 	originalLoadPrivateKey := LoadPrivateKey
 	defer func() { LoadPrivateKey = originalLoadPrivateKey }()
 
-	LoadPrivateKey = func(keyBytes, password []byte) (signature.SignerVerifier, error) {
+	LoadPrivateKey = func(keyBytes, password []byte, _ *[]signature.LoadOption) (signature.SignerVerifier, error) {
 		return &fakeSigner{}, nil
 	}
 
@@ -440,7 +440,7 @@ func TestNewSigner_Comprehensive(t *testing.T) {
 
 			// Setup Kubernetes client for k8s tests
 			if strings.HasPrefix(tt.keyRef, "k8s://") && !tt.expectErr {
-				client := fake.NewSimpleClientset(&v1.Secret{
+				client := fake.NewClientset(&v1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-secret",
 						Namespace: "test-namespace",

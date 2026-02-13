@@ -65,7 +65,7 @@ If used with the '--bench' option then tests will be benchmarked.
 
 Example benchmark run:
 
-	$ opa test --bench ./example/
+	$  opa test --bench ./example/
 
 The optional "gobench" output format conforms to the Go Benchmark Data Format.
 
@@ -87,6 +87,7 @@ ec opa test <path> [path [...]] [flags]
 -c, --coverage:: report coverage (overrides debug tracing) (Default: false)
 -z, --exit-zero-on-skipped:: skipped tests return status 0 (Default: false)
 --explain:: enable query explanations (Default: fails)
+--fail-on-empty:: Whether to fail the test when no test was run (Default: false)
 -f, --format:: set output format (Default: pretty)
 -h, --help:: help for test (Default: false)
 --ignore:: set file and directory names to ignore during loading (e.g., '.*' excludes hidden files) (Default: [])

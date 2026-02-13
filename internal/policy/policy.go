@@ -28,10 +28,10 @@ import (
 
 	ecc "github.com/conforma/crds/api/v1alpha1"
 	"github.com/santhosh-tekuri/jsonschema/v5"
-	"github.com/sigstore/cosign/v2/cmd/cosign/cli/fulcio"
-	"github.com/sigstore/cosign/v2/cmd/cosign/cli/rekor"
-	"github.com/sigstore/cosign/v2/pkg/cosign"
-	cosignSig "github.com/sigstore/cosign/v2/pkg/signature"
+	"github.com/sigstore/cosign/v3/cmd/cosign/cli/fulcio"
+	"github.com/sigstore/cosign/v3/cmd/cosign/cli/rekor"
+	"github.com/sigstore/cosign/v3/pkg/cosign"
+	cosignSig "github.com/sigstore/cosign/v3/pkg/signature"
 	"github.com/sigstore/sigstore/pkg/cryptoutils"
 	sigstoreSig "github.com/sigstore/sigstore/pkg/signature"
 	log "github.com/sirupsen/logrus"
@@ -425,19 +425,31 @@ func checkOpts(ctx context.Context, p *policy) (*cosign.CheckOpts, error) {
 		log.Debugf("TUF_ROOT=%s", os.Getenv("TUF_ROOT"))
 		opts.Identities = []cosign.Identity{p.identity}
 
-		// Get Fulcio certificates
-		if opts.RootCerts, err = fulcio.GetRoots(); err != nil {
-			return nil, err
-		}
-		if opts.IntermediateCerts, err = fulcio.GetIntermediates(); err != nil {
-			return nil, err
+		if !hasSigstoreEnvOverrides() {
+			if trustedRoot, trErr := cosign.TrustedRoot(); trErr == nil {
+				log.Debug("Using trusted root from TUF for verification")
+				opts.TrustedMaterial = trustedRoot
+			} else {
+				log.Debugf("Could not fetch trusted_root.json from TUF, falling back to individual targets: %v", trErr)
+			}
+		} else {
+			log.Debug("Sigstore env overrides detected, skipping trusted root from TUF")
 		}
 
-		// Get Certificate Transparency Log public keys
-		if opts.CTLogPubKeys, err = cosign.GetCTLogPubs(ctx); err != nil {
-			return nil, err
+		if opts.TrustedMaterial == nil {
+			if opts.RootCerts, err = fulcio.GetRoots(); err != nil {
+				return nil, err
+			}
+			log.Debug("Fetched Fulcio root certificates")
+			if opts.IntermediateCerts, err = fulcio.GetIntermediates(); err != nil {
+				return nil, err
+			}
+			log.Debug("Fetched Fulcio intermediate certificates")
+			if opts.CTLogPubKeys, err = cosign.GetCTLogPubs(ctx); err != nil {
+				return nil, err
+			}
+			log.Debug("Fetched CT log public keys")
 		}
-		log.Debug("Retrieved Rekor public keys")
 	}
 
 	opts.IgnoreTlog = p.ignoreRekor
@@ -462,13 +474,25 @@ func checkOpts(ctx context.Context, p *policy) (*cosign.CheckOpts, error) {
 			log.Debugf("Rekor client created, url %q", rekorURL)
 		}
 
-		if opts.RekorPubKeys, err = cosign.GetRekorPubs(ctx); err != nil {
-			return nil, err
+		if opts.TrustedMaterial == nil {
+			if opts.RekorPubKeys, err = cosign.GetRekorPubs(ctx); err != nil {
+				return nil, err
+			}
+			log.Debug("Fetched Rekor public keys")
 		}
-		log.Debug("Retrieved Rekor public keys")
 	}
 
 	return &opts, nil
+}
+
+// hasSigstoreEnvOverrides returns true if any SIGSTORE_* environment variables
+// are set. When present, these take precedence over trusted_root.json and the
+// legacy per-component TUF target loading is used instead.
+func hasSigstoreEnvOverrides() bool {
+	return os.Getenv("SIGSTORE_ROOT_FILE") != "" ||
+		os.Getenv("SIGSTORE_CT_LOG_PUBLIC_KEY_FILE") != "" ||
+		os.Getenv("SIGSTORE_REKOR_PUBLIC_KEY") != "" ||
+		os.Getenv("SIGSTORE_TSA_CERTIFICATE_FILE") != ""
 }
 
 type signatureClient interface {
