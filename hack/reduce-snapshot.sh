@@ -15,15 +15,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-# This script attempts to reduce a snapshot to a single component
+# This script attempts to reduce a snapshot to a single component.
 # It determines the component via a custom resource's labels.
 # It requires that the following environment variables be defined:
 #
 # - SINGLE_COMPONENT: true if single component mode is enabled.
-# - SNAPSHOT: Path to Snapshot json file
-# - CUSTOM_RESOURCE: Custom Resource to query for built component in Snapshot
-# - CUSTOM_RESOURCE_NAMESPACE: Namespace where Custom Resource is found
-# - SNAPSHOT_PATH: Same path as SNAPSHOT. The reduced Snapshot will be stored here.
+# - SNAPSHOT: Path to a Snapshot JSON file, or the name of a Snapshot custom
+#   resource. If a valid CR name (DNS label, ≤63 chars), the Snapshot is
+#   fetched from the cluster using the current kubectl context namespace (no
+#   -n flag). This is intentional: in Tekton the task runs in the pipeline
+#   namespace; locally the context targets the user's workspace.
+# - CUSTOM_RESOURCE: Custom resource kind used for label lookup (single-component).
+# - CUSTOM_RESOURCE_NAMESPACE: Namespace used for label lookup only; not used
+#   when fetching the Snapshot by name (context namespace is used for that).
+# - SNAPSHOT_PATH: Where the reduced Snapshot will be stored.
 
 set -o errexit
 set -o nounset
@@ -36,8 +41,15 @@ set -o pipefail
 # the final output to SNAPSHOT_PATH (which may be the same file as SNAPSHOT).
 
 WORKING_SNAPSHOT="$(mktemp /tmp/snapshot.XXXXXX)"
+# Kubernetes resource names: DNS label, max 63 chars, [a-z0-9]([-a-z0-9]*[a-z0-9])?
+VALID_CR_NAME_PATTERN='^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
 if [[ -f "$SNAPSHOT" ]]; then
   cp "$SNAPSHOT" "$WORKING_SNAPSHOT"
+elif [[ ${#SNAPSHOT} -le 63 && "$SNAPSHOT" =~ $VALID_CR_NAME_PATTERN ]]; then
+  # Fetch Snapshot using current kubectl context namespace only (no -n).
+  # Intentional: Tekton runs in pipeline namespace; local dev uses workspace context.
+  kubectl get snapshot/"${SNAPSHOT}" -o json | jq .spec > "$WORKING_SNAPSHOT" || \
+    { echo "Failed to get Snapshot: $SNAPSHOT"; exit 1; }
 else
   printf "%s" "$SNAPSHOT" > "$WORKING_SNAPSHOT"
 fi
