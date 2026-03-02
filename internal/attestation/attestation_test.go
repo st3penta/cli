@@ -20,6 +20,7 @@ package attestation
 
 import (
 	"crypto/x509"
+	"encoding/base64"
 	"fmt"
 	"testing"
 
@@ -216,6 +217,91 @@ func TestProvenance_Signatures(t *testing.T) {
 			p := provenance{signatures: tt.signatures}
 			result := p.Signatures()
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestProvenanceFromBundlePayload(t *testing.T) {
+	sig1 := `{"keyid": "key-id-1", "sig": "sig-1"}`
+
+	payloadJson := `{
+		"_type": "https://in-toto.io/Statement/v0.1",
+		"predicateType": "https://cool-type.example.io/Amazing/v2.0",
+		"predicate": {
+			"secure": "very",
+			"hacks": "none"
+		}
+	}`
+
+	fullAtt := fmt.Sprintf(`{"payloadType":"application/vnd.in-toto+json","signatures": [%s], "payload": "%s"}`, sig1, encode(payloadJson))
+
+	cases := []struct {
+		name      string
+		setup     func(l *mockSignature)
+		dsseJSON  string
+		expectErr string
+	}{
+		{
+			name: "valid bundle attestation with signature from payload",
+			setup: func(l *mockSignature) {
+				l.On("Base64Signature").Return("", nil)
+				l.On("Cert").Return(&x509.Certificate{}, nil)
+				l.On("Chain").Return([]*x509.Certificate{}, nil)
+			},
+			dsseJSON: fullAtt,
+		},
+		{
+			name: "valid bundle attestation with signature from certificate",
+			setup: func(l *mockSignature) {
+				l.On("Base64Signature").Return("sig-from-cert", nil)
+				l.On("Cert").Return(signature.ParseChainguardReleaseCert(), nil)
+				l.On("Chain").Return(signature.ParseSigstoreChainCert(), nil)
+			},
+			dsseJSON: fullAtt,
+		},
+		{
+			name:      "malformed JSON",
+			setup:     func(l *mockSignature) {},
+			dsseJSON:  `{not json`,
+			expectErr: "malformed bundle attestation",
+		},
+		{
+			name:      "empty payload field",
+			setup:     func(l *mockSignature) {},
+			dsseJSON:  `{"signatures": [], "payload": ""}`,
+			expectErr: "no `payload` data found in bundle attestation",
+		},
+		{
+			name:      "invalid base64 payload",
+			setup:     func(l *mockSignature) {},
+			dsseJSON:  `{"signatures": [], "payload": "not-valid-base64!@#"}`,
+			expectErr: "malformed attestation data",
+		},
+		{
+			name:  "invalid statement JSON in payload",
+			setup: func(l *mockSignature) {},
+			dsseJSON: fmt.Sprintf(`{"signatures": [], "payload": "%s"}`,
+				base64.StdEncoding.EncodeToString([]byte(`not-json`))),
+			expectErr: "malformed bundle attestation",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			sig := mockSignature{&mock.Mock{}}
+			c.setup(&sig)
+
+			p, err := ProvenanceFromBundlePayload(sig, []byte(c.dsseJSON))
+			if c.expectErr != "" {
+				assert.ErrorContains(t, err, c.expectErr)
+				assert.Nil(t, p)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.JSONEq(t, payloadJson, string(p.Statement()))
+			assert.Equal(t, "https://cool-type.example.io/Amazing/v2.0", p.PredicateType())
+			assert.NotEmpty(t, p.Signatures())
 		})
 	}
 }
