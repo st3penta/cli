@@ -914,6 +914,169 @@ func TestAttestationDataMarshalJSON(t *testing.T) {
 	}
 }
 
+func TestParseAttestationsFromBundles(t *testing.T) {
+	ref := name.MustParseReference("registry.io/repository/image:tag")
+
+	slsaV02Statement := in_toto.ProvenanceStatementSLSA02{
+		//nolint:staticcheck
+		StatementHeader: in_toto.StatementHeader{
+			Type:          in_toto.StatementInTotoV01,
+			PredicateType: v02.PredicateSLSAProvenance,
+			//nolint:staticcheck
+			Subject: []in_toto.Subject{
+				{Name: "test-image", Digest: common.DigestSet{"sha256": "abc123"}},
+			},
+		},
+		Predicate: v02.ProvenancePredicate{
+			BuildType: pipelineRunBuildType,
+			Builder:   common.ProvenanceBuilder{ID: "https://tekton.dev/chains/v2"},
+		},
+	}
+
+	cases := []struct {
+		name              string
+		layers            []oci.Signature
+		expectErr         bool
+		errContains       string
+		expectedAttCount  int
+		expectedPredTypes []string
+	}{
+		{
+			name:             "empty layers",
+			layers:           []oci.Signature{},
+			expectedAttCount: 0,
+		},
+		{
+			name:              "single valid bundle attestation",
+			layers:            []oci.Signature{createBundleDSSESignature(t, slsaV02Statement)},
+			expectedAttCount:  1,
+			expectedPredTypes: []string{v02.PredicateSLSAProvenance},
+		},
+		{
+			name: "multiple valid bundle attestations",
+			layers: []oci.Signature{
+				createBundleDSSESignature(t, slsaV02Statement),
+				createBundleDSSESignature(t, slsaV02Statement),
+			},
+			expectedAttCount:  2,
+			expectedPredTypes: []string{v02.PredicateSLSAProvenance, v02.PredicateSLSAProvenance},
+		},
+		{
+			name: "skips non-intoto payload type",
+			layers: func() []oci.Signature {
+				payload := `{"payloadType":"application/octet-stream","payload":"aGVsbG8="}`
+				sig, err := static.NewSignature([]byte(payload), "test-sig")
+				require.NoError(t, err)
+				return []oci.Signature{sig}
+			}(),
+			expectedAttCount: 0,
+		},
+		{
+			name: "skips invalid JSON payload",
+			layers: func() []oci.Signature {
+				sig, err := static.NewSignature([]byte(`not-json`), "test-sig")
+				require.NoError(t, err)
+				return []oci.Signature{sig}
+			}(),
+			expectedAttCount: 0,
+		},
+		{
+			name:             "valid attestation with populated signatures",
+			layers:           []oci.Signature{createBundleDSSESignature(t, slsaV02Statement)},
+			expectedAttCount: 1,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := ApplicationSnapshotImage{reference: ref}
+
+			err := a.parseAttestationsFromBundles(tc.layers)
+
+			if tc.expectErr {
+				require.Error(t, err)
+				if tc.errContains != "" {
+					assert.Contains(t, err.Error(), tc.errContains)
+				}
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedAttCount, len(a.attestations))
+
+				for i, expectedType := range tc.expectedPredTypes {
+					assert.Equal(t, expectedType, a.attestations[i].PredicateType())
+				}
+
+				for _, att := range a.attestations {
+					assert.NotNil(t, att.Signatures(), "bundle attestations should have signatures populated")
+				}
+			}
+		})
+	}
+}
+
+func TestParseAttestationsFromBundlesPopulatesSignatures(t *testing.T) {
+	ref := name.MustParseReference("registry.io/repository/image:tag")
+
+	//nolint:staticcheck
+	statement := in_toto.Statement{
+		//nolint:staticcheck
+		StatementHeader: in_toto.StatementHeader{
+			Type:          in_toto.StatementInTotoV01,
+			PredicateType: "https://example.com/test/v1",
+			//nolint:staticcheck
+			Subject: []in_toto.Subject{
+				{Name: "test", Digest: common.DigestSet{"sha256": "abc"}},
+			},
+		},
+		Predicate: json.RawMessage(`{"test":"data"}`),
+	}
+
+	a := ApplicationSnapshotImage{reference: ref}
+	layers := []oci.Signature{createBundleDSSESignature(t, statement)}
+
+	err := a.parseAttestationsFromBundles(layers)
+	require.NoError(t, err)
+	require.Len(t, a.attestations, 1)
+
+	sigs := a.attestations[0].Signatures()
+	assert.NotEmpty(t, sigs, "attestation signatures should be populated for bundle attestations")
+	assert.NotEmpty(t, sigs[0].Certificate, "attestation signature should have certificate")
+}
+
+// createBundleDSSESignature creates a test signature mimicking the bundle
+// format: a raw DSSE envelope accessible via Payload().
+func createBundleDSSESignature(t *testing.T, statement any) oci.Signature {
+	t.Helper()
+
+	statementJSON, err := json.Marshal(statement)
+	require.NoError(t, err)
+
+	encodedStatement := base64.StdEncoding.EncodeToString(statementJSON)
+
+	dsseEnvelope := dsse.Envelope{
+		Payload:     encodedStatement,
+		PayloadType: "application/vnd.in-toto+json",
+		Signatures: []dsse.Signature{
+			{KeyID: "test-key", Sig: "dGVzdC1zaWduYXR1cmU="},
+		},
+	}
+
+	payload, err := json.Marshal(dsseEnvelope)
+	require.NoError(t, err)
+
+	sig, err := static.NewSignature(
+		payload,
+		"test-signature",
+		static.WithCertChain(
+			signature.ChainguardReleaseCert,
+			signature.SigstoreChainCert,
+		),
+	)
+	require.NoError(t, err)
+
+	return sig
+}
+
 // createDSSESignature creates a test signature with a DSSE envelope containing the given statement
 func createDSSESignature(t *testing.T, statement any) oci.Signature {
 	t.Helper()
