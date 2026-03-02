@@ -271,7 +271,7 @@ func (a *ApplicationSnapshotImage) parseAttestationsFromBundles(layers []cosignO
 			continue
 		}
 
-		att, err := attestation.ProvenanceFromBundlePayload(payload)
+		att, err := attestation.ProvenanceFromBundlePayload(sig, payload)
 		if err != nil {
 			return fmt.Errorf("unable to parse bundle attestation: %w", err)
 		}

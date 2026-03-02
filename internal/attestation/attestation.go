@@ -145,7 +145,7 @@ func ProvenanceFromSignature(sig oci.Signature) (Attestation, error) {
 
 // ProvenanceFromBundlePayload parses an attestation from a raw DSSE envelope
 // JSON payload as returned by the Sigstore bundle verification path.
-func ProvenanceFromBundlePayload(dsseJSON []byte) (Attestation, error) {
+func ProvenanceFromBundlePayload(sig oci.Signature, dsseJSON []byte) (Attestation, error) {
 	var payload cosign.AttestationPayload
 	if err := json.Unmarshal(dsseJSON, &payload); err != nil {
 		return nil, fmt.Errorf("malformed bundle attestation: %w", err)
@@ -166,7 +166,12 @@ func ProvenanceFromBundlePayload(dsseJSON []byte) (Attestation, error) {
 		return nil, fmt.Errorf("malformed bundle attestation: %w", err)
 	}
 
-	return provenance{statement: statement, data: embedded}, nil
+	signatures, err := createEntitySignatures(sig, payload)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create signed entity: %w", err)
+	}
+
+	return provenance{statement: statement, data: embedded, signatures: signatures}, nil
 }
 
 type provenance struct {
