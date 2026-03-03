@@ -309,6 +309,8 @@ spec:
         value: $(params.revision)
       - name: SOURCE_ARTIFACT
         value: $(tasks.clone-repository.results.SOURCE_ARTIFACT)
+      - name: STEPS_IMAGE_STEP_NAMES
+        value: "!use-trusted-artifact,!create-trusted-artifact"
       runAfter:
       - build-image-index
       taskRef:
@@ -316,8 +318,7 @@ spec:
         - name: name
           value: tkn-bundle-oci-ta
         - name: bundle
-          value: quay.io/konflux-ci/tekton-catalog/task-tkn-bundle-oci-ta:0.2@sha256:356a021208054be1b9bf7083b4532b8466832f51490abb0d0519dde4e163e764
-        - name: kind
+          value: quay.io/konflux-ci/tekton-catalog/task-tkn-bundle-oci-ta:0.2@sha256:0e12654b0532ca720523693a5a85e67e0221d3678e2f54c675a61e72c5c240b3
           value: task
         resolver: bundles
     - name: deprecated-base-image-check
