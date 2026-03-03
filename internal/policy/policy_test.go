@@ -526,13 +526,20 @@ func TestPublicKeyPEM(t *testing.T) {
 			expectedPublicKey: utils.TestPublicKey,
 		},
 		{
-			// When checkOpts is nil but publicKey is set in the policy spec,
-			// PublicKeyPEM returns the public key directly (fix for issue #1528)
-			name: "checkOpts is nil but publicKey in spec",
+			// When checkOpts is nil but publicKey in spec is valid PEM, return it (e.g. "ec validate input").
+			name: "checkOpts is nil but publicKey in spec is PEM",
 			newPolicy: func(ctx context.Context) (Policy, error) {
 				return NewInertPolicy(ctx, fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON))
 			},
 			expectedPublicKey: utils.TestPublicKey,
+		},
+		{
+			// When checkOpts is nil and publicKey is not PEM, return error to uphold method contract.
+			name: "checkOpts is nil and publicKey in spec is not PEM",
+			newPolicy: func(ctx context.Context) (Policy, error) {
+				return NewInertPolicy(ctx, `{"publicKey": "not-pem-key-ref-or-path"}`)
+			},
+			err: "public key is not in PEM format and signature verifier is not initialized",
 		},
 		{
 			name: "keyless",
