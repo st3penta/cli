@@ -255,44 +255,43 @@ spec:
         set -euo pipefail
 
         cmd_args=(
-          "validate"
-          "image"
-          "--images" "/tekton/home/snapshot.json"
-          "--policy" "${POLICY_CONFIGURATION}"
+          validate
+          image
+          --images=/tekton/home/snapshot.json
+          --policy="${POLICY_CONFIGURATION}"
         )
 
         # To keep bash logic as thin as possible we deliberately don't sanitize
         # these params. If something is wrong or missing let Conforma handle it.
         if [ -n "${CERTIFICATE_IDENTITY}" ] && [ -n "${CERTIFICATE_OIDC_ISSUER}" ]; then
           cmd_args+=(
-            "--certificate-identity" "${CERTIFICATE_IDENTITY}"
-            "--certificate-oidc-issuer" "${CERTIFICATE_OIDC_ISSUER}"
+            --certificate-identity="${CERTIFICATE_IDENTITY}"
+            --certificate-oidc-issuer="${CERTIFICATE_OIDC_ISSUER}"
           )
         elif [ -n "${PUBLIC_KEY}" ]; then
           cmd_args+=(
-            "--public-key" "${PUBLIC_KEY}"
+            --public-key="${PUBLIC_KEY}"
           )
         fi
 
         cmd_args+=(
-          "--rekor-url" "${REKOR_HOST}"
-          "--ignore-rekor=${IGNORE_REKOR}"
-          "--workers" "${WORKERS}"
-          # NOTE: The syntax below is required to negate boolean parameters
-          "--info=${INFO}"
-          "--timeout=0"
-          "--strict=false"
-          "--show-successes"
-          "--effective-time=${EFFECTIVE_TIME}"
-          "--extra-rule-data=${EXTRA_RULE_DATA}"
-          "--retry-max-wait" "${RETRY_MAX_WAIT}"
-          "--retry-max-retry" "${RETRY_MAX_RETRY}"
-          "--retry-duration" "${RETRY_DURATION}"
-          "--retry-factor" "${RETRY_FACTOR}"
-          "--retry-jitter" "${RETRY_JITTER}"
-          "--output" "text=${HOMEDIR}/text-report.txt?show-successes=false"
-          "--output" "appstudio=$(results.TEST_OUTPUT.path)"
-          "--output" "json=${HOMEDIR}/report-json.json"
+          --rekor-url="${REKOR_HOST}"
+          --ignore-rekor="${IGNORE_REKOR}"
+          --workers="${WORKERS}"
+          --info="${INFO}"
+          --timeout=0
+          --strict=false
+          --show-successes=true
+          --effective-time="${EFFECTIVE_TIME}"
+          --extra-rule-data="${EXTRA_RULE_DATA}"
+          --retry-max-wait="${RETRY_MAX_WAIT}"
+          --retry-max-retry="${RETRY_MAX_RETRY}"
+          --retry-duration="${RETRY_DURATION}"
+          --retry-factor="${RETRY_FACTOR}"
+          --retry-jitter="${RETRY_JITTER}"
+          --output="text=${HOMEDIR}/text-report.txt?show-successes=false"
+          --output="json=${HOMEDIR}/report-json.json"
+          --output="appstudio=$(results.TEST_OUTPUT.path)"
         )
 
         exec ec "${cmd_args[@]}"
