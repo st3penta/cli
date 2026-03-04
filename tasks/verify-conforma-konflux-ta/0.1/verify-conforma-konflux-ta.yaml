@@ -300,7 +300,7 @@ spec:
           --ignore-rekor=$(params.IGNORE_REKOR)
           --workers "$(params.WORKERS)"
           --info=$(params.INFO)
-          --timeout=100h
+          --timeout=0
           --strict=false
           --show-successes
           --effective-time=$(params.EFFECTIVE_TIME)
