@@ -319,6 +319,7 @@ spec:
           value: tkn-bundle-oci-ta
         - name: bundle
           value: quay.io/konflux-ci/tekton-catalog/task-tkn-bundle-oci-ta:0.2@sha256:0e12654b0532ca720523693a5a85e67e0221d3678e2f54c675a61e72c5c240b3
+        - name: kind
           value: task
         resolver: bundles
     - name: deprecated-base-image-check
