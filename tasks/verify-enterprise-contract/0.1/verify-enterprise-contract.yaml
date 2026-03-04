@@ -294,6 +294,8 @@ spec:
           --output="appstudio=$(results.TEST_OUTPUT.path)"
         )
 
+
+        # Execute Conforma with constructed arguments
         exec ec "${cmd_args[@]}"
       env:
         - name: POLICY_CONFIGURATION
