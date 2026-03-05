@@ -264,7 +264,7 @@ spec:
         cmd_args=(
           validate
           image
-          --images=/tekton/home/snapshot.json
+          --images="${HOMEDIR}/snapshot.json"
           --policy="${POLICY_CONFIGURATION}"
         )
 
