@@ -320,9 +320,6 @@ spec:
             --attestation-format="${ATTESTATION_FORMAT}"
           )
 
-          # Extract local path from VSA_UPLOAD for output directory
-          # VSA_UPLOAD format is "local@/path/to/dir"
-          VSA_LOCAL_PATH=$(echo "${VSA_UPLOAD}" | grep -oE '^local@[^ ]+' | sed 's/^local@//' | head -n1 || true)
 
           if [[ "${ATTESTATION_FORMAT}" == "dsse" ]]; then
             if [[ -z "${VSA_SIGNING_KEY}" ]]; then
@@ -354,6 +351,9 @@ spec:
 
         # Copy VSA output from /tmp to workdir for trusted artifact archival
         if [[ "${ENABLE_VSA}" == "true" ]]; then
+          # Extract local path from VSA_UPLOAD for output directory
+          # VSA_UPLOAD format is "local@/path/to/dir"
+          # Fixme: Because of -o pipefail this will fail the whole task when the grep doesn't match
           VSA_LOCAL_PATH=$(echo "${VSA_UPLOAD}" | grep -oE '^local@[^ ]+' | sed 's/^local@//' | head -n1 || true)
           if [[ -n "$VSA_LOCAL_PATH" && -d "/tmp/vsa-output" ]]; then
             mkdir -p "$VSA_LOCAL_PATH"
