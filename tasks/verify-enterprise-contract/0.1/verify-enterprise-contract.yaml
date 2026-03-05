@@ -62,8 +62,8 @@ spec:
         Public key used to verify traditional long-lived signatures. Must be a
         valid k8s cosign reference, e.g. k8s://my-space/my-secret where
         my-secret contains the expected cosign.pub attribute. Required for
-        traditional signing key verification. Will be ignored if
-        CERTIFICATE_IDENTITY and CERTIFICATE_OIDC_ISSUER are provided.
+        traditional signing key verification. Will be ignored if either of
+        CERTIFICATE_IDENTITY or CERTIFICATE_OIDC_ISSUER are provided.
       default: ""
 
     - name: REKOR_HOST
@@ -77,8 +77,8 @@ spec:
         Expected identity in the signing certificate for keyless verification.
         This should be the email or URI that was used when signing.
         You should provide both CERTIFICATE_OIDC_ISSUER and CERTIFICATE_IDENTITY
-        for keyless verification. The PUBLIC_KEY param will be ignored if these
-        are provided.
+        for keyless verification. The PUBLIC_KEY param will be ignored if this is
+        provided.
       default: ""
 
     - name: CERTIFICATE_OIDC_ISSUER
@@ -87,7 +87,7 @@ spec:
         Expected OIDC issuer in the signing certificate for keyless verification.
         This should match the issuer that provided the identity token used for signing.
         You should provide both CERTIFICATE_OIDC_ISSUER and CERTIFICATE_IDENTITY for
-        keyless verification. The PUBLIC_KEY param will be ignored if these are provided.
+        keyless verification. The PUBLIC_KEY param will be ignored if this is provided.
       default: ""
 
     - name: IGNORE_REKOR
@@ -270,7 +270,7 @@ spec:
 
         # To keep bash logic as thin as possible we deliberately don't sanitize
         # these params. If something is wrong or missing let Conforma handle it.
-        if [ -n "${CERTIFICATE_IDENTITY}" ] && [ -n "${CERTIFICATE_OIDC_ISSUER}" ]; then
+        if [ -n "${CERTIFICATE_IDENTITY}" ] || [ -n "${CERTIFICATE_OIDC_ISSUER}" ]; then
           cmd_args+=(
             --certificate-identity="${CERTIFICATE_IDENTITY}"
             --certificate-oidc-issuer="${CERTIFICATE_OIDC_ISSUER}"
