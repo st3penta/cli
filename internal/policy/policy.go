@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto"
 	_ "embed"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"os"
@@ -92,20 +93,36 @@ type policy struct {
 	skipImageSigCheck bool
 }
 
-// PublicKeyPEM returns the PublicKey in PEM format.
+// PublicKeyPEM returns the PublicKey in PEM format. When SigVerifier is not
+// initialized, the policy's PublicKey is returned only if it is already valid
+// PEM; otherwise an error is returned so callers do not treat non-PEM data as PEM.
 func (p *policy) PublicKeyPEM() ([]byte, error) {
 	// Public key is not involved when using keyless verification
 	if p.Keyless() {
 		return []byte{}, nil
 	}
+	// When SigVerifier is not initialized, return the policy's PublicKey only if
+	// it is valid PEM (e.g. "ec validate input" with publicKey in policy.yaml).
 	if p.checkOpts == nil || p.checkOpts.SigVerifier == nil {
-		return nil, errors.New("no check options or sig verifier configured")
+		if p.PublicKey == "" {
+			return []byte{}, nil
+		}
+		if !isPEM([]byte(p.PublicKey)) {
+			return nil, errors.New("public key is not in PEM format and signature verifier is not initialized")
+		}
+		return []byte(p.PublicKey), nil
 	}
 	pk, err := p.checkOpts.SigVerifier.PublicKey()
 	if err != nil {
 		return nil, err
 	}
 	return cryptoutils.MarshalPublicKeyToPEM(pk)
+}
+
+// isPEM reports whether data contains at least one valid PEM block.
+func isPEM(data []byte) bool {
+	block, _ := pem.Decode(data)
+	return block != nil
 }
 
 func (p *policy) CheckOpts() (*cosign.CheckOpts, error) {
