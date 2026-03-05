@@ -381,7 +381,7 @@ func (k *kindCluster) TaskInfo(ctx context.Context) (*types.TaskInfo, error) {
 
 	results := map[string]any{}
 	for _, r := range tr.Status.Results {
-		results[r.Name] = r.Value
+		results[r.Name] = paramValue(r.Value)
 	}
 
 	info := types.TaskInfo{
