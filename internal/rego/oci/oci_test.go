@@ -30,8 +30,10 @@ import (
 
 	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/google/go-containerregistry/pkg/crane"
+	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	v1fake "github.com/google/go-containerregistry/pkg/v1/fake"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/google/go-containerregistry/pkg/v1/static"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/open-policy-agent/opa/v1/ast"
@@ -1247,6 +1249,7 @@ func TestFunctionsRegistered(t *testing.T) {
 		ociImageManifestName,
 		ociImageManifestsBatchName,
 		ociImageIndexName,
+		ociImageTagRefsName,
 	}
 	for _, name := range names {
 		t.Run(name, func(t *testing.T) {
@@ -1368,6 +1371,195 @@ func TestResolveIfNeeded(t *testing.T) {
 					require.Equal(t, c.uri, uri)
 				}
 			}
+		})
+	}
+}
+
+func TestOCIImageTagRefs(t *testing.T) {
+	t.Cleanup(ClearCaches)
+	ClearCaches()
+
+	// Known digest for testing
+	testDigest := "sha256:01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+	testRef := "registry.local/spam@" + testDigest
+
+	// Expected tag-based artifact references (cosign format: sha256-<hex>.suffix)
+	expectedSigRef := "registry.local/spam:sha256-01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b.sig"
+	expectedAttRef := "registry.local/spam:sha256-01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b.att"
+	expectedSbomRef := "registry.local/spam:sha256-01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b.sbom"
+
+	// Descriptors for different artifact types
+	sigDescriptor := &v1.Descriptor{
+		MediaType: types.OCIManifestSchema1,
+		Size:      100,
+		Digest: v1.Hash{
+			Algorithm: "sha256",
+			Hex:       "aaaaaa",
+		},
+	}
+	attDescriptor := &v1.Descriptor{
+		MediaType: types.OCIManifestSchema1,
+		Size:      200,
+		Digest: v1.Hash{
+			Algorithm: "sha256",
+			Hex:       "bbbbbb",
+		},
+	}
+	sbomDescriptor := &v1.Descriptor{
+		MediaType: types.OCIManifestSchema1,
+		Size:      300,
+		Digest: v1.Hash{
+			Algorithm: "sha256",
+			Hex:       "cccccc",
+		},
+	}
+
+	type headMock struct {
+		descriptor *v1.Descriptor
+		err        error
+	}
+
+	cases := []struct {
+		name           string
+		ref            *ast.Term
+		resolvedDigest string
+		resolveErr     error
+		headMocks      map[string]headMock
+		want           []string
+	}{
+		{
+			name: "all artifacts exist",
+			ref:  ast.StringTerm(testRef),
+			headMocks: map[string]headMock{
+				".sig":  {descriptor: sigDescriptor},
+				".att":  {descriptor: attDescriptor},
+				".sbom": {descriptor: sbomDescriptor},
+			},
+			want: []string{expectedSigRef, expectedAttRef, expectedSbomRef},
+		},
+		{
+			name:           "tag reference resolves to digest-based artifacts",
+			ref:            ast.StringTerm("registry.local/spam:v1.0"),
+			resolvedDigest: testDigest,
+			headMocks: map[string]headMock{
+				".sig":  {descriptor: sigDescriptor},
+				".att":  {descriptor: attDescriptor},
+				".sbom": {descriptor: sbomDescriptor},
+			},
+			want: []string{expectedSigRef, expectedAttRef, expectedSbomRef},
+		},
+		{
+			name: "no artifacts exist (404 not found)",
+			ref:  ast.StringTerm(testRef),
+			headMocks: map[string]headMock{
+				".sig":  {err: &transport.Error{StatusCode: 404}},
+				".att":  {err: &transport.Error{StatusCode: 404}},
+				".sbom": {err: &transport.Error{StatusCode: 404}},
+			},
+			want: []string{},
+		},
+		{
+			name: "auth error on signature check - gracefully skips sig, returns others",
+			ref:  ast.StringTerm(testRef),
+			headMocks: map[string]headMock{
+				".sig":  {err: &transport.Error{StatusCode: 401}},
+				".att":  {descriptor: attDescriptor},
+				".sbom": {descriptor: sbomDescriptor},
+			},
+			want: []string{expectedAttRef, expectedSbomRef},
+		},
+		{
+			name: "forbidden error on attestation check - gracefully skips att, returns others",
+			ref:  ast.StringTerm(testRef),
+			headMocks: map[string]headMock{
+				".sig":  {descriptor: sigDescriptor},
+				".att":  {err: &transport.Error{StatusCode: 403}},
+				".sbom": {descriptor: sbomDescriptor},
+			},
+			want: []string{expectedSigRef, expectedSbomRef},
+		},
+		{
+			name: "registry error on SBOM check - gracefully skips sbom, returns others",
+			ref:  ast.StringTerm(testRef),
+			headMocks: map[string]headMock{
+				".sig":  {descriptor: sigDescriptor},
+				".att":  {descriptor: attDescriptor},
+				".sbom": {err: &transport.Error{StatusCode: 500}},
+			},
+			want: []string{expectedSigRef, expectedAttRef},
+		},
+		{
+			name: "network error (non-transport error) - gracefully skips sig, returns others",
+			ref:  ast.StringTerm(testRef),
+			headMocks: map[string]headMock{
+				".sig":  {err: errors.New("network timeout")},
+				".att":  {descriptor: attDescriptor},
+				".sbom": {descriptor: sbomDescriptor},
+			},
+			want: []string{expectedAttRef, expectedSbomRef},
+		},
+		{
+			name:       "resolve error (returns nil per OPA convention)",
+			ref:        ast.StringTerm("registry.local/spam:latest"),
+			resolveErr: errors.New("resolve failed"),
+			want:       nil, // Note: wantErr is false, function returns (nil, nil)
+		},
+		{
+			name: "invalid ref type (returns nil per OPA convention)",
+			ref:  ast.IntNumberTerm(42),
+			want: nil, // Note: wantErr is false, function returns (nil, nil)
+		},
+		{
+			name:       "invalid reference (returns nil per OPA convention)",
+			ref:        ast.StringTerm("...invalid..."),
+			resolveErr: errors.New("invalid reference"),
+			want:       nil, // Note: wantErr is false, function returns (nil, nil)
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ClearCaches()
+
+			client := fake.FakeClient{}
+
+			client.On("ResolveDigest", mock.Anything).Return(c.resolvedDigest, c.resolveErr)
+
+			// Mock Head calls for tag-based artifacts
+			for suffix, headMock := range c.headMocks {
+				client.On("Head", mock.MatchedBy(func(ref name.Reference) bool {
+					return strings.Contains(ref.String(), suffix)
+				})).Return(headMock.descriptor, headMock.err)
+			}
+
+			ctx := oci.WithClient(context.Background(), &client)
+			bctx := rego.BuiltinContext{Context: ctx}
+
+			got, err := ociImageTagRefs(bctx, c.ref)
+			require.NoError(t, err)
+
+			// If want is nil, expect nil result (input validation errors per OPA convention)
+			if c.want == nil {
+				require.Nil(t, got)
+				return
+			}
+
+			require.NotNil(t, got)
+
+			// Verify it's an array
+			arr, ok := got.Value.(*ast.Array)
+			require.True(t, ok, "result should be an array")
+
+			// Collect all returned refs
+			var gotRefs []string
+			for i := 0; i < arr.Len(); i++ {
+				refStr, ok := arr.Elem(i).Value.(ast.String)
+				require.True(t, ok, "all array elements should be strings")
+				gotRefs = append(gotRefs, string(refStr))
+			}
+
+			// Verify the refs match (order-independent)
+			require.ElementsMatch(t, c.want, gotRefs, "tag refs mismatch")
 		})
 	}
 }

@@ -37,10 +37,12 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/open-policy-agent/opa/v1/ast"
 	"github.com/open-policy-agent/opa/v1/rego"
 	"github.com/open-policy-agent/opa/v1/topdown/builtins"
 	"github.com/open-policy-agent/opa/v1/types"
+	ociremote "github.com/sigstore/cosign/v3/pkg/oci/remote"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/singleflight"
@@ -59,6 +61,7 @@ const (
 	ociImageManifestsBatchName = "ec.oci.image_manifests"
 	ociImageFilesName          = "ec.oci.image_files"
 	ociImageIndexName          = "ec.oci.image_index"
+	ociImageTagRefsName        = "ec.oci.image_tag_refs"
 	maxTarEntrySizeConst       = 500 * 1024 * 1024 // 500MB
 )
 
@@ -412,6 +415,30 @@ func registerOCIImageIndex() {
 	ast.RegisterBuiltin(&ast.Builtin{
 		Name:             decl.Name,
 		Description:      "Fetch an Image Index from an OCI registry.",
+		Decl:             decl.Decl,
+		Nondeterministic: decl.Nondeterministic,
+	})
+}
+
+func registerOCIImageTagRefs() {
+	resultType := types.NewArray([]types.Type{types.S}, nil)
+
+	decl := rego.Function{
+		Name: ociImageTagRefsName,
+		Decl: types.NewFunction(
+			types.Args(
+				types.Named("ref", types.S).Description("OCI image reference"),
+			),
+			types.Named("refs", resultType).Description("list of tag-based artifact references"),
+		),
+		Memoize:          true,
+		Nondeterministic: true,
+	}
+
+	rego.RegisterBuiltin1(&decl, ociImageTagRefs)
+	ast.RegisterBuiltin(&ast.Builtin{
+		Name:             decl.Name,
+		Description:      "Discover artifacts attached to an image via legacy tag-based discovery (cosign .sig, .att, .sbom suffixes).",
 		Decl:             decl.Decl,
 		Nondeterministic: decl.Nondeterministic,
 	})
@@ -1299,6 +1326,97 @@ func ociImageIndex(bctx rego.BuiltinContext, a *ast.Term) (*ast.Term, error) {
 	return result.(*ast.Term), nil
 }
 
+// ociImageTagRefs discovers tag-based artifacts attached to an image using legacy cosign conventions.
+// It checks for .sig, .att, and .sbom suffixed tags and returns references to any that exist.
+// Returns nil if the reference cannot be resolved.
+func ociImageTagRefs(bctx rego.BuiltinContext, a *ast.Term) (*ast.Term, error) {
+	logger := log.WithField("function", ociImageTagRefsName)
+
+	uriValue, ok := a.Value.(ast.String)
+	if !ok {
+		logger.Error("input is not a string")
+		return nil, nil
+	}
+	refStr := string(uriValue)
+	logger = logger.WithField("input_ref", refStr)
+
+	client := oci.NewClient(bctx.Context)
+
+	// Resolve to digest if needed
+	resolvedStr, ref, err := resolveIfNeeded(client, refStr)
+	if err != nil {
+		logger.WithError(err).Error("failed to resolve reference")
+		return nil, nil
+	}
+
+	// Convert to digest reference (needed for cosign tag functions)
+	var digestRef name.Digest
+	if d, ok := ref.(name.Digest); ok {
+		// Already a digest
+		digestRef = d
+	} else {
+		// Tag reference - parse the resolved string which includes the digest
+		digestRef, err = name.NewDigest(resolvedStr)
+		if err != nil {
+			logger.WithError(err).Error("failed to create digest reference from resolved string")
+			return nil, nil
+		}
+	}
+
+	// Use cosign's tag computation functions with remote options
+	remoteOpts := oci.CreateRemoteOptions(bctx.Context)
+
+	var tagRefs []*ast.Term
+
+	// Check for tag-based signature artifact (.sig suffix)
+	if sigTag, err := ociremote.SignatureTag(digestRef, ociremote.WithRemoteOptions(remoteOpts...)); err == nil {
+		if _, err := client.Head(sigTag); err == nil {
+			tagRefs = append(tagRefs, ast.StringTerm(sigTag.String()))
+			logger.WithField("tag", sigTag.String()).Debug("found tag-based signature artifact")
+		} else if isNotFoundError(err) {
+			logger.WithField("tag", sigTag.String()).Debug("tag-based signature artifact does not exist")
+		} else {
+			logger.WithFields(log.Fields{
+				"tag":   sigTag.String(),
+				"error": err,
+			}).Error("failed to check tag-based signature artifact")
+		}
+	}
+
+	// Check for tag-based attestation artifact (.att suffix)
+	if attTag, err := ociremote.AttestationTag(digestRef, ociremote.WithRemoteOptions(remoteOpts...)); err == nil {
+		if _, err := client.Head(attTag); err == nil {
+			tagRefs = append(tagRefs, ast.StringTerm(attTag.String()))
+			logger.WithField("tag", attTag.String()).Debug("found tag-based attestation artifact")
+		} else if isNotFoundError(err) {
+			logger.WithField("tag", attTag.String()).Debug("tag-based attestation artifact does not exist")
+		} else {
+			logger.WithFields(log.Fields{
+				"tag":   attTag.String(),
+				"error": err,
+			}).Error("failed to check tag-based attestation artifact")
+		}
+	}
+
+	// Check for tag-based SBOM artifact (.sbom suffix)
+	if sbomTag, err := ociremote.SBOMTag(digestRef, ociremote.WithRemoteOptions(remoteOpts...)); err == nil {
+		if _, err := client.Head(sbomTag); err == nil {
+			tagRefs = append(tagRefs, ast.StringTerm(sbomTag.String()))
+			logger.WithField("tag", sbomTag.String()).Debug("found tag-based SBOM artifact")
+		} else if isNotFoundError(err) {
+			logger.WithField("tag", sbomTag.String()).Debug("tag-based SBOM artifact does not exist")
+		} else {
+			logger.WithFields(log.Fields{
+				"tag":   sbomTag.String(),
+				"error": err,
+			}).Error("failed to check tag-based SBOM artifact")
+		}
+	}
+
+	logger.WithField("found_count", len(tagRefs)).Debug("tag-based artifact discovery complete")
+	return ast.ArrayTerm(tagRefs...), nil
+}
+
 func newPlatformTerm(p v1.Platform) *ast.Term {
 	osFeatures := []*ast.Term{}
 	for _, f := range p.OSFeatures {
@@ -1390,6 +1508,20 @@ func parseReference(uri string) (name.Reference, error) {
 	return ref, nil
 }
 
+// isNotFoundError checks if an error is a 404 Not Found from the registry.
+// Returns true only for genuine "not found" cases, false for auth errors,
+// network errors, or other registry failures.
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var terr *transport.Error
+	if errors.As(err, &terr) {
+		return terr.StatusCode == 404
+	}
+	return false
+}
+
 func init() {
 	registerOCIBlob()
 	registerOCIBlobFiles()
@@ -1398,4 +1530,5 @@ func init() {
 	registerOCIImageManifest()
 	registerOCIImageManifestsBatch()
 	registerOCIImageIndex()
+	registerOCIImageTagRefs()
 }

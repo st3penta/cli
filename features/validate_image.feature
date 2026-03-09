@@ -1151,6 +1151,29 @@ Feature: evaluate enterprise contract
     Then the exit status should be 0
     Then the output should match the snapshot
 
+  Scenario: discover tag-based artifact references
+    Given a key pair named "known"
+    Given an image named "acceptance/image-tag-refs"
+    Given a valid image signature of "acceptance/image-tag-refs" image signed by the "known" key
+    Given a valid attestation of "acceptance/image-tag-refs" signed by the "known" key
+    Given a git repository named "image-tag-refs-policy" with
+      | main.rego | examples/image_tag_refs.rego |
+    Given policy configuration named "ec-policy" with specification
+      """
+      {
+        "sources": [
+          {
+            "policy": [
+              "git::https://${GITHOST}/git/image-tag-refs-policy"
+            ]
+          }
+        ]
+      }
+      """
+    When ec command is run with "validate image --image ${REGISTRY}/acceptance/image-tag-refs --policy acceptance/ec-policy --public-key ${known_PUBLIC_KEY} --rekor-url ${REKOR} --show-successes --output json"
+    Then the exit status should be 0
+    Then the output should match the snapshot
+
   Scenario: tracing and debug logging
     Given a key pair named "trace_debug"
       And an image named "acceptance/trace-debug"
