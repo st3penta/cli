@@ -40,7 +40,8 @@ import (
 )
 
 // the image we're using to launch the stub image registry
-const registryImage = "docker.io/registry:2.8.1"
+// Using Zot which has proper OCI Referrers API support
+const registryImage = "ghcr.io/project-zot/zot:v2.1.15"
 
 type key int
 
@@ -71,10 +72,38 @@ func startStubRegistry(ctx context.Context) (context.Context, error) {
 		return ctx, nil
 	}
 
+	// Create a minimal Zot configuration with error-only logging to reduce I/O overhead
+	// This dramatically reduces disk I/O and prevents DNS timeouts under load
+	// Using the exact same structure as Zot's minimal example config but with error-level logging
+	// The "compat": ["docker2s2"] enables Docker v2 Schema 2 manifest compatibility
+	zotConfig := `{
+		"distSpecVersion": "1.1.1",
+		"storage": {
+			"rootDirectory": "/var/lib/registry"
+		},
+		"http": {
+			"address": "0.0.0.0",
+			"port": "5000",
+			"compat": ["docker2s2"]
+		},
+		"log": {
+			"level": "error"
+		}
+	}`
+
 	req := testenv.TestContainersRequest(ctx, testcontainers.ContainerRequest{
 		Image:        registryImage,
 		ExposedPorts: []string{"0.0.0.0::5000/tcp"},
 		WaitingFor:   wait.ForHTTP("/v2/").WithPort("5000/tcp"),
+		Cmd:          []string{"serve", "/config/config.json"},
+		Files: []testcontainers.ContainerFile{
+			{
+				HostFilePath:      "",
+				ContainerFilePath: "/config/config.json",
+				FileMode:          0644,
+				Reader:            strings.NewReader(zotConfig),
+			},
+		},
 	})
 
 	logger, ctx := log.LoggerFor(ctx)
