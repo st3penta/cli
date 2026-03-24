@@ -453,3 +453,83 @@ true
   "TEST_OUTPUT": "{\"timestamp\":\"${TIMESTAMP}\",\"namespace\":\"\",\"successes\":5,\"failures\":0,\"warnings\":0,\"result\":\"SUCCESS\"}\n"
 }
 ---
+
+[Collect keyless signing parameters from ConfigMap:collect-signing-params - 1]
+Reading ConfigMap konflux-info/cluster-config
+ConfigMap found, extracting keyless signing parameters
+results.keylessSigningEnabled: true
+results.defaultOIDCIssuer: https://kubernetes.default.svc
+results.buildIdentityRegexp: ^https://kubernetes.io/namespaces/[a-z0-9-]+-tenant/serviceaccounts/build-pipeline-[a-z0-9-]+$
+results.tektonChainsIdentity: https://kubernetes.io/namespaces/openshift-pipelines/serviceaccounts/tekton-chains-controller
+results.fulcioUrl: https://fulcio.internal.svc
+results.rekorUrl: https://rekor.internal.svc
+results.tufUrl: https://tuf.internal.svc
+
+---
+
+[Collect keyless signing parameters from ConfigMap with external url fallback:collect-signing-params - 1]
+Reading ConfigMap konflux-info/cluster-config-1
+ConfigMap found, extracting keyless signing parameters
+results.keylessSigningEnabled: true
+results.defaultOIDCIssuer: https://kubernetes.default.svc
+results.buildIdentityRegexp: ^https://kubernetes.io/namespaces/[a-z0-9-]+-tenant/serviceaccounts/build-pipeline-[a-z0-9-]+$
+results.tektonChainsIdentity: https://kubernetes.io/namespaces/openshift-pipelines/serviceaccounts/tekton-chains-controller
+results.fulcioUrl: https://fulcio.example.com
+results.rekorUrl: https://rekor.example.com
+results.tufUrl: https://tuf.example.com
+
+---
+
+[Collect keyless signing parameters from ConfigMap with keyless signing disabled:collect-signing-params - 1]
+Reading ConfigMap konflux-info/cluster-config-2
+ConfigMap found, extracting keyless signing parameters
+enableKeylessSigning is not set, using default empty values
+results.keylessSigningEnabled: false
+results.defaultOIDCIssuer: 
+results.buildIdentityRegexp: 
+results.tektonChainsIdentity: 
+results.fulcioUrl: 
+results.rekorUrl: 
+results.tufUrl: 
+
+---
+
+[Collect keyless signing parameters when there is a malformed ConfigMap:collect-signing-params - 1]
+Reading ConfigMap konflux-info/cluster-config-3
+ConfigMap found, extracting keyless signing parameters
+enableKeylessSigning is not set, using default empty values
+results.keylessSigningEnabled: false
+results.defaultOIDCIssuer: 
+results.buildIdentityRegexp: 
+results.tektonChainsIdentity: 
+results.fulcioUrl: 
+results.rekorUrl: 
+results.tufUrl: 
+
+---
+
+[Collect keyless signing parameters when the ConfigMap does not exist:collect-signing-params - 1]
+Reading ConfigMap konflux-info/doesnt-exist-config
+ConfigMap not found, using default empty values
+results.keylessSigningEnabled: false
+results.defaultOIDCIssuer: 
+results.buildIdentityRegexp: 
+results.tektonChainsIdentity: 
+results.fulcioUrl: 
+results.rekorUrl: 
+results.tufUrl: 
+
+---
+
+[Collect keyless signing parameters when the namespace does not exist:collect-signing-params - 1]
+Reading ConfigMap doesnt-exist-namespace/whatever
+ConfigMap not found, using default empty values
+results.keylessSigningEnabled: false
+results.defaultOIDCIssuer: 
+results.buildIdentityRegexp: 
+results.tektonChainsIdentity: 
+results.fulcioUrl: 
+results.rekorUrl: 
+results.tufUrl: 
+
+---
