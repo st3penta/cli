@@ -243,6 +243,11 @@ func NewInputPolicy(ctx context.Context, policyRef string, effectiveTime string)
 // rekorUrl and publicKey provide a mechanism to overwrite the attributes, of same name, in the
 // EnterpriseContractPolicySpec.
 //
+// If the caller supplies keyless identity options (certificate identity / issuer) but does not pass
+// publicKey, any publicKey from the EnterpriseContractPolicySpec is cleared so verification uses
+// the keyless workflow with that CLI identity instead of silently taking the long-lived key path
+// (EC-1740).
+//
 // The public key is resolved as part of object construction. If the public key is a reference
 // to a kubernetes resource, for example, the cluster will be contacted.
 func NewPolicy(ctx context.Context, opts Options) (Policy, error) {
@@ -265,6 +270,11 @@ func NewPolicy(ctx context.Context, opts Options) (Policy, error) {
 	if opts.PublicKey != "" && opts.PublicKey != p.PublicKey {
 		p.PublicKey = opts.PublicKey
 		log.Debugf("Updated public key in policy to %q", opts.PublicKey)
+	}
+
+	if opts.PublicKey == "" && opts.Identity != (cosign.Identity{}) && p.PublicKey != "" {
+		log.Debug("Clearing policy publicKey so CLI keyless identity takes precedence (no --public-key)")
+		p.PublicKey = ""
 	}
 
 	if p.PublicKey == "" {
