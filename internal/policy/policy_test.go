@@ -287,30 +287,30 @@ func TestCheckOpts(t *testing.T) {
 		err             string
 	}{
 		{
-			//Public Key Workflow Tests: Rekor client creation
+			// Public Key Workflow Tests: Rekor client creation
 			name:      "create rekor client",
 			rekorUrl:  utils.TestRekorURL,
 			publicKey: utils.TestPublicKey,
 		},
 		{
-			//Public Key Workflow Tests: inline key handling
+			// Public Key Workflow Tests: inline key handling
 			name:      "inline public key",
 			publicKey: utils.TestPublicKey,
 		},
 		{
-			//Public Key Workflow Tests: remote key fetching via k8s://
+			// Public Key Workflow Tests: remote key fetching via k8s://
 			name:            "in-cluster public key",
 			publicKey:       "k8s://test/cosign-public-key",
 			remotePublicKey: utils.TestPublicKey,
 		},
 		{
-			//Public Key Workflow Tests: Rekor public key setup
+			// Public Key Workflow Tests: Rekor public key setup
 			name:      "with rekor public key",
 			rekorUrl:  utils.TestRekorURL,
 			publicKey: utils.TestPublicKey,
 		},
 		{
-			//Public Key Workflow Tests: ignoreRekor: true scenario
+			// Public Key Workflow Tests: ignoreRekor: true scenario
 			name:        "without rekor",
 			ignoreRekor: true,
 			publicKey:   utils.TestPublicKey,
@@ -361,10 +361,20 @@ func TestCheckOpts(t *testing.T) {
 			},
 		},
 		{
-			name:          "prioritize public key worklow",
+			name:          "prioritize public key workflow",
 			rekorUrl:      utils.TestRekorURL,
 			publicKey:     utils.TestPublicKey,
 			expectKeyless: false,
+			identity: cosign.Identity{
+				Issuer:  "my-issuer",
+				Subject: "my-subject",
+			},
+		},
+		{
+			name:          "CLI keyless identity overrides spec publicKey when CLI omits public key",
+			policyRef:     fmt.Sprintf(`{"publicKey": %s}`, utils.TestPublicKeyJSON),
+			rekorUrl:      utils.TestRekorURL,
+			expectKeyless: true,
 			identity: cosign.Identity{
 				Issuer:  "my-issuer",
 				Subject: "my-subject",
