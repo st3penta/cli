@@ -126,8 +126,9 @@ type validateVSAData struct {
 	workers int // Number of worker threads for parallel processing
 
 	// Output formatting options
-	noColor    bool // Disable color output
-	forceColor bool // Force color output
+	noColor            bool // Disable color output
+	forceColor         bool // Force color output
+	showPolicyDocsLink bool // Show policy docs link in output
 
 	// Internal state
 	policySpec ecapi.EnterpriseContractPolicySpec
@@ -265,6 +266,9 @@ func runValidateVSA(cmd *cobra.Command, data *validateVSAData, args []string) er
 
 	// Set color support based on flags
 	utils.SetColorEnabled(data.noColor, data.forceColor)
+
+	// Get show-policy-docs-link flag value
+	data.showPolicyDocsLink, _ = cmd.Flags().GetBool("show-policy-docs-link")
 
 	// Parse VSA expiration
 	if err := parseVSAExpiration(data); err != nil {
@@ -1095,13 +1099,14 @@ func buildFallbackReportData(fallbackResults []validate_utils.Result, vsaData *v
 	}
 
 	return validate_utils.ReportData{
-		Snapshot:      vsaData.images,
-		Components:    components,
-		Policy:        vsaData.fallbackContext.FallbackPolicy,
-		PolicyInputs:  manyPolicyInput,
-		Expansion:     nil,
-		ShowSuccesses: false,
-		ShowWarnings:  true,
+		Snapshot:           vsaData.images,
+		Components:         components,
+		Policy:             vsaData.fallbackContext.FallbackPolicy,
+		PolicyInputs:       manyPolicyInput,
+		Expansion:          nil,
+		ShowSuccesses:      false,
+		ShowWarnings:       true,
+		ShowPolicyDocsLink: vsaData.showPolicyDocsLink,
 	}, nil
 }
 
@@ -1121,6 +1126,7 @@ func createFallbackReport(allData AllSectionsData, vsaData *validateVSAData) (*a
 		reportData.PolicyInputs,
 		reportData.ShowSuccesses,
 		reportData.ShowWarnings,
+		reportData.ShowPolicyDocsLink,
 		reportData.Expansion,
 	)
 	if err != nil {
@@ -1425,8 +1431,9 @@ func determineStatusFromReport(report VSAReport, display ComponentResultsDisplay
 // captureFallbackText captures the text output from a fallback report
 func captureFallbackText(fallbackReport *applicationsnapshot.Report, fs afero.Fs) (string, error) {
 	formatOpts := format.Options{
-		ShowSuccesses: fallbackReport.ShowSuccesses,
-		ShowWarnings:  fallbackReport.ShowWarnings,
+		ShowSuccesses:      fallbackReport.ShowSuccesses,
+		ShowWarnings:       fallbackReport.ShowWarnings,
+		ShowPolicyDocsLink: fallbackReport.ShowPolicyDocsLink,
 	}
 	var fallbackBuf strings.Builder
 	fallbackWriter := &stringWriter{&fallbackBuf}

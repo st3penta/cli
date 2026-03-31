@@ -45,5 +45,6 @@ func NewValidateCmd() *cobra.Command {
 	}
 	validateCmd.PersistentFlags().Bool("show-successes", false, "")
 	validateCmd.PersistentFlags().Bool("show-warnings", true, "")
+	validateCmd.PersistentFlags().Bool("show-policy-docs-link", false, "Show link to policy documentation in output when there are violations or warnings")
 	return validateCmd
 }
