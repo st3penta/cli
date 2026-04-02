@@ -1034,6 +1034,8 @@ func TestValidateSingleVSA(t *testing.T) {
 			ctx := context.Background()
 			cmd := &cobra.Command{}
 			cmd.SetContext(ctx)
+			// Add the persistent flag that runValidateVSA expects
+			cmd.Flags().Bool("show-policy-docs-link", false, "")
 
 			// Use the unified runValidateVSA function which handles both single and snapshot cases
 			err := runValidateVSA(cmd, tt.data, tt.args)
@@ -1132,6 +1134,8 @@ func TestValidateSnapshotVSAs(t *testing.T) {
 			ctx := context.Background()
 			cmd := &cobra.Command{}
 			cmd.SetContext(ctx)
+			// Add the persistent flag that runValidateVSA expects
+			cmd.Flags().Bool("show-policy-docs-link", false, "")
 
 			// Use the unified runValidateVSA function which handles both single and snapshot cases
 			err := runValidateVSA(cmd, tt.data, []string{})
