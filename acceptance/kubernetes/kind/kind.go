@@ -428,6 +428,7 @@ func Destroy(ctx context.Context) {
 			if err := os.RemoveAll(kindDir); err != nil {
 				panic(err)
 			}
+			os.Remove(fmt.Sprintf("/tmp/ec-cli-image-cache-%d.hash", globalCluster.registryPort))
 		}()
 
 		// ignore error
