@@ -229,7 +229,10 @@ func TestMain(t *testing.M) {
 	v := t.Run()
 
 	// After all tests have run `go-snaps` can check for not used snapshots
-	snaps.Clean(t)
+	if _, err := snaps.Clean(t); err != nil {
+		fmt.Println("Error cleaning snaps:", err)
+		os.Exit(1)
+	}
 
 	os.Exit(v)
 }
