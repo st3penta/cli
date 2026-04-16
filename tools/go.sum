@@ -66,6 +66,8 @@ cloud.google.com/go/storage v1.61.3 h1:VS//ZfBuPGDvakfD9xyPW1RGF1Vy3BWUoVZXgW1KM
 cloud.google.com/go/storage v1.61.3/go.mod h1:JtqK8BBB7TWv0HVGHubtUdzYYrakOQIsMLffZ2Z/HWk=
 cloud.google.com/go/trace v1.11.7 h1:kDNDX8JkaAG3R2nq1lIdkb7FCSi1rCmsEtKVsty7p+U=
 cloud.google.com/go/trace v1.11.7/go.mod h1:TNn9d5V3fQVf6s4SCveVMIBS2LJUqo73GACmq/Tky0s=
+codeberg.org/chavacava/garif v0.2.0 h1:F0tVjhYbuOCnvNcU3YSpO6b3Waw6Bimy4K0mM8y6MfY=
+codeberg.org/chavacava/garif v0.2.0/go.mod h1:P2BPbVbT4QcvLZrORc2T29szK3xEOlnl0GiPTJmEqBQ=
 contrib.go.opencensus.io/exporter/ocagent v0.7.1-0.20200907061046-05415f1de66d h1:LblfooH1lKOpp1hIhukktmSAxFkqMPFk9KR6iZ0MJNI=
 contrib.go.opencensus.io/exporter/ocagent v0.7.1-0.20200907061046-05415f1de66d/go.mod h1:IshRmMJBhDfFj5Y67nVhMYTTIze91RUeT73ipWKs/GY=
 contrib.go.opencensus.io/exporter/prometheus v0.4.2 h1:sqfsYl5GIY/L570iT+l93ehxaWJs2/OwXtiWwew3oAg=
@@ -391,8 +393,6 @@ github.com/chai2010/gettext-go v1.0.3 h1:9liNh8t+u26xl5ddmWLmsOsdNLwkdRTg5AG+JnT
 github.com/chai2010/gettext-go v1.0.3/go.mod h1:y+wnP2cHYaVj19NZhYKAwEMH2CI1gNHeQQ+5AjwawxA=
 github.com/charithe/durationcheck v0.0.10 h1:wgw73BiocdBDQPik+zcEoBG/ob8uyBHf2iyoHGPf5w4=
 github.com/charithe/durationcheck v0.0.10/go.mod h1:bCWXb7gYRysD1CU3C+u4ceO49LoGOY1C1L6uouGNreQ=
-github.com/chavacava/garif v0.1.0 h1:2JHa3hbYf5D9dsgseMKAmc/MZ109otzgNFk5s87H9Pc=
-github.com/chavacava/garif v0.1.0/go.mod h1:XMyYCkEL58DF0oyW4qDjjnPWONs2HBqYKI+UIPD+Gww=
 github.com/chrismellard/docker-credential-acr-env v0.0.0-20230304212654-82a0ddb27589 h1:krfRl01rzPzxSxyLyrChD+U+MzsBXbm0OwYYB67uF+4=
 github.com/chrismellard/docker-credential-acr-env v0.0.0-20230304212654-82a0ddb27589/go.mod h1:OuDyvmLnMCwa2ep4Jkm6nyA0ocJuZlGyk2gGseVzERM=
 github.com/chzyer/logex v1.1.10/go.mod h1:+Ywpsq7O8HXn0nuIou7OrIPyXbp3wmkHB+jjWRnGsAI=
@@ -1125,8 +1125,8 @@ github.com/mattn/go-sqlite3 v1.14.22/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxU
 github.com/mattn/go-sqlite3 v1.14.28 h1:ThEiQrnbtumT+QMknw63Befp/ce/nUPgBPMlRFEum7A=
 github.com/mattn/go-sqlite3 v1.14.28/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
 github.com/matttproud/golang_protobuf_extensions v1.0.1/go.mod h1:D8He9yQNgCq6Z5Ld7szi9bcBfOoFv/3dc6xSMkL2PC0=
-github.com/mgechev/revive v1.7.0 h1:JyeQ4yO5K8aZhIKf5rec56u0376h8AlKNQEmjfkjKlY=
-github.com/mgechev/revive v1.7.0/go.mod h1:qZnwcNhoguE58dfi96IJeSTPeZQejNeoMQLUZGi4SW4=
+github.com/mgechev/revive v1.15.0 h1:vJ0HzSBzfNyPbHKolgiFjHxLek9KUijhqh42yGoqZ8Q=
+github.com/mgechev/revive v1.15.0/go.mod h1:LlAKO3QQe9OJ0pVZzI2GPa8CbXGZ/9lNpCGvK4T/a8A=
 github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b/go.mod h1:01TrycV0kFyexm33Z7vhZRXopbI8J3TDReVlkTgMUxE=
 github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d h1:5PJl274Y63IEHC+7izoQE9x6ikvDFZS2mDVS3drnohI=
 github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d/go.mod h1:01TrycV0kFyexm33Z7vhZRXopbI8J3TDReVlkTgMUxE=
