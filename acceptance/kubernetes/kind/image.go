@@ -33,6 +33,7 @@ import (
 	imagespecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	v1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	"golang.org/x/sync/errgroup"
+	corev1 "k8s.io/api/core/v1"
 	"oras.land/oras-go/v2"
 	orasFile "oras.land/oras-go/v2/content/file"
 	"oras.land/oras-go/v2/registry/remote"
@@ -274,6 +275,10 @@ func (k *kindCluster) buildTaskBundleImage(ctx context.Context) error {
 			for i, step := range steps {
 				if strings.Contains(step.Image, "/cli:") {
 					steps[i].Image = img
+					steps[i].ImagePullPolicy = corev1.PullIfNotPresent
+				}
+				if steps[i].ComputeResources.Requests != nil {
+					delete(steps[i].ComputeResources.Requests, corev1.ResourceCPU)
 				}
 			}
 
