@@ -426,3 +426,8 @@ require (
 	sigs.k8s.io/release-utils v0.12.3 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 )
+
+// Force moby/go-archive to v0.1.0 for compatibility with docker/docker v28.5.2
+// v0.2.0 removed archive.Compression type which docker still uses
+// (Maybe won't be needed in a future version of docker/docker.)
+replace github.com/moby/go-archive v0.2.0 => github.com/moby/go-archive v0.1.0
