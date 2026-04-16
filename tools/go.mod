@@ -1,6 +1,6 @@
 module github.com/conforma/cli/tools
 
-go 1.25.3
+go 1.25.6
 
 require (
 	github.com/daixiang0/gci v0.13.5
@@ -162,7 +162,7 @@ require (
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/platforms v1.0.0-rc.2 // indirect
-	github.com/containerd/stargz-snapshotter/estargz v0.16.3 // indirect
+	github.com/containerd/stargz-snapshotter/estargz v0.18.2 // indirect
 	github.com/containerd/typeurl/v2 v2.2.3 // indirect
 	github.com/coreos/go-oidc/v3 v3.11.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.6.0 // indirect
@@ -257,7 +257,7 @@ require (
 	github.com/google/certificate-transparency-go v1.2.1 // indirect
 	github.com/google/gnostic-models v0.7.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/go-containerregistry v0.20.2 // indirect
+	github.com/google/go-containerregistry v0.21.0 // indirect
 	github.com/google/go-containerregistry/pkg/authn/k8schain v0.0.0-20240826191751-a07d1cab8700 // indirect
 	github.com/google/go-containerregistry/pkg/authn/kubernetes v0.0.0-20240826191751-a07d1cab8700 // indirect
 	github.com/google/go-github/v55 v55.0.0 // indirect
@@ -325,7 +325,7 @@ require (
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/kisielk/errcheck v1.8.0 // indirect
 	github.com/kkHAIKE/contextcheck v1.1.5 // indirect
-	github.com/klauspost/compress v1.18.1 // indirect
+	github.com/klauspost/compress v1.18.4 // indirect
 	github.com/ktr0731/go-ansisgr v0.1.0 // indirect
 	github.com/ktr0731/go-fuzzyfinder v0.8.0 // indirect
 	github.com/kulti/thelper v0.6.3 // indirect
@@ -427,7 +427,7 @@ require (
 	github.com/secure-systems-lab/go-securesystemslib v0.8.0 // indirect
 	github.com/securego/gosec/v2 v2.21.4 // indirect
 	github.com/segmentio/ksuid v1.0.4 // indirect
-	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
+	github.com/sergi/go-diff v1.4.0 // indirect
 	github.com/shazow/go-diff v0.0.0-20160112020656-b6b7b6733b8c // indirect
 	github.com/shibumi/go-pathspec v1.3.0 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
@@ -471,6 +471,9 @@ require (
 	github.com/tetafro/godot v1.4.20 // indirect
 	github.com/thales-e-security/pool v0.0.2 // indirect
 	github.com/theupdateframework/go-tuf v0.7.0 // indirect
+	github.com/tidwall/gjson v1.18.0 // indirect
+	github.com/tidwall/pretty v1.2.1 // indirect
+	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/timakin/bodyclose v0.0.0-20241017074812-ed6a65f985e3 // indirect
 	github.com/timonwong/loggercheck v0.10.1 // indirect
 	github.com/titanous/rocacheck v0.0.0-20171023193734-afe73141d399 // indirect
@@ -485,7 +488,7 @@ require (
 	github.com/ultraware/whitespace v0.2.0 // indirect
 	github.com/uudashr/gocognit v1.2.0 // indirect
 	github.com/uudashr/iface v1.3.0 // indirect
-	github.com/vbatts/tar-split v0.12.1 // indirect
+	github.com/vbatts/tar-split v0.12.2 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.28 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xanzy/go-gitlab v0.108.0 // indirect
