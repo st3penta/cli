@@ -73,6 +73,8 @@ func CreateStatementFor(imageName string, image v1.Image) (*in_toto.ProvenanceSt
 
 // CreateV1StatementFor creates an empty SLSA v1.0 statement that can be further customized
 // and subsequently signed by SignStatement.
+//
+//nolint:staticcheck // Using deprecated ProvenanceStatementSLSA1 for acceptance testing
 func CreateV1StatementFor(imageName string, image v1.Image) (*in_toto.ProvenanceStatementSLSA1, error) {
 	digest, err := image.Digest()
 	if err != nil {
@@ -99,6 +101,7 @@ func CreateV1StatementFor(imageName string, image v1.Image) (*in_toto.Provenance
 		return nil, err
 	}
 
+	//nolint:staticcheck // Using deprecated ProvenanceStatementSLSA1 for acceptance testing
 	if statement, ok := obj.(in_toto.ProvenanceStatementSLSA1); ok {
 		return &statement, nil
 	}
