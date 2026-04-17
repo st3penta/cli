@@ -38,6 +38,7 @@ import (
 	"oras.land/oras-go/v2/registry/remote"
 	"sigs.k8s.io/yaml"
 
+	"github.com/conforma/cli/acceptance/log"
 	"github.com/conforma/cli/acceptance/testenv"
 )
 
@@ -345,7 +346,8 @@ func (k *kindCluster) BuildSnapshotArtifact(ctx context.Context, content string)
 		if t != nil {
 			t.snapshotDigest = fileDescriptor.Digest.String()
 		}
-		fmt.Printf("file descriptor for %s: %v\n", name, fileDescriptor)
+		logger, _ := log.LoggerFor(ctx)
+		logger.Logf("file descriptor for %s: %v", name, fileDescriptor)
 	}
 
 	artifactType := "application/vnd.test.artifact"
@@ -356,7 +358,8 @@ func (k *kindCluster) BuildSnapshotArtifact(ctx context.Context, content string)
 	if err != nil {
 		return ctx, fmt.Errorf("failed creating manifestDescriptor: %w", err)
 	}
-	fmt.Println("manifest descriptor:", manifestDescriptor)
+	logger, _ := log.LoggerFor(ctx)
+	logger.Log("manifest descriptor:", manifestDescriptor)
 
 	tag := "latest"
 	if err = fs.Tag(ctx, manifestDescriptor, tag); err != nil {
@@ -368,7 +371,7 @@ func (k *kindCluster) BuildSnapshotArtifact(ctx context.Context, content string)
 	if err != nil {
 		return ctx, fmt.Errorf("failed to create repo: %w", err)
 	}
-	fmt.Println("artifactRepo:", artifactRepo)
+	logger.Log("artifactRepo:", artifactRepo)
 
 	// the registry is insecure
 	repo.PlainHTTP = true
@@ -377,7 +380,7 @@ func (k *kindCluster) BuildSnapshotArtifact(ctx context.Context, content string)
 	if err != nil {
 		return ctx, fmt.Errorf("failed to copy %s: %w", filePath, err)
 	}
-	fmt.Println("snapshotDigest:", orasDesc.Digest)
+	logger.Log("snapshotDigest:", orasDesc.Digest)
 
 	return ctx, nil
 }
