@@ -266,10 +266,6 @@ spec:
       - name: trusted-ca
         mountPath: /mnt/trusted-ca
         readOnly: true
-      - name: trusted-ca
-        mountPath: /etc/ssl/certs/ca-custom-bundle.crt
-        subPath: ca-bundle.crt
-        readOnly: true
     env:
       - name: "ORAS_OPTIONS"
         value: "$(params.ORAS_OPTIONS)"
@@ -292,7 +288,10 @@ spec:
         - use
         - $(params.SOURCE_DATA_ARTIFACT)=$(params.TRUSTED_ARTIFACTS_EXTRACT_DIR)
       computeResources: {}
-      image: quay.io/redhat-appstudio/build-trusted-artifacts:e02102ede09aa07187cba066ad547a54724e5cf4
+      image: quay.io/konflux-ci/build-trusted-artifacts@sha256:9bd32f6bafb517b309e11a2d89365052b4ab3f1c9c23c4ffd45aff6f03960476
+      env:
+        - name: CA_FILE
+          value: /mnt/trusted-ca/ca-bundle.crt
 
     - name: initialize-tuf
       image: quay.io/conforma/cli:latest
@@ -333,6 +332,10 @@ spec:
       script: |
         #!/bin/bash
         set -euo pipefail
+
+        if [ -f "/mnt/trusted-ca/ca-bundle.crt" ]; then
+            export SSL_CERT_FILE="/mnt/trusted-ca/ca-bundle.crt"
+        fi
 
         cmd_args=(
           validate
@@ -512,11 +515,6 @@ spec:
           memory: 2Gi
         limits:
           memory: 2Gi
-      volumeMounts:
-        - name: trusted-ca
-          mountPath: /etc/pki/tls/certs/ca-custom-bundle.crt
-          subPath: ca-bundle.crt
-          readOnly: true
 
     - name: report-json
       image: quay.io/conforma/cli:latest
