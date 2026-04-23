@@ -218,7 +218,6 @@ lint-fix: ## Fix linting issues automagically
 # We don't apply the fixes from the internal (error handling) linter.
 # TODO: fix the outstanding error handling lint issues and enable the fixer
 #	@go run -modfile tools/go.mod ./internal/lint -fix $$(go list ./... | grep -v '/acceptance/')
-	@go run -modfile tools/go.mod github.com/daixiang0/gci write -s standard -s default -s "prefix(github.com/conforma/cli)" .
 
 node_modules: package-lock.json
 	@npm ci

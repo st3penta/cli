@@ -26,6 +26,7 @@ linters:
   enable:
     - gosec
     - misspell
+    - staticcheck
   settings:
     gosec:
       excludes:
