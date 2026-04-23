@@ -5529,6 +5529,7 @@ Error: success criteria not met
 ---
 
 [TestFeatures/invalid image signature with valid att sig and skip-image-sig-check flag:stderr - 1]
+time="${TIMESTAMP}" level=warning msg="Image signature check skipped"
 
 ---
 
@@ -5594,6 +5595,7 @@ Error: success criteria not met
 ---
 
 [TestFeatures/happy day with skip-image-sig-check flag:stderr - 1]
+time="${TIMESTAMP}" level=warning msg="Image signature check skipped"
 
 ---
 
@@ -5778,5 +5780,139 @@ Error: success criteria not met
 ---
 
 [TestFeatures/discover artifact referrers via OCI Referrers API:stderr - 1]
+
+---
+
+[TestFeatures/invalid att signature with valid image sig and skip-att-sig-check flag:stdout - 1]
+{
+  "success": true,
+  "components": [
+    {
+      "name": "Unnamed",
+      "containerImage": "${REGISTRY}/acceptance/invalid-att-signature@sha256:${REGISTRY_acceptance/invalid-att-signature:latest_DIGEST}",
+      "source": {},
+      "successes": [
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "builtin.attestation.syntax_check"
+          }
+        },
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "builtin.image.signature_check"
+          }
+        },
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "main.acceptor"
+          }
+        }
+      ],
+      "success": true,
+      "signatures": [
+        {
+          "keyid": "",
+          "sig": "${IMAGE_SIGNATURE_acceptance/invalid-att-signature}"
+        }
+      ],
+      "attestations": [
+        {
+          "type": "https://in-toto.io/Statement/v0.1",
+          "predicateType": "https://slsa.dev/provenance/v0.2",
+          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
+          "signatures": [
+            {
+              "keyid": "",
+              "sig": "${ATTESTATION_SIGNATURE_acceptance/invalid-att-signature}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "key": "${known_PUBLIC_KEY_JSON}",
+  "policy": {
+    "sources": [
+      {
+        "policy": [
+          "git::${GITHOST}/git/invalid-att-signature.git?ref=${LATEST_COMMIT}"
+        ]
+      }
+    ],
+    "rekorUrl": "${REKOR}",
+    "publicKey": "${known_PUBLIC_KEY}"
+  },
+  "ec-version": "${EC_VERSION}",
+  "effective-time": "${TIMESTAMP}"
+}
+---
+
+[TestFeatures/invalid att signature with valid image sig and skip-att-sig-check flag:stderr - 1]
+time="${TIMESTAMP}" level=warning msg="Attestation signature check skipped, fetching attestations without verification"
+
+---
+
+[TestFeatures/skip both image and att sig checks for debugging:stdout - 1]
+{
+  "success": true,
+  "components": [
+    {
+      "name": "Unnamed",
+      "containerImage": "${REGISTRY}/acceptance/skip-both-sig-checks@sha256:${REGISTRY_acceptance/skip-both-sig-checks:latest_DIGEST}",
+      "source": {},
+      "successes": [
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "builtin.attestation.syntax_check"
+          }
+        },
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "main.acceptor"
+          }
+        }
+      ],
+      "success": true,
+      "attestations": [
+        {
+          "type": "https://in-toto.io/Statement/v0.1",
+          "predicateType": "https://slsa.dev/provenance/v0.2",
+          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
+          "signatures": [
+            {
+              "keyid": "",
+              "sig": "${ATTESTATION_SIGNATURE_acceptance/skip-both-sig-checks}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "key": "${known_PUBLIC_KEY_JSON}",
+  "policy": {
+    "sources": [
+      {
+        "policy": [
+          "git::${GITHOST}/git/skip-both-sig-checks.git?ref=${LATEST_COMMIT}"
+        ]
+      }
+    ],
+    "rekorUrl": "${REKOR}",
+    "publicKey": "${known_PUBLIC_KEY}"
+  },
+  "ec-version": "${EC_VERSION}",
+  "effective-time": "${TIMESTAMP}"
+}
+---
+
+[TestFeatures/skip both image and att sig checks for debugging:stderr - 1]
+time="${TIMESTAMP}" level=warning msg="Image signature check skipped"
+time="${TIMESTAMP}" level=warning msg="Attestation signature check skipped, fetching attestations without verification"
+time="${TIMESTAMP}" level=warning msg="Both --skip-image-sig-check and --skip-att-sig-check are active, all cryptographic verification is disabled"
 
 ---

@@ -19,6 +19,7 @@ package image
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"runtime/trace"
 	"sort"
 	"time"
@@ -76,14 +77,27 @@ func ValidateImage(ctx context.Context, comp app.SnapshotComponent, snap *app.Sn
 
 	// Handle image signature validation
 	if p.SkipImageSigCheck() {
-		log.Debug("Image signature check skipped")
+		log.Warn("Image signature check skipped")
 	} else {
 		out.SetImageSignatureCheckFromError(a.ValidateImageSignature(ctx))
 	}
 
-	out.SetAttestationSignatureCheckFromError(a.ValidateAttestationSignature(ctx))
-	if !out.AttestationSignatureCheck.Passed {
-		return out, nil
+	// Handle attestation signature validation
+	if p.SkipAttSigCheck() {
+		log.Warn("Attestation signature check skipped, fetching attestations without verification")
+		if p.SkipImageSigCheck() {
+			log.Warn("Both --skip-image-sig-check and --skip-att-sig-check are active, all cryptographic verification is disabled")
+		}
+		if err := a.FetchAttestationsWithoutVerification(ctx); err != nil {
+			log.Warnf("Failed to fetch attestations without verification: %v", err)
+			out.SetAttestationSignatureCheckFromError(fmt.Errorf("failed to fetch attestations (signature check skipped): %w", err))
+			return out, nil
+		}
+	} else {
+		out.SetAttestationSignatureCheckFromError(a.ValidateAttestationSignature(ctx))
+		if !out.AttestationSignatureCheck.Passed {
+			return out, nil
+		}
 	}
 
 	out.Signatures = a.Signatures()

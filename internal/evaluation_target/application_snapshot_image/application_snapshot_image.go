@@ -201,9 +201,32 @@ func (a *ApplicationSnapshotImage) ValidateAttestationSignature(ctx context.Cont
 		return a.parseAttestationsFromBundles(layers)
 	}
 
-	// Extract the signatures from the attestations here in order to also validate that
-	// the signatures do exist in the expected format.
-	for _, sig := range layers {
+	return a.parseAttestationsFromSignatures(layers)
+}
+
+// FetchAttestationsWithoutVerification fetches attestations from the registry
+// without performing signature verification. This is used when --skip-att-sig-check
+// is enabled but we still need the attestation data for policy evaluation.
+func (a *ApplicationSnapshotImage) FetchAttestationsWithoutVerification(ctx context.Context) error {
+	if trace.IsEnabled() {
+		region := trace.StartRegion(ctx, "ec:fetch-attestations-without-verification")
+		defer region.End()
+	}
+
+	sigs, err := oci.NewClient(ctx).FetchAttestationLayers(a.reference)
+	if err != nil {
+		return err
+	}
+
+	if a.hasBundles(ctx) {
+		return a.parseAttestationsFromBundles(sigs)
+	}
+
+	return a.parseAttestationsFromSignatures(sigs)
+}
+
+func (a *ApplicationSnapshotImage) parseAttestationsFromSignatures(sigs []cosignOCI.Signature) error {
+	for _, sig := range sigs {
 		att, err := attestation.ProvenanceFromSignature(sig)
 		if err != nil {
 			return fmt.Errorf("unable to parse untyped provenance: %w", err)
@@ -283,7 +306,8 @@ func (a *ApplicationSnapshotImage) parseAttestationsFromBundles(layers []cosignO
 // ValidateAttestationSyntax validates the attestations against known JSON
 // schemas, errors out if there are no attestations to check to prevent
 // successful syntax check of no inputs, must invoke
-// [ValidateAttestationSignature] to prefill the attestations.
+// [ValidateAttestationSignature] or [FetchAttestationsWithoutVerification]
+// to prefill the attestations.
 func (a ApplicationSnapshotImage) ValidateAttestationSyntax(ctx context.Context) error {
 	if trace.IsEnabled() {
 		region := trace.StartRegion(ctx, "ec:validate-attestation-syntax")
