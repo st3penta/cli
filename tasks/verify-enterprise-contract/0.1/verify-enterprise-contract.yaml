@@ -164,6 +164,16 @@ spec:
       description: Merge additional Rego variables into the policy data. Use syntax "key=value,key2=value2..."
       default: ""
 
+    - name: POLICY_BUNDLE_DIGEST
+      type: string
+      description: >-
+        Optional OCI digest to pin the release policy bundle. When provided,
+        the policy configuration is resolved and the reference
+        oci::quay.io/conforma/release-policy:konflux is replaced with
+        oci::quay.io/conforma/release-policy@<digest>. Accepts a full digest
+        (sha256:abc123...) or just the hex hash (abc123...).
+      default: ""
+
     - name: WORKERS
       type: string
       description: Number of parallel workers to use for policy evaluation.
@@ -272,12 +282,33 @@ spec:
       onError: continue # progress even if the step fails so we can see the debug logs
       command: [reduce-snapshot.sh]
 
+    - name: pin-policy-bundle
+      computeResources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          memory: 256Mi
+      env:
+        - name: POLICY_CONFIGURATION
+          value: $(params.POLICY_CONFIGURATION)
+        - name: POLICY_BUNDLE_DIGEST
+          value: $(params.POLICY_BUNDLE_DIGEST)
+      image: quay.io/conforma/cli:latest
+      onError: continue
+      command: [pin-konflux-policy-bundle.sh]
+
     - name: validate
       image: quay.io/conforma/cli:latest
       onError: continue # progress even if the step fails so we can see the debug logs
       script: |
         #!/bin/bash
         set -euo pipefail
+
+        # Use policy override file if pin-policy-bundle produced one
+        if [[ -f "${HOMEDIR}/policy-with-pinned-bundle.yaml" ]]; then
+          POLICY_CONFIGURATION="${HOMEDIR}/policy-with-pinned-bundle.yaml"
+        fi
 
         cmd_args=(
           validate
