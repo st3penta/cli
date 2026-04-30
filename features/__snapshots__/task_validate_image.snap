@@ -34,7 +34,8 @@ Error: Get "http://tuf.invalid/root.json": dial tcp: lookup tuf.invalid on 10.96
 ---
 
 [TestFeatures/Golden container image:pin-policy-bundle - 1]
-POLICY_BUNDLE_DIGEST is empty, skipping policy bundle digest override.
+Applying policy bundle digest override: sha256:1b296a925b4021f4b4959ea289596925a8735540e554f3ba7754a651731a216f
+'oci::quay.io/conforma/release-policy:konflux' not found in policy configuration, nothing to do.
 
 ---
 
