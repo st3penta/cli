@@ -32,7 +32,6 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	"github.com/sigstore/cosign/v3/pkg/cosign"
 	cosignOCI "github.com/sigstore/cosign/v3/pkg/oci"
-	ociremote "github.com/sigstore/cosign/v3/pkg/oci/remote"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 
@@ -123,9 +122,8 @@ func (a *ApplicationSnapshotImage) SetImageURL(url string) error {
 }
 
 func (a *ApplicationSnapshotImage) hasBundles(ctx context.Context) bool {
-	regOpts := []ociremote.Option{ociremote.WithRemoteOptions(oci.CreateRemoteOptions(ctx)...)}
-	bundles, _, err := cosign.GetBundles(ctx, a.reference, regOpts)
-	return err == nil && len(bundles) > 0
+	found, err := oci.NewClient(ctx).HasBundles(ctx, a.reference)
+	return err == nil && found
 }
 
 func (a *ApplicationSnapshotImage) FetchImageConfig(ctx context.Context) error {

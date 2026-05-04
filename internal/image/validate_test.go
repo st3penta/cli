@@ -80,6 +80,7 @@ func TestBuiltinChecks(t *testing.T) {
 			name: "simple success",
 			setup: func(c *fake.FakeClient) {
 				c.On("Head", ref).Return(&v1.Descriptor{MediaType: types.OCIManifestSchema1}, nil)
+				c.On("HasBundles", mock.Anything, refNoTag).Return(false, nil)
 				c.On("VerifyImageSignatures", refNoTag, mock.Anything).Return([]oci.Signature{validSignature}, true, nil)
 				c.On("VerifyImageAttestations", refNoTag, mock.Anything).Return([]oci.Signature{validAttestation}, true, nil)
 			},
@@ -106,6 +107,7 @@ func TestBuiltinChecks(t *testing.T) {
 			name: "no image signatures",
 			setup: func(c *fake.FakeClient) {
 				c.On("Head", ref).Return(&v1.Descriptor{MediaType: types.OCIManifestSchema1}, nil)
+				c.On("HasBundles", mock.Anything, refNoTag).Return(false, nil)
 				c.On("VerifyImageSignatures", refNoTag, mock.Anything).Return(nil, false, errors.New("no image signatures client error"))
 				c.On("VerifyImageAttestations", refNoTag, mock.Anything).Return([]oci.Signature{validAttestation}, true, nil)
 			},
@@ -122,6 +124,7 @@ func TestBuiltinChecks(t *testing.T) {
 			name: "no image attestations",
 			setup: func(c *fake.FakeClient) {
 				c.On("Head", ref).Return(&v1.Descriptor{MediaType: types.OCIManifestSchema1}, nil)
+				c.On("HasBundles", mock.Anything, refNoTag).Return(false, nil)
 				c.On("VerifyImageSignatures", refNoTag, mock.Anything).Return(validSignature, true, nil)
 				c.On("VerifyImageAttestations", refNoTag, mock.Anything).Return(nil, false, errors.New("no image attestations client error"))
 			},
@@ -325,6 +328,7 @@ func TestEvaluatorLifecycle(t *testing.T) {
 	ctx = ecoci.WithClient(ctx, &client)
 	client.On("Image", name.MustParseReference(imageRegistry+"@sha256:"+imageDigest), mock.Anything).Return(empty.Image, nil)
 	client.On("Head", ref).Return(&v1.Descriptor{MediaType: types.OCIManifestSchema1}, nil)
+	client.On("HasBundles", mock.Anything, refNoTag).Return(false, nil)
 	client.On("VerifyImageSignatures", refNoTag, mock.Anything).Return([]oci.Signature{validSignature}, true, nil)
 	client.On("VerifyImageAttestations", refNoTag, mock.Anything).Return([]oci.Signature{validAttestation}, true, nil)
 	client.On("ResolveDigest", refNoTag).Return("@sha256:"+imageDigest, nil)
@@ -367,6 +371,7 @@ func TestComponentNamePassedToEvaluator(t *testing.T) {
 	client := fake.FakeClient{}
 	client.On("Head", mock.Anything).Return(&v1.Descriptor{MediaType: types.OCIManifestSchema1}, nil)
 	client.On("Image", name.MustParseReference(imageRegistry+"@sha256:"+imageDigest), mock.Anything).Return(empty.Image, nil)
+	client.On("HasBundles", mock.Anything, refNoTag).Return(false, nil)
 	client.On("VerifyImageSignatures", refNoTag, mock.Anything).Return([]oci.Signature{validSignature}, true, nil)
 	client.On("VerifyImageAttestations", refNoTag, mock.Anything).Return([]oci.Signature{validAttestation}, true, nil)
 	client.On("ResolveDigest", refNoTag).Return("@sha256:"+imageDigest, nil)
@@ -609,6 +614,7 @@ func TestValidateImageSkipImageSigCheck(t *testing.T) {
 			// Set up minimal fake data for image to pass accessibility check
 			// and signature/attestation checks (they will fail but create results)
 			fakeClient.On("Head", ref).Return(&v1.Descriptor{MediaType: types.OCIManifestSchema1}, nil)
+			fakeClient.On("HasBundles", mock.Anything, refNoTag).Return(false, nil)
 			fakeClient.On("VerifyImageSignatures", refNoTag, mock.Anything).Return([]oci.Signature{}, false, fmt.Errorf("no signatures found"))
 			fakeClient.On("VerifyImageAttestations", refNoTag, mock.Anything).Return([]oci.Signature{}, false, fmt.Errorf("no attestations found"))
 
