@@ -21,6 +21,7 @@ package sigstore
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -378,6 +379,7 @@ func TestSigstoreVerifyAttestation(t *testing.T) {
 			c := fake.FakeClient{}
 			ctx := o.WithClient(context.Background(), &c)
 
+			c.On("HasBundles", mock.Anything, goodImage).Return(false, nil)
 			verifyCall := c.On(
 				"VerifyImageAttestations", goodImage, mock.Anything,
 			).Return(tt.sigs, false, tt.sigError)
@@ -393,6 +395,177 @@ func TestSigstoreVerifyAttestation(t *testing.T) {
 			require.NotNil(t, result)
 			require.Equal(t, tt.errors, result.Get(ast.StringTerm("errors")))
 			require.Equal(t, tt.success, result.Get(ast.StringTerm("success")))
+		})
+	}
+}
+
+// bundleDSSEPayload creates a DSSE envelope JSON for bundle-format attestations.
+func bundleDSSEPayload(payloadType string, statement any) []byte {
+	statementBytes, err := json.Marshal(statement)
+	if err != nil {
+		panic(err)
+	}
+	envelope := map[string]string{
+		"payloadType": payloadType,
+		"payload":     base64.StdEncoding.EncodeToString(statementBytes),
+	}
+	data, err := json.Marshal(envelope)
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
+func TestSigstoreVerifyAttestationWithBundles(t *testing.T) {
+	goodImage := name.MustParseReference(
+		"registry.local/spam@sha256:4e388ab32b10dc8dbc7e28144f552830adc74787c1e2c0824032078a79f227fb",
+	)
+
+	// Valid in-toto statement for bundle path
+	statement := map[string]any{
+		"_type":         "https://in-toto.io/Statement/v0.1",
+		"predicateType": "https://slsa.dev/provenance/v0.2",
+		"subject":       []any{},
+		"predicate":     map[string]any{},
+	}
+
+	validBundlePayload := bundleDSSEPayload("application/vnd.in-toto+json", statement)
+	validBundleSig, err := static.NewSignature(
+		validBundlePayload,
+		"signature",
+		static.WithLayerMediaType(types.MediaType(cosignTypes.DssePayloadType)),
+	)
+	require.NoError(t, err)
+
+	// Valid DSSE envelope structure but with corrupted base64 payload data
+	malformedBundlePayload := []byte(`{"payloadType":"application/vnd.in-toto+json","payload":"!!!bad-base64!!!"}`)
+	malformedBundleSig, err := static.NewSignature(
+		malformedBundlePayload,
+		"signature",
+		static.WithLayerMediaType(types.MediaType(cosignTypes.DssePayloadType)),
+	)
+	require.NoError(t, err)
+
+	nonInTotoPayload := bundleDSSEPayload("application/octet-stream", "binary-data")
+	nonInTotoSig, err := static.NewSignature(
+		nonInTotoPayload,
+		"signature",
+		static.WithLayerMediaType(types.MediaType(cosignTypes.DssePayloadType)),
+	)
+	require.NoError(t, err)
+
+	cases := []struct {
+		name    string
+		success *ast.Term
+		errors  *ast.Term
+		sigs    []oci.Signature
+	}{
+		{
+			name:    "bundle attestation verification succeeds",
+			success: ast.BooleanTerm(true),
+			errors:  ast.ArrayTerm(),
+			sigs:    []oci.Signature{validBundleSig},
+		},
+		{
+			name:    "malformed bundle payload produces parsing error",
+			success: ast.BooleanTerm(false),
+			errors: ast.ArrayTerm(
+				ast.StringTerm("parsing attestation: malformed attestation data: illegal base64 data at input byte 0"),
+			),
+			sigs: []oci.Signature{malformedBundleSig},
+		},
+		{
+			name:    "non-in-toto payload type is skipped",
+			success: ast.BooleanTerm(true),
+			errors:  ast.ArrayTerm(),
+			sigs:    []oci.Signature{nonInTotoSig},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			utils.SetTestRekorPublicKey(t)
+			utils.SetTestFulcioRoots(t)
+			utils.SetTestCTLogPublicKey(t)
+
+			c := fake.FakeClient{}
+			ctx := o.WithClient(context.Background(), &c)
+
+			c.On("HasBundles", mock.Anything, goodImage).Return(true, nil)
+			c.On(
+				"VerifyImageAttestations", goodImage, mock.Anything,
+			).Return(tt.sigs, false, nil)
+
+			bctx := rego.BuiltinContext{Context: ctx}
+
+			result, err := sigstoreVerifyAttestation(
+				bctx,
+				ast.StringTerm(goodImage.String()),
+				options{ignoreRekor: true, publicKey: utils.TestPublicKey}.toTerm(),
+			)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Equal(t, tt.errors, result.Get(ast.StringTerm("errors")))
+			require.Equal(t, tt.success, result.Get(ast.StringTerm("success")))
+		})
+	}
+}
+
+func TestSigstoreVerifyAttestationBundleFallback(t *testing.T) {
+	goodImage := name.MustParseReference(
+		"registry.local/spam@sha256:4e388ab32b10dc8dbc7e28144f552830adc74787c1e2c0824032078a79f227fb",
+	)
+
+	// Legacy-format signature (same as existing tests)
+	goodSig, err := static.NewSignature(
+		[]byte(fmt.Sprintf(`{"payload": "%s"}`, base64.StdEncoding.EncodeToString([]byte("{}")))),
+		"signature",
+		static.WithLayerMediaType(types.MediaType(cosignTypes.DssePayloadType)),
+	)
+	require.NoError(t, err)
+
+	cases := []struct {
+		name       string
+		hasBundles bool
+		bundleErr  error
+	}{
+		{
+			name:       "HasBundles returns error falls back to legacy",
+			hasBundles: false,
+			bundleErr:  errors.New("registry error"),
+		},
+		{
+			name:       "HasBundles returns false uses legacy path",
+			hasBundles: false,
+			bundleErr:  nil,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			utils.SetTestRekorPublicKey(t)
+			utils.SetTestFulcioRoots(t)
+			utils.SetTestCTLogPublicKey(t)
+
+			c := fake.FakeClient{}
+			ctx := o.WithClient(context.Background(), &c)
+
+			c.On("HasBundles", mock.Anything, goodImage).Return(tt.hasBundles, tt.bundleErr)
+			c.On(
+				"VerifyImageAttestations", goodImage, mock.Anything,
+			).Return([]oci.Signature{goodSig}, false, nil)
+
+			bctx := rego.BuiltinContext{Context: ctx}
+
+			result, err := sigstoreVerifyAttestation(
+				bctx,
+				ast.StringTerm(goodImage.String()),
+				options{ignoreRekor: true, publicKey: utils.TestPublicKey}.toTerm(),
+			)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Equal(t, ast.BooleanTerm(true), result.Get(ast.StringTerm("success")))
+			require.Equal(t, ast.ArrayTerm(), result.Get(ast.StringTerm("errors")))
 		})
 	}
 }
