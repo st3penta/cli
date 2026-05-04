@@ -76,6 +76,7 @@ func CreateRemoteOptions(ctx context.Context) []remote.Option {
 type Client interface {
 	VerifyImageSignatures(name.Reference, *cosign.CheckOpts) ([]oci.Signature, bool, error)
 	VerifyImageAttestations(name.Reference, *cosign.CheckOpts) ([]oci.Signature, bool, error)
+	HasBundles(context.Context, name.Reference) (bool, error)
 	Head(name.Reference) (*v1.Descriptor, error)
 	ResolveDigest(name.Reference) (string, error)
 	Image(name.Reference) (v1.Image, error)
@@ -127,6 +128,15 @@ func (c *defaultClient) VerifyImageAttestations(ref name.Reference, opts *cosign
 
 	opts.RegistryClientOpts = append(opts.RegistryClientOpts, ociremote.WithRemoteOptions(c.opts...))
 	return cosign.VerifyImageAttestations(c.ctx, ref, opts)
+}
+
+func (c *defaultClient) HasBundles(ctx context.Context, ref name.Reference) (bool, error) {
+	regOpts := []ociremote.Option{ociremote.WithRemoteOptions(c.opts...)}
+	bundles, _, err := cosign.GetBundles(ctx, ref, regOpts)
+	if err != nil {
+		return false, err
+	}
+	return len(bundles) > 0, nil
 }
 
 func (c *defaultClient) Head(ref name.Reference) (*v1.Descriptor, error) {
