@@ -1197,12 +1197,14 @@ func AttestationSignaturesFrom(ctx context.Context, prefix string) (map[string]s
 	state := testenv.FetchState[imageState](ctx)
 
 	signatures := map[string]string{}
-	for name, signature := range state.AttestationSignatures {
-		if signature.KeyID != "" {
-			signatures[fmt.Sprintf("%s_KEY_ID_%s", prefix, name)] = signature.KeyID
-		}
-		if signature.Signature != "" {
-			signatures[fmt.Sprintf("%s_%s", prefix, name)] = signature.Signature
+	for _, m := range []map[string]Signature{state.AttestationSignatures, state.ReferrerAttestationSignatures} {
+		for name, signature := range m {
+			if signature.KeyID != "" {
+				signatures[fmt.Sprintf("%s_KEY_ID_%s", prefix, name)] = signature.KeyID
+			}
+			if signature.Signature != "" {
+				signatures[fmt.Sprintf("%s_%s", prefix, name)] = signature.Signature
+			}
 		}
 	}
 
@@ -1217,8 +1219,10 @@ func RawAttestationSignaturesFrom(ctx context.Context) map[string]string {
 	state := testenv.FetchState[imageState](ctx)
 
 	ret := map[string]string{}
-	for ref, signature := range state.AttestationSignatures {
-		ret[fmt.Sprintf("ATTESTATION_SIGNATURE_%s", ref)] = signature.Signature
+	for _, m := range []map[string]Signature{state.AttestationSignatures, state.ReferrerAttestationSignatures} {
+		for ref, signature := range m {
+			ret[fmt.Sprintf("ATTESTATION_SIGNATURE_%s", ref)] = signature.Signature
+		}
 	}
 
 	return ret
@@ -1232,12 +1236,14 @@ func ImageSignaturesFrom(ctx context.Context, prefix string) (map[string]string,
 	state := testenv.FetchState[imageState](ctx)
 
 	ret := map[string]string{}
-	for name, signature := range state.ImageSignatures {
-		if signature.KeyID != "" {
-			ret[fmt.Sprintf("%s_KEY_ID_%s", prefix, name)] = signature.KeyID
-		}
-		if signature.Signature != "" {
-			ret[fmt.Sprintf("%s_%s", prefix, name)] = signature.Signature
+	for _, m := range []map[string]Signature{state.ImageSignatures, state.ReferrerImageSignatures} {
+		for name, signature := range m {
+			if signature.KeyID != "" {
+				ret[fmt.Sprintf("%s_KEY_ID_%s", prefix, name)] = signature.KeyID
+			}
+			if signature.Signature != "" {
+				ret[fmt.Sprintf("%s_%s", prefix, name)] = signature.Signature
+			}
 		}
 	}
 
@@ -1252,8 +1258,10 @@ func RawImageSignaturesFrom(ctx context.Context) map[string]string {
 	state := testenv.FetchState[imageState](ctx)
 
 	ret := map[string]string{}
-	for ref, signature := range state.ImageSignatures {
-		ret[fmt.Sprintf("IMAGE_SIGNATURE_%s", ref)] = signature.Signature
+	for _, m := range []map[string]Signature{state.ImageSignatures, state.ReferrerImageSignatures} {
+		for ref, signature := range m {
+			ret[fmt.Sprintf("IMAGE_SIGNATURE_%s", ref)] = signature.Signature
+		}
 	}
 
 	return ret
