@@ -476,12 +476,13 @@ func TestValidateImageSignatureClaims(t *testing.T) {
 
 	ctx := o.WithClient(context.Background(), &c)
 
+	c.On("HasBundles", mock.Anything, ref).Return(false, nil)
 	c.On("VerifyImageSignatures", ref, mock.Anything).Return([]oci.Signature{}, false, nil)
 
 	err := a.ValidateImageSignature(ctx)
 	require.NoError(t, err)
 
-	call := c.Calls[0]
+	call := c.Calls[1]
 
 	checkOpts := call.Arguments.Get(1).(*cosign.CheckOpts)
 	assert.NotNil(t, checkOpts)
@@ -597,12 +598,13 @@ func TestValidateAttestationSignatureClaims(t *testing.T) {
 
 	ctx := o.WithClient(context.Background(), &c)
 
+	c.On("HasBundles", mock.Anything, ref).Return(false, nil)
 	c.On("VerifyImageAttestations", ref, mock.Anything).Return([]oci.Signature{}, false, nil)
 
 	err := a.ValidateAttestationSignature(ctx)
 	require.NoError(t, err)
 
-	call := c.Calls[0]
+	call := c.Calls[1]
 
 	checkOpts := call.Arguments.Get(1).(*cosign.CheckOpts)
 	assert.NotNil(t, checkOpts)
@@ -739,6 +741,7 @@ func TestValidateImageSignatureWithCertificates(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	c.On("HasBundles", mock.Anything, ref).Return(false, nil)
 	c.On("VerifyImageSignatures", ref, mock.Anything).Return([]oci.Signature{sig}, false, nil)
 
 	err = a.ValidateImageSignature(ctx)
@@ -1339,6 +1342,7 @@ func TestValidateAttestationSignature(t *testing.T) {
 			a := ApplicationSnapshotImage{reference: ref}
 
 			client := fake.FakeClient{}
+			client.On("HasBundles", mock.Anything, ref).Return(false, nil)
 			client.On("VerifyImageAttestations", ref, mock.Anything).Return(tc.signatures, false, tc.verifyErr)
 
 			ctx := o.WithClient(context.Background(), &client)
