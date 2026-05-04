@@ -131,10 +131,25 @@ func sigstoreVerifyImage(bctx rego.BuiltinContext, refTerm *ast.Term, optsTerm *
 		logger.WithField("error", err).Debug("failed to parse check opts")
 		return signatureFailedResult(fmt.Errorf("opts parameter: %w", err))
 	}
-	checkOpts.ClaimVerifier = cosign.SimpleClaimVerifier
 
-	logger.Debug("verifying image signatures")
-	signatures, _, err := ecoci.NewClient(ctx).VerifyImageSignatures(ref, checkOpts)
+	client := ecoci.NewClient(ctx)
+	useBundles, err := client.HasBundles(ctx, ref)
+	if err != nil {
+		logger.WithField("error", err).Debug("bundle detection failed, falling back to legacy path")
+		useBundles = false
+	}
+
+	var signatures []oci.Signature
+	if useBundles {
+		logger.Debug("bundles detected, using bundle verification path")
+		checkOpts.NewBundleFormat = true
+		checkOpts.ClaimVerifier = cosign.IntotoSubjectClaimVerifier
+		signatures, _, err = client.VerifyImageAttestations(ref, checkOpts)
+	} else {
+		checkOpts.ClaimVerifier = cosign.SimpleClaimVerifier
+		logger.Debug("verifying image signatures")
+		signatures, _, err = client.VerifyImageSignatures(ref, checkOpts)
+	}
 	if err != nil {
 		logger.WithField("error", err).Debug("failed to verify image signature")
 		return signatureFailedResult(fmt.Errorf("verify image signature: %w", err))
@@ -202,15 +217,26 @@ func sigstoreVerifyAttestation(bctx rego.BuiltinContext, refTerm *ast.Term, opts
 	}
 	checkOpts.ClaimVerifier = cosign.IntotoSubjectClaimVerifier
 
+	client := ecoci.NewClient(ctx)
+	useBundles, err := client.HasBundles(ctx, ref)
+	if err != nil {
+		logger.WithField("error", err).Debug("bundle detection failed, falling back to legacy path")
+		useBundles = false
+	}
+	if useBundles {
+		logger.Debug("bundles detected, using bundle verification path")
+		checkOpts.NewBundleFormat = true
+	}
+
 	logger.Debug("verifying image attestations")
-	attestations, _, err := ecoci.NewClient(ctx).VerifyImageAttestations(ref, checkOpts)
+	attestations, _, err := client.VerifyImageAttestations(ref, checkOpts)
 	if err != nil {
 		logger.WithField("error", err).Debug("failed to verify image attestation signature")
 		return attestationFailedResult(fmt.Errorf("verify image attestation signature: %w", err))
 	}
 
 	logger.WithField("attestations_count", len(attestations)).Debug("attestation verification complete")
-	return attestationResult(attestations, nil)
+	return attestationResult(attestations, useBundles, nil)
 }
 
 func parseCheckOpts(ctx context.Context, optsTerm *ast.Term) (*cosign.CheckOpts, error) {
@@ -340,10 +366,10 @@ func signatureResult(signatures []oci.Signature, err error) (*ast.Term, error) {
 }
 
 func attestationFailedResult(err error) (*ast.Term, error) {
-	return attestationResult(nil, err)
+	return attestationResult(nil, false, err)
 }
 
-func attestationResult(attestations []oci.Signature, err error) (*ast.Term, error) {
+func attestationResult(attestations []oci.Signature, useBundles bool, err error) (*ast.Term, error) {
 	var errorTerms []*ast.Term
 	var attestationTerms []*ast.Term
 
@@ -352,9 +378,33 @@ func attestationResult(attestations []oci.Signature, err error) (*ast.Term, erro
 	}
 
 	for _, s := range attestations {
-		att, err := attestation.ProvenanceFromSignature(s)
-		if err != nil {
-			errorTerms = append(errorTerms, ast.StringTerm(fmt.Sprintf("parsing attestation: %s", err)))
+		var att attestation.Attestation
+		var parseErr error
+
+		if useBundles {
+			payload, pErr := s.Payload()
+			if pErr != nil {
+				log.WithField("error", pErr).Debug("skipping bundle entry: cannot read payload")
+				continue
+			}
+			var dsseEnvelope struct {
+				PayloadType string `json:"payloadType"`
+			}
+			if jErr := json.Unmarshal(payload, &dsseEnvelope); jErr != nil {
+				log.WithField("error", jErr).Debug("skipping bundle entry: not a valid DSSE envelope")
+				continue
+			}
+			if dsseEnvelope.PayloadType != "application/vnd.in-toto+json" {
+				log.WithField("payloadType", dsseEnvelope.PayloadType).Debug("skipping bundle entry with non-in-toto payloadType")
+				continue
+			}
+			att, parseErr = attestation.ProvenanceFromBundlePayload(s, payload)
+		} else {
+			att, parseErr = attestation.ProvenanceFromSignature(s)
+		}
+
+		if parseErr != nil {
+			errorTerms = append(errorTerms, ast.StringTerm(fmt.Sprintf("parsing attestation: %s", parseErr)))
 			continue
 		}
 
