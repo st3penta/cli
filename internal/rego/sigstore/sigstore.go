@@ -131,10 +131,25 @@ func sigstoreVerifyImage(bctx rego.BuiltinContext, refTerm *ast.Term, optsTerm *
 		logger.WithField("error", err).Debug("failed to parse check opts")
 		return signatureFailedResult(fmt.Errorf("opts parameter: %w", err))
 	}
-	checkOpts.ClaimVerifier = cosign.SimpleClaimVerifier
 
-	logger.Debug("verifying image signatures")
-	signatures, _, err := ecoci.NewClient(ctx).VerifyImageSignatures(ref, checkOpts)
+	client := ecoci.NewClient(ctx)
+	useBundles, err := client.HasBundles(ctx, ref)
+	if err != nil {
+		logger.WithField("error", err).Debug("bundle detection failed, falling back to legacy path")
+		useBundles = false
+	}
+
+	var signatures []oci.Signature
+	if useBundles {
+		logger.Debug("bundles detected, using bundle verification path")
+		checkOpts.NewBundleFormat = true
+		checkOpts.ClaimVerifier = cosign.IntotoSubjectClaimVerifier
+		signatures, _, err = client.VerifyImageAttestations(ref, checkOpts)
+	} else {
+		checkOpts.ClaimVerifier = cosign.SimpleClaimVerifier
+		logger.Debug("verifying image signatures")
+		signatures, _, err = client.VerifyImageSignatures(ref, checkOpts)
+	}
 	if err != nil {
 		logger.WithField("error", err).Debug("failed to verify image signature")
 		return signatureFailedResult(fmt.Errorf("verify image signature: %w", err))
