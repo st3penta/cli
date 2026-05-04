@@ -101,6 +101,11 @@ func (m *FakeClient) VerifyImageAttestations(ref name.Reference, opts *cosign.Ch
 	return sigs, args.Bool(1), args.Error(2)
 }
 
+func (m *FakeClient) HasBundles(ctx context.Context, ref name.Reference) (bool, error) {
+	args := m.Called(ctx, ref)
+	return args.Bool(0), args.Error(1)
+}
+
 func (m *FakeClient) Head(ref name.Reference) (*v1.Descriptor, error) {
 	args := m.Called(ref)
 	var desc *v1.Descriptor
