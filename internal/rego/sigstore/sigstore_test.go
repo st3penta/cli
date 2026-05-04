@@ -190,6 +190,7 @@ func TestSigstoreVerifyImage(t *testing.T) {
 			)
 			require.NoError(t, err)
 
+			c.On("HasBundles", mock.Anything, goodImage).Return(false, nil)
 			verifyCall := c.On(
 				"VerifyImageSignatures", goodImage, mock.Anything,
 			).Return([]oci.Signature{sig}, false, tt.sigError)
@@ -558,6 +559,120 @@ func TestSigstoreVerifyAttestationBundleFallback(t *testing.T) {
 			bctx := rego.BuiltinContext{Context: ctx}
 
 			result, err := sigstoreVerifyAttestation(
+				bctx,
+				ast.StringTerm(goodImage.String()),
+				options{ignoreRekor: true, publicKey: utils.TestPublicKey}.toTerm(),
+			)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Equal(t, ast.BooleanTerm(true), result.Get(ast.StringTerm("success")))
+			require.Equal(t, ast.ArrayTerm(), result.Get(ast.StringTerm("errors")))
+		})
+	}
+}
+
+func TestSigstoreVerifyImageWithBundles(t *testing.T) {
+	goodImage := name.MustParseReference(
+		"registry.local/spam@sha256:4e388ab32b10dc8dbc7e28144f552830adc74787c1e2c0824032078a79f227fb",
+	)
+
+	sig, err := static.NewSignature(
+		[]byte(`image`),
+		"signature",
+		static.WithLayerMediaType(types.MediaType(cosignTypes.DssePayloadType)),
+	)
+	require.NoError(t, err)
+
+	cases := []struct {
+		name    string
+		success *ast.Term
+		errors  *ast.Term
+	}{
+		{
+			name:    "bundle-format image verification succeeds",
+			success: ast.BooleanTerm(true),
+			errors:  ast.ArrayTerm(),
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			utils.SetTestRekorPublicKey(t)
+			utils.SetTestFulcioRoots(t)
+			utils.SetTestCTLogPublicKey(t)
+
+			c := fake.FakeClient{}
+			ctx := o.WithClient(context.Background(), &c)
+
+			c.On("HasBundles", mock.Anything, goodImage).Return(true, nil)
+			c.On(
+				"VerifyImageAttestations", goodImage, mock.Anything,
+			).Return([]oci.Signature{sig}, false, nil).Run(func(args mock.Arguments) {
+				checkOpts := args.Get(1).(*cosign.CheckOpts)
+				require.True(t, checkOpts.NewBundleFormat)
+			})
+
+			bctx := rego.BuiltinContext{Context: ctx}
+
+			result, err := sigstoreVerifyImage(
+				bctx,
+				ast.StringTerm(goodImage.String()),
+				options{ignoreRekor: true, publicKey: utils.TestPublicKey}.toTerm(),
+			)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Equal(t, tt.errors, result.Get(ast.StringTerm("errors")))
+			require.Equal(t, tt.success, result.Get(ast.StringTerm("success")))
+		})
+	}
+}
+
+func TestSigstoreVerifyImageBundleFallback(t *testing.T) {
+	goodImage := name.MustParseReference(
+		"registry.local/spam@sha256:4e388ab32b10dc8dbc7e28144f552830adc74787c1e2c0824032078a79f227fb",
+	)
+
+	sig, err := static.NewSignature(
+		[]byte(`image`),
+		"signature",
+		static.WithLayerMediaType(types.MediaType(cosignTypes.DssePayloadType)),
+	)
+	require.NoError(t, err)
+
+	cases := []struct {
+		name       string
+		hasBundles bool
+		bundleErr  error
+	}{
+		{
+			name:       "HasBundles returns error falls back to legacy",
+			hasBundles: false,
+			bundleErr:  errors.New("registry error"),
+		},
+		{
+			name:       "HasBundles returns false uses legacy path",
+			hasBundles: false,
+			bundleErr:  nil,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			utils.SetTestRekorPublicKey(t)
+			utils.SetTestFulcioRoots(t)
+			utils.SetTestCTLogPublicKey(t)
+
+			c := fake.FakeClient{}
+			ctx := o.WithClient(context.Background(), &c)
+
+			c.On("HasBundles", mock.Anything, goodImage).Return(tt.hasBundles, tt.bundleErr)
+			c.On(
+				"VerifyImageSignatures", goodImage, mock.Anything,
+			).Return([]oci.Signature{sig}, false, nil)
+
+			bctx := rego.BuiltinContext{Context: ctx}
+
+			result, err := sigstoreVerifyImage(
 				bctx,
 				ast.StringTerm(goodImage.String()),
 				options{ignoreRekor: true, publicKey: utils.TestPublicKey}.toTerm(),
