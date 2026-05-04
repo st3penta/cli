@@ -495,7 +495,10 @@ func TestSigstoreVerifyAttestationWithBundles(t *testing.T) {
 			c.On("HasBundles", mock.Anything, goodImage).Return(true, nil)
 			c.On(
 				"VerifyImageAttestations", goodImage, mock.Anything,
-			).Return(tt.sigs, false, nil)
+			).Return(tt.sigs, false, nil).Run(func(args mock.Arguments) {
+				checkOpts := args.Get(1).(*cosign.CheckOpts)
+				require.True(t, checkOpts.NewBundleFormat)
+			})
 
 			bctx := rego.BuiltinContext{Context: ctx}
 
