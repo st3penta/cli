@@ -54,6 +54,7 @@ import (
 	"github.com/sigstore/cosign/v3/pkg/oci/static"
 	cosigntypes "github.com/sigstore/cosign/v3/pkg/types"
 	rc "github.com/sigstore/rekor/pkg/client"
+	"github.com/sigstore/rekor/pkg/generated/models"
 	"github.com/sigstore/sigstore/pkg/cryptoutils"
 	"github.com/sigstore/sigstore/pkg/signature"
 	"gopkg.in/go-jose/go-jose.v2/json"
@@ -208,7 +209,7 @@ func createSignatureData(ctx context.Context, imageName string, digestImage name
 	}
 
 	// Upload to transparency log to get bundle information like Tekton Chains does
-	rekorBundle, err := uploadToTransparencyLog(ctx, payload, rawSignature, signer)
+	rekorBundle, _, err := uploadToTransparencyLog(ctx, payload, rawSignature, signer)
 	if err != nil {
 		return nil, err
 	}
@@ -300,42 +301,43 @@ func CreateAndPushImageSignature(ctx context.Context, imageName string, keyName 
 }
 
 // uploadToTransparencyLog uploads a signature to the transparency log and returns the bundle
-func uploadToTransparencyLog(ctx context.Context, payload []byte, rawSignature []byte, signer signature.SignerVerifier) (*bundle.RekorBundle, error) {
+// along with the raw tlog entry (needed for creating protobuf bundles).
+func uploadToTransparencyLog(ctx context.Context, payload []byte, rawSignature []byte, signer signature.SignerVerifier) (*bundle.RekorBundle, *models.LogEntryAnon, error) {
 	// Get public key or cert for transparency log upload
 	pkoc, err := getPublicKeyOrCert(signer)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get public key or cert: %w", err)
+		return nil, nil, fmt.Errorf("failed to get public key or cert: %w", err)
 	}
 
 	// Get Rekor URL
 	rekorURL, err := rekor.StubRekor(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get stub rekor URL: %w", err)
+		return nil, nil, fmt.Errorf("failed to get stub rekor URL: %w", err)
 	}
 
 	rekorClient, err := rc.GetRekorClient(rekorURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get rekor client: %w", err)
+		return nil, nil, fmt.Errorf("failed to get rekor client: %w", err)
 	}
 
 	// Compute payload checksum
 	checksum := sha256.New()
 	if _, err := checksum.Write(payload); err != nil {
-		return nil, fmt.Errorf("error checksuming payload: %w", err)
+		return nil, nil, fmt.Errorf("error checksuming payload: %w", err)
 	}
 
 	tlogEntry, err := cosign.TLogUpload(ctx, rekorClient, rawSignature, checksum, pkoc)
 	if err != nil {
-		return nil, fmt.Errorf("failed to upload to transparency log: %w", err)
+		return nil, nil, fmt.Errorf("failed to upload to transparency log: %w", err)
 	}
 
 	// Create bundle from the actual transparency log entry
 	rekorBundle := bundle.EntryToBundle(tlogEntry)
 	if rekorBundle == nil {
-		return nil, fmt.Errorf("rekorBundle is nil after EntryToBundle")
+		return nil, nil, fmt.Errorf("rekorBundle is nil after EntryToBundle")
 	}
 
-	return rekorBundle, nil
+	return rekorBundle, tlogEntry, nil
 }
 
 // getImageDigestAndRef returns the image, its digest, and digest reference for signing
@@ -533,7 +535,7 @@ func createAndPushAttestationInternal(ctx context.Context, imageName, keyName st
 	}
 
 	// Upload to transparency log to get bundle information like Tekton Chains does
-	rekorBundle, err := uploadToTransparencyLog(ctx, signedAttestation, rawSignature, signer)
+	rekorBundle, _, err := uploadToTransparencyLog(ctx, signedAttestation, rawSignature, signer)
 	if err != nil {
 		return ctx, err
 	}
@@ -671,15 +673,22 @@ func CreateAndPushAttestationReferrer(ctx context.Context, imageName, keyName st
 	}
 
 	// Upload to transparency log to get bundle information
-	rekorBundle, err := uploadToTransparencyLog(ctx, signedAttestation, rawSignature, signer)
+	_, tlogEntry, err := uploadToTransparencyLog(ctx, signedAttestation, rawSignature, signer)
 	if err != nil {
 		return ctx, err
 	}
 
-	// Create the attestation layer with bundle information
-	attestationLayer, err := static.NewAttestation(signedAttestation, static.WithBundle(rekorBundle))
+	// Marshal the statement to get the raw payload for the protobuf bundle
+	statementPayload, err := json.Marshal(statement)
 	if err != nil {
-		return ctx, err
+		return ctx, fmt.Errorf("failed to marshal statement: %w", err)
+	}
+
+	// Create a Sigstore protobuf bundle so that cosign.GetBundles() / HasBundles()
+	// can detect the referrer as a bundle-format attestation.
+	bundleBytes, err := bundle.MakeNewBundle(publicKey, tlogEntry, statementPayload, signedAttestation, publicKeyBytes, nil)
+	if err != nil {
+		return ctx, fmt.Errorf("failed to create protobuf bundle: %w", err)
 	}
 
 	digestRef, err := getDigestRefForImage(ctx, imageName, digest)
@@ -687,27 +696,17 @@ func CreateAndPushAttestationReferrer(ctx context.Context, imageName, keyName st
 		return ctx, err
 	}
 
-	// Attach attestation using OCI Referrers API
-	annotations := map[string]string{
-		"predicateType": statement.PredicateType,
-	}
-
-	// Add bundle annotation if bundle information exists
-	bundleJSON, err := json.Marshal(rekorBundle)
-	if err != nil {
-		return ctx, fmt.Errorf("failed to marshal bundle for annotation: %w", err)
-	}
-	annotations[static.BundleAnnotationKey] = string(bundleJSON)
-
-	err = cosignRemote.WriteReferrer(
+	// Write the attestation as a Sigstore bundle referrer.
+	// WriteAttestationNewBundleFormat uses the correct bundle media type
+	// (application/vnd.dev.sigstore.bundle.v0.3+json) which cosign recognizes.
+	err = cosignRemote.WriteAttestationNewBundleFormat(
 		digestRef,
-		"application/vnd.dsse.envelope.v1+json",
-		[]v1.Layer{attestationLayer},
-		annotations,
+		bundleBytes,
+		statement.PredicateType,
 		cosignRemote.WithRemoteOptions(remote.WithContext(ctx)),
 	)
 	if err != nil {
-		return ctx, fmt.Errorf("failed to write attestation referrer: %w", err)
+		return ctx, fmt.Errorf("failed to write attestation bundle referrer: %w", err)
 	}
 
 	// NOTE: We store the subject image digest here for deduplication purposes only.
@@ -1197,12 +1196,15 @@ func AttestationSignaturesFrom(ctx context.Context, prefix string) (map[string]s
 	state := testenv.FetchState[imageState](ctx)
 
 	signatures := map[string]string{}
-	for name, signature := range state.AttestationSignatures {
-		if signature.KeyID != "" {
-			signatures[fmt.Sprintf("%s_KEY_ID_%s", prefix, name)] = signature.KeyID
-		}
-		if signature.Signature != "" {
-			signatures[fmt.Sprintf("%s_%s", prefix, name)] = signature.Signature
+	// Referrer entries first so legacy entries take precedence (overwrite) for same image name
+	for _, m := range []map[string]Signature{state.ReferrerAttestationSignatures, state.AttestationSignatures} {
+		for name, signature := range m {
+			if signature.KeyID != "" {
+				signatures[fmt.Sprintf("%s_KEY_ID_%s", prefix, name)] = signature.KeyID
+			}
+			if signature.Signature != "" {
+				signatures[fmt.Sprintf("%s_%s", prefix, name)] = signature.Signature
+			}
 		}
 	}
 
@@ -1217,8 +1219,11 @@ func RawAttestationSignaturesFrom(ctx context.Context) map[string]string {
 	state := testenv.FetchState[imageState](ctx)
 
 	ret := map[string]string{}
-	for ref, signature := range state.AttestationSignatures {
-		ret[fmt.Sprintf("ATTESTATION_SIGNATURE_%s", ref)] = signature.Signature
+	// Referrer entries first so legacy entries take precedence (overwrite) for same image name
+	for _, m := range []map[string]Signature{state.ReferrerAttestationSignatures, state.AttestationSignatures} {
+		for ref, signature := range m {
+			ret[fmt.Sprintf("ATTESTATION_SIGNATURE_%s", ref)] = signature.Signature
+		}
 	}
 
 	return ret
@@ -1232,12 +1237,15 @@ func ImageSignaturesFrom(ctx context.Context, prefix string) (map[string]string,
 	state := testenv.FetchState[imageState](ctx)
 
 	ret := map[string]string{}
-	for name, signature := range state.ImageSignatures {
-		if signature.KeyID != "" {
-			ret[fmt.Sprintf("%s_KEY_ID_%s", prefix, name)] = signature.KeyID
-		}
-		if signature.Signature != "" {
-			ret[fmt.Sprintf("%s_%s", prefix, name)] = signature.Signature
+	// Referrer entries first so legacy entries take precedence (overwrite) for same image name
+	for _, m := range []map[string]Signature{state.ReferrerImageSignatures, state.ImageSignatures} {
+		for name, signature := range m {
+			if signature.KeyID != "" {
+				ret[fmt.Sprintf("%s_KEY_ID_%s", prefix, name)] = signature.KeyID
+			}
+			if signature.Signature != "" {
+				ret[fmt.Sprintf("%s_%s", prefix, name)] = signature.Signature
+			}
 		}
 	}
 
@@ -1252,8 +1260,11 @@ func RawImageSignaturesFrom(ctx context.Context) map[string]string {
 	state := testenv.FetchState[imageState](ctx)
 
 	ret := map[string]string{}
-	for ref, signature := range state.ImageSignatures {
-		ret[fmt.Sprintf("IMAGE_SIGNATURE_%s", ref)] = signature.Signature
+	// Referrer entries first so legacy entries take precedence (overwrite) for same image name
+	for _, m := range []map[string]Signature{state.ReferrerImageSignatures, state.ImageSignatures} {
+		for ref, signature := range m {
+			ret[fmt.Sprintf("IMAGE_SIGNATURE_%s", ref)] = signature.Signature
+		}
 	}
 
 	return ret

@@ -1278,6 +1278,29 @@ Feature: evaluate enterprise contract
     Then the exit status should be 0
     Then the output should match the snapshot
 
+  Scenario: sigstore functions with bundle-format attestations
+    Given a key pair named "bundle"
+    Given an image named "acceptance/sigstore-bundles"
+    Given a valid image signature referrer of "acceptance/sigstore-bundles" image signed by the "bundle" key
+    Given a valid attestation referrer of "acceptance/sigstore-bundles" signed by the "bundle" key
+    Given a git repository named "sigstore-bundles" with
+      | main.rego | examples/sigstore.rego |
+    Given policy configuration named "ec-policy" with specification
+      """
+      {
+        "sources": [
+          {
+            "policy": [
+              "git::https://${GITHOST}/git/sigstore-bundles.git"
+            ]
+          }
+        ]
+      }
+      """
+    When ec command is run with "validate image --image ${REGISTRY}/acceptance/sigstore-bundles --policy acceptance/ec-policy --public-key ${bundle_PUBLIC_KEY} --rekor-url ${REKOR} --show-successes --output json"
+    Then the exit status should be 0
+    Then the output should match the snapshot
+
   # Commented out as part of EC-1023. This will be enabled once the issue is resolved.
   # Scenario: many components and sources
   #   Given a key pair named "known"
