@@ -977,12 +977,101 @@ func TestCriteriaGetWithComponentName(t *testing.T) {
 			componentName: "my-component",
 			expected:      []string{"test.image_check", "test.component_check", "*"},
 		},
+		{
+			name: "Multi-arch expanded component matches original component name",
+			criteria: &Criteria{
+				digestItems: map[string][]string{},
+				componentItems: map[string][]string{
+					"my-component": {"test.component_check"},
+				},
+				defaultItems: []string{"*"},
+			},
+			imageRef:      "quay.io/repo/img@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			componentName: "my-component-sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890-arm64",
+			expected:      []string{"test.component_check", "*"},
+		},
+		{
+			name: "Multi-arch expanded component with noarch suffix",
+			criteria: &Criteria{
+				digestItems: map[string][]string{},
+				componentItems: map[string][]string{
+					"my-component": {"test.component_check"},
+				},
+				defaultItems: []string{"*"},
+			},
+			imageRef:      "quay.io/repo/img@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			componentName: "my-component-sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890-noarch-2",
+			expected:      []string{"test.component_check", "*"},
+		},
+		{
+			name: "Similar component name not incorrectly matched",
+			criteria: &Criteria{
+				digestItems: map[string][]string{},
+				componentItems: map[string][]string{
+					"my-component": {"test.component_check"},
+				},
+				defaultItems: []string{"*"},
+			},
+			imageRef:      "quay.io/repo/img@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			componentName: "my-component-libs",
+			expected:      []string{"*"},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.criteria.get(tt.imageRef, tt.componentName)
 			require.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestOriginalComponentName(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "plain component name unchanged",
+			input:    "my-component",
+			expected: "my-component",
+		},
+		{
+			name:     "multi-arch arm64 suffix stripped",
+			input:    "my-component-sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890-arm64",
+			expected: "my-component",
+		},
+		{
+			name:     "multi-arch amd64 suffix stripped",
+			input:    "my-component-sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890-amd64",
+			expected: "my-component",
+		},
+		{
+			name:     "multi-arch noarch suffix stripped",
+			input:    "my-component-sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890-noarch-2",
+			expected: "my-component",
+		},
+		{
+			name:     "similar name without digest not stripped",
+			input:    "my-component-libs",
+			expected: "my-component-libs",
+		},
+		{
+			name:     "similar name with sha prefix but no digest not stripped",
+			input:    "my-component-sha256",
+			expected: "my-component-sha256",
+		},
+		{
+			name:     "empty string unchanged",
+			input:    "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.expected, originalComponentName(tt.input))
 		})
 	}
 }
