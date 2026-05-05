@@ -672,20 +672,133 @@ func CreateAndPushAttestationReferrer(ctx context.Context, imageName, keyName st
 		return ctx, fmt.Errorf("error stubbing rekor endpoints for attestation: %w", err)
 	}
 
-	// Upload to transparency log to get bundle information
+	// Upload to transparency log to get bundle information like Tekton Chains does
+	rekorBundle, _, err := uploadToTransparencyLog(ctx, signedAttestation, rawSignature, signer)
+	if err != nil {
+		return ctx, err
+	}
+
+	// Create the attestation layer with bundle information
+	attestationLayer, err := static.NewAttestation(signedAttestation, static.WithBundle(rekorBundle))
+	if err != nil {
+		return ctx, err
+	}
+
+	digestRef, err := getDigestRefForImage(ctx, imageName, digest)
+	if err != nil {
+		return ctx, err
+	}
+
+	// Attach attestation using OCI Referrers API
+	annotations := map[string]string{
+		"predicateType": statement.PredicateType,
+	}
+
+	// Add bundle annotation if bundle information exists
+	bundleJSON, err := json.Marshal(rekorBundle)
+	if err != nil {
+		return ctx, fmt.Errorf("failed to marshal bundle for annotation: %w", err)
+	}
+	annotations[static.BundleAnnotationKey] = string(bundleJSON)
+
+	err = cosignRemote.WriteReferrer(
+		digestRef,
+		"application/vnd.dsse.envelope.v1+json",
+		[]v1.Layer{attestationLayer},
+		annotations,
+		cosignRemote.WithRemoteOptions(remote.WithContext(ctx)),
+	)
+	if err != nil {
+		return ctx, fmt.Errorf("failed to write attestation referrer: %w", err)
+	}
+
+	// NOTE: We store the subject image digest here for deduplication purposes only.
+	// This is NOT the referrer artifact's digest.
+	state.ReferrerAttestations[imageName] = digestRef.String()
+
+	return ctx, nil
+}
+
+// CreateAndPushBundleAttestationReferrer creates a protobuf Sigstore bundle attestation
+// and pushes it as an OCI referrer with the bundle media type that cosign recognizes.
+func CreateAndPushBundleAttestationReferrer(ctx context.Context, imageName, keyName string) (context.Context, error) {
+	var state *imageState
+	ctx, err := testenv.SetupState(ctx, &state)
+	if err != nil {
+		return ctx, err
+	}
+
+	if state.ReferrerAttestations[imageName] != "" {
+		return ctx, nil
+	}
+
+	image, digest, _, err := getImageDigestAndRef(ctx, imageName)
+	if err != nil {
+		return ctx, err
+	}
+
+	statement, err := attestation.CreateStatementFor(imageName, image)
+	if err != nil {
+		return ctx, err
+	}
+
+	signedAttestation, err := attestation.SignStatement(ctx, keyName, statement)
+	if err != nil {
+		return ctx, err
+	}
+
+	var sig *cosign.Signatures
+	sig, err = unmarshallSignatures(signedAttestation)
+	if err != nil {
+		return ctx, err
+	}
+	if sig == nil {
+		return ctx, fmt.Errorf("failed to extract signature from attestation: no signatures found")
+	}
+
+	state.ReferrerAttestationSignatures[imageName] = Signature{
+		KeyID:     sig.KeyID,
+		Signature: sig.Sig,
+	}
+
+	var rawSignature []byte
+	if sig.Sig != "" {
+		rawSignature, err = base64.StdEncoding.DecodeString(sig.Sig)
+		if err != nil {
+			return ctx, fmt.Errorf("failed to decode signature: %w", err)
+		}
+	}
+
+	signer, err := crypto.SignerWithKey(ctx, keyName)
+	if err != nil {
+		return ctx, err
+	}
+
+	publicKey, err := signer.PublicKey()
+	if err != nil {
+		return ctx, fmt.Errorf("failed to get public key: %w", err)
+	}
+
+	publicKeyBytes, err := cryptoutils.MarshalPublicKeyToPEM(publicKey)
+	if err != nil {
+		return ctx, fmt.Errorf("failed to marshal public key: %w", err)
+	}
+
+	err = rekor.StubRekorEntryCreationForAttestation(ctx, signedAttestation, publicKeyBytes)
+	if err != nil {
+		return ctx, fmt.Errorf("error stubbing rekor endpoints for attestation: %w", err)
+	}
+
 	_, tlogEntry, err := uploadToTransparencyLog(ctx, signedAttestation, rawSignature, signer)
 	if err != nil {
 		return ctx, err
 	}
 
-	// Marshal the statement to get the raw payload for the protobuf bundle
 	statementPayload, err := json.Marshal(statement)
 	if err != nil {
 		return ctx, fmt.Errorf("failed to marshal statement: %w", err)
 	}
 
-	// Create a Sigstore protobuf bundle so that cosign.GetBundles() / HasBundles()
-	// can detect the referrer as a bundle-format attestation.
 	bundleBytes, err := bundle.MakeNewBundle(publicKey, tlogEntry, statementPayload, signedAttestation, publicKeyBytes, nil)
 	if err != nil {
 		return ctx, fmt.Errorf("failed to create protobuf bundle: %w", err)
@@ -696,9 +809,6 @@ func CreateAndPushAttestationReferrer(ctx context.Context, imageName, keyName st
 		return ctx, err
 	}
 
-	// Write the attestation as a Sigstore bundle referrer.
-	// WriteAttestationNewBundleFormat uses the correct bundle media type
-	// (application/vnd.dev.sigstore.bundle.v0.3+json) which cosign recognizes.
 	err = cosignRemote.WriteAttestationNewBundleFormat(
 		digestRef,
 		bundleBytes,
@@ -709,8 +819,6 @@ func CreateAndPushAttestationReferrer(ctx context.Context, imageName, keyName st
 		return ctx, fmt.Errorf("failed to write attestation bundle referrer: %w", err)
 	}
 
-	// NOTE: We store the subject image digest here for deduplication purposes only.
-	// This is NOT the referrer artifact's digest.
 	state.ReferrerAttestations[imageName] = digestRef.String()
 
 	return ctx, nil
@@ -1423,4 +1531,5 @@ func AddStepsTo(sc *godog.ScenarioContext) {
 	sc.Step(`^an OCI blob with content "([^"]*)" in the repo "([^"]*)"$`, createAndPushLayer)
 	sc.Step(`^a valid image signature referrer of "([^"]*)" image signed by the "([^"]*)" key$`, CreateAndPushImageSignatureReferrer)
 	sc.Step(`^a valid attestation referrer of "([^"]*)" signed by the "([^"]*)" key$`, CreateAndPushAttestationReferrer)
+	sc.Step(`^a valid bundle-format attestation referrer of "([^"]*)" signed by the "([^"]*)" key$`, CreateAndPushBundleAttestationReferrer)
 }

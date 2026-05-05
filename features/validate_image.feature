@@ -1282,7 +1282,7 @@ Feature: evaluate enterprise contract
     Given a key pair named "bundle"
     Given an image named "acceptance/sigstore-bundles"
     Given a valid image signature referrer of "acceptance/sigstore-bundles" image signed by the "bundle" key
-    Given a valid attestation referrer of "acceptance/sigstore-bundles" signed by the "bundle" key
+    Given a valid bundle-format attestation referrer of "acceptance/sigstore-bundles" signed by the "bundle" key
     Given a git repository named "sigstore-bundles" with
       | main.rego | examples/sigstore.rego |
     Given policy configuration named "ec-policy" with specification

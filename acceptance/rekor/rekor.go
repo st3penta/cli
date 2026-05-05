@@ -182,6 +182,8 @@ func computeLogEntryForSignature(ctx context.Context, publicKey, data, signature
 	// Use current Unix timestamp for integrated time
 	time := time.Now().Unix()
 
+	checkpoint := fmt.Sprintf("rekor.sigstore.dev - %s\n%d\n%s\n\n", logID, treeSize, rootHashHex)
+
 	// fill in the entry with the attestation and in-toto entry for the log
 	// and add the verification
 	logEntry = &models.LogEntryAnon{
@@ -191,10 +193,11 @@ func computeLogEntryForSignature(ctx context.Context, publicKey, data, signature
 		Body: base64.StdEncoding.EncodeToString(logBodyBytes),
 		Verification: &models.LogEntryAnonVerification{
 			InclusionProof: &models.InclusionProof{
-				RootHash: &rootHashHex,
-				Hashes:   hashes,
-				LogIndex: &logIndex,
-				TreeSize: &treeSize,
+				Checkpoint: &checkpoint,
+				RootHash:   &rootHashHex,
+				Hashes:     hashes,
+				LogIndex:   &logIndex,
+				TreeSize:   &treeSize,
 			},
 		},
 		IntegratedTime: &time,
@@ -301,6 +304,8 @@ func computeLogEntryForAttestation(ctx context.Context, publicKey []byte, attest
 	// Use current Unix timestamp for integrated time
 	time := time.Now().Unix()
 
+	checkpoint := fmt.Sprintf("rekor.sigstore.dev - %s\n%d\n%s\n\n", logID, treeSize, rootHashHex)
+
 	// fill in the entry with the attestation and in-toto entry for the log
 	// and add the verification
 	logEntry = &models.LogEntryAnon{
@@ -310,10 +315,11 @@ func computeLogEntryForAttestation(ctx context.Context, publicKey []byte, attest
 		Body: base64.StdEncoding.EncodeToString(logBodyBytes),
 		Verification: &models.LogEntryAnonVerification{
 			InclusionProof: &models.InclusionProof{
-				RootHash: &rootHashHex,
-				Hashes:   hashes,
-				LogIndex: &logIndex,
-				TreeSize: &treeSize,
+				Checkpoint: &checkpoint,
+				RootHash:   &rootHashHex,
+				Hashes:     hashes,
+				LogIndex:   &logIndex,
+				TreeSize:   &treeSize,
 			},
 		},
 		IntegratedTime: &time,
@@ -376,10 +382,9 @@ func StubRekorEntryCreationForSignature(ctx context.Context, data []byte, signat
 		return fmt.Errorf("failed to compute signed entry timestamp: %w", err)
 	}
 
-	// Add the verification section with the signed entry timestamp
-	logEntry.Verification = &models.LogEntryAnonVerification{
-		SignedEntryTimestamp: strfmt.Base64(signedTimestamp),
-	}
+	// Add the signed entry timestamp to the existing verification section
+	// (preserves the InclusionProof already set by the compute function)
+	logEntry.Verification.SignedEntryTimestamp = strfmt.Base64(signedTimestamp)
 
 	// Create the response format that Rekor creation endpoint returns: {uuid: logEntry}
 	response := map[string]*models.LogEntryAnon{
@@ -443,10 +448,9 @@ func StubRekorEntryCreationForAttestation(ctx context.Context, attestationData [
 		return fmt.Errorf("failed to compute signed entry timestamp: %w", err)
 	}
 
-	// Add the verification section with the signed entry timestamp
-	logEntry.Verification = &models.LogEntryAnonVerification{
-		SignedEntryTimestamp: strfmt.Base64(signedTimestamp),
-	}
+	// Add the signed entry timestamp to the existing verification section
+	// (preserves the InclusionProof already set by the compute function)
+	logEntry.Verification.SignedEntryTimestamp = strfmt.Base64(signedTimestamp)
 
 	// Create the response format that Rekor creation endpoint returns: {uuid: logEntry}
 	response := map[string]*models.LogEntryAnon{
