@@ -3714,7 +3714,7 @@ Error: success criteria not met
         {
           "msg": "Pass",
           "metadata": {
-            "code": "sigstore.valid"
+            "code": "sigstore_attestation_only.valid"
           }
         }
       ],
@@ -3722,7 +3722,7 @@ Error: success criteria not met
       "signatures": [
         {
           "keyid": "",
-          "sig": "${ATTESTATION_SIGNATURE_acceptance/sigstore-bundles}"
+          "sig": "${IMAGE_SIGNATURE_acceptance/sigstore-bundles}"
         }
       ],
       "attestations": [
