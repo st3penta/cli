@@ -1281,10 +1281,10 @@ Feature: evaluate enterprise contract
   Scenario: sigstore functions with bundle-format attestations
     Given a key pair named "bundle"
     Given an image named "acceptance/sigstore-bundles"
-    Given a valid image signature of "acceptance/sigstore-bundles" image signed by the "bundle" key
+    Given a valid image signature referrer of "acceptance/sigstore-bundles" image signed by the "bundle" key
     Given a valid bundle-format attestation referrer of "acceptance/sigstore-bundles" signed by the "bundle" key
     Given a git repository named "sigstore-bundles" with
-      | main.rego | examples/sigstore_attestation_only.rego |
+      | main.rego | examples/sigstore.rego |
     Given policy configuration named "ec-policy" with specification
       """
       {
@@ -1297,7 +1297,7 @@ Feature: evaluate enterprise contract
         ]
       }
       """
-    When ec command is run with "validate image --image ${REGISTRY}/acceptance/sigstore-bundles --policy acceptance/ec-policy --public-key ${bundle_PUBLIC_KEY} --rekor-url ${REKOR} --show-successes --output json"
+    When ec command is run with "validate image --image ${REGISTRY}/acceptance/sigstore-bundles --policy acceptance/ec-policy --public-key ${bundle_PUBLIC_KEY} --ignore-rekor --show-successes --output json"
     Then the exit status should be 0
     Then the output should match the snapshot
 

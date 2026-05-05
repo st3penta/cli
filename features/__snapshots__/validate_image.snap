@@ -3714,7 +3714,7 @@ Error: success criteria not met
         {
           "msg": "Pass",
           "metadata": {
-            "code": "sigstore_attestation_only.valid"
+            "code": "sigstore.valid"
           }
         }
       ],
@@ -3722,14 +3722,13 @@ Error: success criteria not met
       "signatures": [
         {
           "keyid": "",
-          "sig": "${IMAGE_SIGNATURE_acceptance/sigstore-bundles}"
+          "sig": ""
         }
       ],
       "attestations": [
         {
           "type": "https://in-toto.io/Statement/v0.1",
           "predicateType": "https://slsa.dev/provenance/v0.2",
-          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
           "signatures": [
             {
               "keyid": "",
@@ -3749,7 +3748,6 @@ Error: success criteria not met
         ]
       }
     ],
-    "rekorUrl": "${REKOR}",
     "publicKey": "${bundle_PUBLIC_KEY}"
   },
   "ec-version": "${EC_VERSION}",
