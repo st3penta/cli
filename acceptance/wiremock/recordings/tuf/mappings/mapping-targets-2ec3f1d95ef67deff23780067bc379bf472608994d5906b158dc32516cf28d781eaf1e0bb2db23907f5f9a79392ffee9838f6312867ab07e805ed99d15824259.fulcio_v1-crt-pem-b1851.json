@@ -1,0 +1,20 @@
+{
+  "id": "4b7bad3e-0be9-498a-8df6-55a27a74d352",
+  "request": {
+    "url": "/targets/2ec3f1d95ef67deff23780067bc379bf472608994d5906b158dc32516cf28d781eaf1e0bb2db23907f5f9a79392ffee9838f6312867ab07e805ed99d15824259.fulcio_v1.crt.pem",
+    "method": "GET"
+  },
+  "response": {
+    "status": 200,
+    "bodyFileName": "body-targets-2ec3f1d95ef67deff23780067bc379bf472608994d5906b158dc32516cf28d781eaf1e0bb2db23907f5f9a79392ffee9838f6312867ab07e805ed99d15824259.fulcio_v1-crt-pem-b1851.pem",
+    "headers": {
+      "date": "Mon, 05 May 2026 14:45:37 GMT",
+      "server": "envoy",
+      "last-modified": "Mon, 05 May 2026 14:45:21 GMT",
+      "x-envoy-upstream-service-time": "1",
+      "content-type": "application/octet-stream",
+      "accept-ranges": "bytes"
+    }
+  },
+  "uuid": "19a6dcde-843d-48a3-9704-527526494738"
+}

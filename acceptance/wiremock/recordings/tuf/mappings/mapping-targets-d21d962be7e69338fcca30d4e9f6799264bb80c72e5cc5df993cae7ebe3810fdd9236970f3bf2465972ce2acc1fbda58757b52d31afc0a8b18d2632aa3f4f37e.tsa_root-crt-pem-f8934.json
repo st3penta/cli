@@ -1,0 +1,20 @@
+{
+  "id": "5cd1cd7c-b0c0-445c-876e-c41868c13950",
+  "request": {
+    "url": "/targets/d21d962be7e69338fcca30d4e9f6799264bb80c72e5cc5df993cae7ebe3810fdd9236970f3bf2465972ce2acc1fbda58757b52d31afc0a8b18d2632aa3f4f37e.tsa_root.crt.pem",
+    "method": "GET"
+  },
+  "response": {
+    "status": 200,
+    "bodyFileName": "body-targets-d21d962be7e69338fcca30d4e9f6799264bb80c72e5cc5df993cae7ebe3810fdd9236970f3bf2465972ce2acc1fbda58757b52d31afc0a8b18d2632aa3f4f37e.tsa_root-crt-pem-f8934.pem",
+    "headers": {
+      "date": "Mon, 05 May 2026 14:45:37 GMT",
+      "server": "envoy",
+      "last-modified": "Mon, 05 May 2026 14:45:21 GMT",
+      "x-envoy-upstream-service-time": "1",
+      "content-type": "application/octet-stream",
+      "accept-ranges": "bytes"
+    }
+  },
+  "uuid": "7f734da0-5e4e-4e4f-9023-da5a33938f31"
+}

@@ -1,0 +1,100 @@
+{
+ "signed": {
+  "_type": "targets",
+  "spec_version": "1.0",
+  "version": 1,
+  "expires": "2036-05-05T14:45:21Z",
+  "targets": {
+   "ctfe.pub": {
+    "length": 178,
+    "hashes": {
+     "sha512": "56649b190b13ca67089399cbee01d93ff5f79716494c27998e6b63178b3cbcf7df663bf0e01949c1b8e7db29b6f6a6133b74291d8755895794eb3c3eff911082"
+    },
+    "custom": {
+     "sigstore": {
+      "usage": "CTFE",
+      "status": "Active",
+      "uri": ""
+     }
+    }
+   },
+   "fulcio_v1.crt.pem": {
+    "length": 830,
+    "hashes": {
+     "sha512": "2ec3f1d95ef67deff23780067bc379bf472608994d5906b158dc32516cf28d781eaf1e0bb2db23907f5f9a79392ffee9838f6312867ab07e805ed99d15824259"
+    },
+    "custom": {
+     "sigstore": {
+      "usage": "Fulcio",
+      "status": "Active",
+      "uri": ""
+     }
+    }
+   },
+   "rekor.pub": {
+    "length": 178,
+    "hashes": {
+     "sha512": "490ea150f2c9845c32d1efff5fdb2051f990677a05f1377c920c428ac6fdef8ba60d3ff0efcc3ed10219c6f70c28b31ed5f6f641e8e3413e6dae59810b4b808d"
+    },
+    "custom": {
+     "sigstore": {
+      "usage": "Rekor",
+      "status": "Active",
+      "uri": ""
+     }
+    }
+   },
+   "trusted_root.json": {
+    "length": 3766,
+    "hashes": {
+     "sha512": "8afb423704f1291c85104797fc63a075a198ccf38def9875dcd76ea94190ef8f4e85c31e21f1c2a99ba30f6218bbd082ca3fa081d341cfeb7b835970aa8d4550"
+    }
+   },
+   "tsa_intermediate_0.crt.pem": {
+    "length": 691,
+    "hashes": {
+     "sha512": "47888d9ecb80c130e141d916f00fa70302b13eee560f2a1e9d1f7681ee5d3122a1c5e79e60b939e3e593db2503db942ef2b620d824858fa2b31ec1900ce4a5aa"
+    },
+    "custom": {
+     "sigstore": {
+      "usage": "TSA",
+      "status": "Active",
+      "uri": ""
+     }
+    }
+   },
+   "tsa_leaf.crt.pem": {
+    "length": 683,
+    "hashes": {
+     "sha512": "4448f59d42f73d1174a3488ecc328be5bbb2d3c1edb5173556fbaa6cc63c130b3e8de0322a2d8ae998d219a1fdc4e86d93bddc16cb2999e36f4ac4dacb2494ff"
+    },
+    "custom": {
+     "sigstore": {
+      "usage": "TSA",
+      "status": "Active",
+      "uri": ""
+     }
+    }
+   },
+   "tsa_root.crt.pem": {
+    "length": 606,
+    "hashes": {
+     "sha512": "d21d962be7e69338fcca30d4e9f6799264bb80c72e5cc5df993cae7ebe3810fdd9236970f3bf2465972ce2acc1fbda58757b52d31afc0a8b18d2632aa3f4f37e"
+    },
+    "custom": {
+     "sigstore": {
+      "usage": "TSA",
+      "status": "Active",
+      "uri": ""
+     }
+    }
+   }
+  }
+ },
+ "signatures": [
+  {
+   "keyid": "a9bf158441d4cec744cd06fea1db32b0fdb864609e1a5a5ba55d4dd22efaf856",
+   "sig": "869ee7021cb3151a3205d26debfa12403b2aeea483f2f43ea77d7a7b888379c6260905e046b45745b36b015f66c77f9b45dda82b3523480e971d6f4097a0fc05"
+  }
+ ]
+}

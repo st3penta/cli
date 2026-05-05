@@ -1,0 +1,20 @@
+{
+  "id" : "f1d2823f-ea64-392d-b993-2eb73bb9cab5",
+  "request" : {
+    "url" : "/targets/8afb423704f1291c85104797fc63a075a198ccf38def9875dcd76ea94190ef8f4e85c31e21f1c2a99ba30f6218bbd082ca3fa081d341cfeb7b835970aa8d4550.trusted_root.json",
+    "method" : "GET"
+  },
+  "response" : {
+    "status" : 200,
+    "bodyFileName" : "body-targets-8afb423704f1291c85104797fc63a075a198ccf38def9875dcd76ea94190ef8f4e85c31e21f1c2a99ba30f6218bbd082ca3fa081d341cfeb7b835970aa8d4550.trusted_root.-BuA3p.json",
+    "headers" : {
+      "date" : "Tue, 05 May 2026 14:45:34 GMT",
+      "server" : "envoy",
+      "last-modified" : "Tue, 05 May 2026 14:45:20 GMT",
+      "x-envoy-upstream-service-time" : "0",
+      "content-type" : "application/json",
+      "accept-ranges" : "bytes"
+    }
+  },
+  "uuid" : "f1d2823f-ea64-392d-b993-2eb73bb9cab5"
+}

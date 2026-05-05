@@ -1,0 +1,20 @@
+{
+  "id" : "3f641501-be28-3225-a59f-97664b789f74",
+  "request" : {
+    "url" : "/timestamp.json",
+    "method" : "GET"
+  },
+  "response" : {
+    "status" : 200,
+    "bodyFileName" : "body-timestamp.json-B3VOf.json",
+    "headers" : {
+      "date" : "Tue, 05 May 2026 14:45:34 GMT",
+      "server" : "envoy",
+      "last-modified" : "Tue, 05 May 2026 14:45:20 GMT",
+      "x-envoy-upstream-service-time" : "1",
+      "content-type" : "application/json",
+      "accept-ranges" : "bytes"
+    }
+  },
+  "uuid" : "3f641501-be28-3225-a59f-97664b789f74"
+}

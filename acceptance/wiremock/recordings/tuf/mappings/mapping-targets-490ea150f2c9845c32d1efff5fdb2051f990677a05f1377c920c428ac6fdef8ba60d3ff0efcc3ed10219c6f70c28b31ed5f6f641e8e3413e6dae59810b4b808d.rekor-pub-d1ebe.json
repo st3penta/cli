@@ -1,0 +1,20 @@
+{
+  "id": "3257307d-6c8a-4d35-a515-37a745d7a9d4",
+  "request": {
+    "url": "/targets/490ea150f2c9845c32d1efff5fdb2051f990677a05f1377c920c428ac6fdef8ba60d3ff0efcc3ed10219c6f70c28b31ed5f6f641e8e3413e6dae59810b4b808d.rekor.pub",
+    "method": "GET"
+  },
+  "response": {
+    "status": 200,
+    "bodyFileName": "body-targets-490ea150f2c9845c32d1efff5fdb2051f990677a05f1377c920c428ac6fdef8ba60d3ff0efcc3ed10219c6f70c28b31ed5f6f641e8e3413e6dae59810b4b808d.rekor-pub-d1ebe.pem",
+    "headers": {
+      "date": "Mon, 05 May 2026 14:45:37 GMT",
+      "server": "envoy",
+      "last-modified": "Mon, 05 May 2026 14:45:21 GMT",
+      "x-envoy-upstream-service-time": "1",
+      "content-type": "application/octet-stream",
+      "accept-ranges": "bytes"
+    }
+  },
+  "uuid": "57e3eb44-2cda-4a8d-9177-c9938b499f40"
+}

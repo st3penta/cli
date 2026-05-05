@@ -1,0 +1,1 @@
+{"created":"2026-05-05T14:45:26.490064471Z","architecture":"amd64","os":"linux","config":{"WorkingDir":"/","Labels":{"io.buildah.version":"1.43.1"}},"rootfs":{"type":"layers","diff_ids":["sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"]},"history":[{"created":"2026-05-05T14:45:26.490498602Z","created_by":"/bin/sh"}]}
