@@ -417,6 +417,52 @@ type Input struct {
 	PolicySpec    ecc.EnterpriseContractPolicySpec `json:"policy_spec,omitempty"`
 }
 
+// BuildInput constructs the OPA input as a Go map and JSON bytes without disk I/O.
+// The JSON marshal/unmarshal round-trip ensures correct types for OPA (e.g. numbers
+// as float64, consistent key ordering).
+func (a *ApplicationSnapshotImage) BuildInput(_ context.Context) (map[string]any, []byte, error) {
+	log.Debugf("Building input for %d attestations", len(a.attestations))
+
+	var attestations []attestationData
+	for _, att := range a.attestations {
+		attestations = append(attestations, attestationData{
+			Statement:  att.Statement(),
+			Signatures: att.Signatures(),
+		})
+	}
+
+	input := Input{
+		Attestations: attestations,
+		Image: image{
+			Ref:        a.reference.String(),
+			Signatures: a.signatures,
+			Config:     a.configJSON,
+			Files:      a.files,
+			Source:     a.component.Source,
+		},
+		AppSnapshot: a.snapshot,
+	}
+
+	if a.parentRef != nil {
+		input.Image.Parent = image{
+			Ref:    a.parentRef.String(),
+			Config: a.parentConfigJSON,
+		}
+	}
+
+	inputJSON, err := json.Marshal(input)
+	if err != nil {
+		return nil, nil, fmt.Errorf("input to JSON: %w", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(inputJSON, &parsed); err != nil {
+		return nil, nil, fmt.Errorf("parse input JSON: %w", err)
+	}
+
+	return parsed, inputJSON, nil
+}
+
 // WriteInputFile writes the JSON from the attestations to input.json in a random temp dir
 func (a *ApplicationSnapshotImage) WriteInputFile(ctx context.Context) (string, []byte, error) {
 	log.Debugf("Attempting to write %d attestations to input file", len(a.attestations))

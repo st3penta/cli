@@ -90,14 +90,11 @@ func TestPrepareDataDirs(t *testing.T) {
 				require.NoError(t, afero.WriteFile(fs, fullPath, []byte("test"), 0644))
 			}
 
-			// Create evaluator instance
 			evaluator := conftestEvaluator{
 				dataDir: dataDir,
 				fs:      fs,
 			}
 
-			// Call prepareDataDirs with the base data directory as data source
-			// In real usage, dataSourceDirs would be the directories returned by GetPolicy
 			actualDirs, err := evaluator.prepareDataDirs(ctx, []string{dataDir})
 			require.NoError(t, err)
 
