@@ -756,7 +756,7 @@ func TestBasePolicyEvaluatorComputeSuccesses(t *testing.T) {
 			},
 		}
 
-		successes := b.computeSuccesses(result, rules, "", "", map[string]bool{}, nil)
+		successes := b.computeSuccesses(result, rules, "", "", map[string]bool{}, nil, time.Now())
 		assert.Len(t, successes, 1)
 		assert.Equal(t, "Pass", successes[0].Message)
 		assert.Equal(t, "test.ns.rule2", successes[0].Metadata[metadataCode])
@@ -776,7 +776,7 @@ func TestBasePolicyEvaluatorComputeSuccesses(t *testing.T) {
 			},
 		}
 
-		successes := b.computeSuccesses(result, rules, "", "", map[string]bool{}, nil)
+		successes := b.computeSuccesses(result, rules, "", "", map[string]bool{}, nil, time.Now())
 		assert.Empty(t, successes)
 	})
 
@@ -788,7 +788,7 @@ func TestBasePolicyEvaluatorComputeSuccesses(t *testing.T) {
 
 		result := Outcome{Namespace: "test.ns"}
 
-		successes := b.computeSuccesses(result, rules, "", "", map[string]bool{}, nil)
+		successes := b.computeSuccesses(result, rules, "", "", map[string]bool{}, nil, time.Now())
 		assert.Len(t, successes, 2)
 	})
 
@@ -812,7 +812,7 @@ func TestBasePolicyEvaluatorComputeSuccesses(t *testing.T) {
 		}
 		result := Outcome{Namespace: "test.ns"}
 
-		successes := b.computeSuccesses(result, extendedRules, "", "", map[string]bool{}, nil)
+		successes := b.computeSuccesses(result, extendedRules, "", "", map[string]bool{}, nil, time.Now())
 		require.Len(t, successes, 1)
 		assert.Equal(t, "Full Rule", successes[0].Metadata[metadataTitle])
 		assert.Equal(t, "A complete rule", successes[0].Metadata[metadataDescription])

@@ -318,7 +318,7 @@ func (b *basePolicyEvaluator) postProcessResults(ctx context.Context, runResults
 		result.Exceptions = exceptions
 		result.Skipped = skipped
 
-		result.Successes = b.computeSuccesses(result, b.rules, target.Target, target.ComponentName, missingIncludes, unifiedFilter)
+		result.Successes = b.computeSuccesses(result, b.rules, target.Target, target.ComponentName, missingIncludes, unifiedFilter, effectiveTime)
 
 		totalRules += len(result.Warnings) + len(result.Failures) + len(result.Successes)
 		results = append(results, result)
@@ -351,6 +351,7 @@ func (b *basePolicyEvaluator) computeSuccesses(
 	componentName string,
 	missingIncludes map[string]bool,
 	unifiedFilter PostEvaluationFilter,
+	effectiveTime time.Time,
 ) []Result {
 	seenRules := map[string]bool{}
 	for _, outcomes := range [][]Result{result.Failures, result.Warnings, result.Skipped, result.Exceptions} {
@@ -395,7 +396,7 @@ func (b *basePolicyEvaluator) computeSuccesses(
 
 		if unifiedFilter != nil {
 			filteredResults, _ := unifiedFilter.FilterResults(
-				[]Result{success}, rules, imageRef, componentName, missingIncludes, time.Now())
+				[]Result{success}, rules, imageRef, componentName, missingIncludes, effectiveTime)
 			if len(filteredResults) == 0 {
 				log.Debugf("Skipping result success: %#v", success)
 				continue
