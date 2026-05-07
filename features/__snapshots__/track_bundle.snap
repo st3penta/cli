@@ -1,5 +1,5 @@
 
-[Fresh tags:stdout - 1]
+[TestFeatures/Fresh tags:stdout - 1]
 /-/-/-/
 trusted_tasks:
   oci://${REGISTRY}/acceptance/bundle:tag:
@@ -9,30 +9,30 @@ trusted_tasks:
 
 ---
 
-[Fresh tags:stderr - 1]
+[TestFeatures/Fresh tags:stderr - 1]
 
 ---
 
-[Track git references, without git id:stdout - 1]
+[TestFeatures/Track git references, without git id:stdout - 1]
 
 ---
 
-[Track git references, without git id:stderr - 1]
+[TestFeatures/Track git references, without git id:stderr - 1]
 Error: expected "git+https://${GITHOST}/git/tasks.git//task.yaml" to contain the revision information following the `@`, e.g. git+https://github.com/org/repository//task/0.1/task.yaml@f0cacc1a, to fetch the latest revision from a remote URL provide the --freshen parameter
 
 ---
 
-[Pipeline definition is ignored on its own:stdout - 1]
+[TestFeatures/Pipeline definition is ignored on its own:stdout - 1]
 /-/-/-/
 {}
 
 ---
 
-[Pipeline definition is ignored on its own:stderr - 1]
+[TestFeatures/Pipeline definition is ignored on its own:stderr - 1]
 
 ---
 
-[Track tekton-task alias:stdout - 1]
+[TestFeatures/Track tekton-task alias:stdout - 1]
 /-/-/-/
 trusted_tasks:
   git+https://github.com/konflux-ci/build-definitions.git//task/buildah/0.1/buildah.yaml:
@@ -42,11 +42,11 @@ trusted_tasks:
 
 ---
 
-[Track tekton-task alias:stderr - 1]
+[TestFeatures/Track tekton-task alias:stderr - 1]
 
 ---
 
-[Track git references, with freshen:stdout - 1]
+[TestFeatures/Track git references, with freshen:stdout - 1]
 /-/-/-/
 trusted_tasks:
   git+https://${GITHOST}/git/tasks.git//task.yaml:
@@ -54,11 +54,11 @@ trusted_tasks:
 
 ---
 
-[Track git references, with freshen:stderr - 1]
+[TestFeatures/Track git references, with freshen:stderr - 1]
 
 ---
 
-[Track git references, with prune:stdout - 1]
+[TestFeatures/Track git references, with prune:stdout - 1]
 /-/-/-/
 trusted_tasks:
   git+https://forge.io/organization/repository.git//task/0.1/task.yaml:
@@ -66,11 +66,11 @@ trusted_tasks:
 
 ---
 
-[Track git references, with prune:stderr - 1]
+[TestFeatures/Track git references, with prune:stderr - 1]
 
 ---
 
-[Track git references, append to existing:stdout - 1]
+[TestFeatures/Track git references, append to existing:stdout - 1]
 /-/-/-/
 trusted_tasks:
   git+https://forge.io/organization/repository.git//task/0.1/task.yaml:
@@ -80,11 +80,11 @@ trusted_tasks:
 
 ---
 
-[Track git references, append to existing:stderr - 1]
+[TestFeatures/Track git references, append to existing:stderr - 1]
 
 ---
 
-[Pipeline definition is ignored from mixed bundle:stdout - 1]
+[TestFeatures/Pipeline definition is ignored from mixed bundle:stdout - 1]
 /-/-/-/
 trusted_tasks:
   oci://${REGISTRY}/acceptance/bundle:tag:
@@ -92,11 +92,11 @@ trusted_tasks:
 
 ---
 
-[Pipeline definition is ignored from mixed bundle:stderr - 1]
+[TestFeatures/Pipeline definition is ignored from mixed bundle:stderr - 1]
 
 ---
 
-[Track git references:stdout - 1]
+[TestFeatures/Track git references:stdout - 1]
 /-/-/-/
 trusted_tasks:
   git+https://github.com/konflux-ci/build-definitions.git//task/buildah/0.1/buildah.yaml:
@@ -104,11 +104,11 @@ trusted_tasks:
 
 ---
 
-[Track git references:stderr - 1]
+[TestFeatures/Track git references:stderr - 1]
 
 ---
 
-[:stdout - 1]
+[TestFeatures/:stdout - 1]
 /-/-/-/
 trusted_tasks:
   oci://${REGISTRY}/acceptance/bundle:tag:
@@ -116,6 +116,6 @@ trusted_tasks:
 
 ---
 
-[:stderr - 1]
+[TestFeatures/:stderr - 1]
 
 ---

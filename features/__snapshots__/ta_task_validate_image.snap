@@ -1,5 +1,5 @@
 
-[Golden container image with trusted artifacts:report-json - 1]
+[TestFeatures/Golden container image with trusted artifacts:report-json - 1]
 {
   "success": true,
   "components": [
@@ -131,14 +131,14 @@
 }
 ---
 
-[Golden container image with trusted artifacts:results - 1]
+[TestFeatures/Golden container image with trusted artifacts:results - 1]
 {
   "TEST_OUTPUT": "{\"timestamp\":\"${TIMESTAMP}\",\"namespace\":\"\",\"successes\":5,\"failures\":0,\"warnings\":0,\"result\":\"SUCCESS\"}\n",
   "VSA_GENERATED": "false"
 }
 ---
 
-[Golden container image with trusted artifacts:show-config - 1]
+[TestFeatures/Golden container image with trusted artifacts:show-config - 1]
 {
   "policy": {
     "sources": [

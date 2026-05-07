@@ -1,5 +1,5 @@
 
-[appstudio error nofail:stdout - 1]
+[TestFeatures/appstudio error nofail:stdout - 1]
 {
   "timestamp": "${TIMESTAMP}",
   "namespace": "",
@@ -11,12 +11,12 @@
 }
 ---
 
-[appstudio error nofail:stderr - 1]
+[TestFeatures/appstudio error nofail:stderr - 1]
 Error: running test: load: loading policies: load: 1 error occurred during loading: stat file/not/exist.rego: no such file or directory
 
 ---
 
-[appstudio warning:stdout - 1]
+[TestFeatures/appstudio warning:stdout - 1]
 {
   "timestamp": "${TIMESTAMP}",
   "namespace": "main",
@@ -28,11 +28,11 @@ Error: running test: load: loading policies: load: 1 error occurred during loadi
 }
 ---
 
-[appstudio warning:stderr - 1]
+[TestFeatures/appstudio warning:stderr - 1]
 
 ---
 
-[a warning:stdout - 1]
+[TestFeatures/a warning:stdout - 1]
 [
   {
     "filename": "acceptance/examples/empty_input.json",
@@ -50,11 +50,11 @@ Error: running test: load: loading policies: load: 1 error occurred during loadi
 ]
 ---
 
-[a warning:stderr - 1]
+[TestFeatures/a warning:stderr - 1]
 
 ---
 
-[a different appstudio error:stdout - 1]
+[TestFeatures/a different appstudio error:stdout - 1]
 {
   "timestamp": "${TIMESTAMP}",
   "namespace": "",
@@ -66,12 +66,12 @@ Error: running test: load: loading policies: load: 1 error occurred during loadi
 }
 ---
 
-[a different appstudio error:stderr - 1]
+[TestFeatures/a different appstudio error:stderr - 1]
 Error: running test: parse configurations: parser unmarshal: unmarshal json: invalid character '\n' in string literal, path: acceptance/examples/broken_input.json
 
 ---
 
-[appstudio success:stdout - 1]
+[TestFeatures/appstudio success:stdout - 1]
 {
   "timestamp": "${TIMESTAMP}",
   "namespace": "main",
@@ -83,7 +83,7 @@ Error: running test: parse configurations: parser unmarshal: unmarshal json: inv
 }
 ---
 
-[a deny with no-fail:stdout - 1]
+[TestFeatures/a deny with no-fail:stdout - 1]
 [
   {
     "filename": "acceptance/examples/empty_input.json",
@@ -101,15 +101,15 @@ Error: running test: parse configurations: parser unmarshal: unmarshal json: inv
 ]
 ---
 
-[appstudio success:stderr - 1]
+[TestFeatures/appstudio success:stderr - 1]
 
 ---
 
-[a deny with no-fail:stderr - 1]
+[TestFeatures/a deny with no-fail:stderr - 1]
 
 ---
 
-[appstudio deny:stdout - 1]
+[TestFeatures/appstudio deny:stdout - 1]
 {
   "timestamp": "${TIMESTAMP}",
   "namespace": "main",
@@ -121,7 +121,7 @@ Error: running test: parse configurations: parser unmarshal: unmarshal json: inv
 }
 ---
 
-[a deny:stdout - 1]
+[TestFeatures/a deny:stdout - 1]
 [
   {
     "filename": "acceptance/examples/empty_input.json",
@@ -139,15 +139,15 @@ Error: running test: parse configurations: parser unmarshal: unmarshal json: inv
 ]
 ---
 
-[appstudio deny:stderr - 1]
+[TestFeatures/appstudio deny:stderr - 1]
 
 ---
 
-[a deny:stderr - 1]
+[TestFeatures/a deny:stderr - 1]
 
 ---
 
-[a warning with fail-on-warn:stdout - 1]
+[TestFeatures/a warning with fail-on-warn:stdout - 1]
 [
   {
     "filename": "acceptance/examples/empty_input.json",
@@ -165,11 +165,11 @@ Error: running test: parse configurations: parser unmarshal: unmarshal json: inv
 ]
 ---
 
-[a warning with fail-on-warn:stderr - 1]
+[TestFeatures/a warning with fail-on-warn:stderr - 1]
 
 ---
 
-[appstudio skipped:stdout - 1]
+[TestFeatures/appstudio skipped:stdout - 1]
 {
   "timestamp": "${TIMESTAMP}",
   "namespace": "main",
@@ -181,22 +181,22 @@ Error: running test: parse configurations: parser unmarshal: unmarshal json: inv
 }
 ---
 
-[appstudio skipped:stderr - 1]
+[TestFeatures/appstudio skipped:stderr - 1]
 
 ---
 
-[plain text deny:stdout - 1]
+[TestFeatures/plain text deny:stdout - 1]
 FAIL - acceptance/examples/empty_input.json - main - Failure due to overripeness
 
 1 test, 0 passed, 0 warnings, 1 failure, 0 exceptions
 
 ---
 
-[plain text deny:stderr - 1]
+[TestFeatures/plain text deny:stderr - 1]
 
 ---
 
-[appstudio error:stdout - 1]
+[TestFeatures/appstudio error:stdout - 1]
 {
   "timestamp": "${TIMESTAMP}",
   "namespace": "",
@@ -208,21 +208,21 @@ FAIL - acceptance/examples/empty_input.json - main - Failure due to overripeness
 }
 ---
 
-[normal error:stdout - 1]
+[TestFeatures/normal error:stdout - 1]
 
 ---
 
-[appstudio error:stderr - 1]
+[TestFeatures/appstudio error:stderr - 1]
 Error: running test: load: loading policies: load: 1 error occurred during loading: stat file/not/exist.rego: no such file or directory
 
 ---
 
-[normal error:stderr - 1]
+[TestFeatures/normal error:stderr - 1]
 Error: running test: load: loading policies: load: 1 error occurred during loading: stat file/not/exist.rego: no such file or directory
 
 ---
 
-[success:stdout - 1]
+[TestFeatures/success:stdout - 1]
 [
   {
     "filename": "acceptance/examples/empty_input.json",
@@ -232,6 +232,6 @@ Error: running test: load: loading policies: load: 1 error occurred during loadi
 ]
 ---
 
-[success:stderr - 1]
+[TestFeatures/success:stderr - 1]
 
 ---

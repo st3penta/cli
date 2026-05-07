@@ -1,4 +1,5 @@
-[happy day with git config and yaml:stdout - 1]
+
+[TestFeatures/happy day with git config and yaml:stdout - 1]
 {
   "success": true,
   "components": [
@@ -71,20 +72,21 @@
 }
 ---
 
-[happy day with git config and yaml:stderr - 1]
+[TestFeatures/happy day with git config and yaml:stderr - 1]
 
 ---
 
-[JUnit and AppStudio output format:stdout - 1]
+[TestFeatures/JUnit and AppStudio output format:stdout - 1]
 <testsuites tests="7" failures="3"><testsuite name="Unnamed (${REGISTRY}/acceptance/image@sha256:${REGISTRY_acceptance/image:latest_DIGEST})" tests="7" failures="3" errors="0" id="0" time="" timestamp="${TIMESTAMP}"><properties><property name="image" value="${REGISTRY}/acceptance/image@sha256:${REGISTRY_acceptance/image:latest_DIGEST}"></property><property name="key" value="${known_PUBLIC_KEY_XML}"></property><property name="success" value="false"></property><property name="keyId" value=""></property><property name="signature" value="${IMAGE_SIGNATURE_acceptance/image}"></property></properties><testcase name="builtin.attestation.signature_check: Pass" classname="builtin.attestation.signature_check: Pass"></testcase><testcase name="builtin.attestation.syntax_check: Pass" classname="builtin.attestation.syntax_check: Pass"></testcase><testcase name="builtin.image.signature_check: Pass" classname="builtin.image.signature_check: Pass"></testcase><testcase name="main.acceptor: Pass" classname="main.acceptor: Pass"></testcase><testcase name="main.reject_with_term: Fails always (term1) [term=term1]" classname="main.reject_with_term: Fails always (term1) [term=term1]"><failure message="Fails always (term1)"><![CDATA[Fails always (term1)]]></failure></testcase><testcase name="main.reject_with_term: Fails always (term2) [term=[term2 term3]]" classname="main.reject_with_term: Fails always (term2) [term=[term2 term3]]"><failure message="Fails always (term2)"><![CDATA[Fails always (term2)]]></failure></testcase><testcase name="main.rejector: Fails always" classname="main.rejector: Fails always"><failure message="Fails always"><![CDATA[Fails always]]></failure></testcase></testsuite></testsuites>
 
 ---
 
-[JUnit and AppStudio output format:stderr - 1]
+[TestFeatures/JUnit and AppStudio output format:stderr - 1]
 Error: success criteria not met
 
 ---
-[JUnit and AppStudio output format:stdout - 2]
+
+[TestFeatures/JUnit and AppStudio output format:stdout - 2]
 {
   "timestamp": "${TIMESTAMP}",
   "namespace": "",
@@ -94,11 +96,13 @@ Error: success criteria not met
   "result": "FAILURE"
 }
 ---
-[JUnit and AppStudio output format:stderr - 2]
+
+[TestFeatures/JUnit and AppStudio output format:stderr - 2]
 Error: success criteria not met
 
 ---
-[policy and data sources:stdout - 1]
+
+[TestFeatures/policy and data sources:stdout - 1]
 {
   "success": false,
   "components": [
@@ -184,12 +188,12 @@ Error: success criteria not met
 }
 ---
 
-[policy and data sources:stderr - 1]
+[TestFeatures/policy and data sources:stderr - 1]
 Error: success criteria not met
 
 ---
 
-[inline policy:stdout - 1]
+[TestFeatures/inline policy:stdout - 1]
 {
   "success": true,
   "components": [
@@ -262,11 +266,11 @@ Error: success criteria not met
 }
 ---
 
-[inline policy:stderr - 1]
+[TestFeatures/inline policy:stderr - 1]
 
 ---
 
-[happy day with git config and json:stdout - 1]
+[TestFeatures/happy day with git config and json:stdout - 1]
 {
   "success": true,
   "components": [
@@ -339,11 +343,11 @@ Error: success criteria not met
 }
 ---
 
-[happy day with git config and json:stderr - 1]
+[TestFeatures/happy day with git config and json:stderr - 1]
 
 ---
 
-[future failure is converted to a warning:stdout - 1]
+[TestFeatures/future failure is converted to a warning:stdout - 1]
 {
   "success": true,
   "components": [
@@ -418,11 +422,11 @@ Error: success criteria not met
 }
 ---
 
-[future failure is converted to a warning:stderr - 1]
+[TestFeatures/future failure is converted to a warning:stderr - 1]
 
 ---
 
-[Custom rule data:stdout - 1]
+[TestFeatures/Custom rule data:stdout - 1]
 {
   "success": true,
   "components": [
@@ -524,11 +528,11 @@ Error: success criteria not met
 }
 ---
 
-[Custom rule data:stderr - 1]
+[TestFeatures/Custom rule data:stderr - 1]
 
 ---
 
-[multiple policy sources with multiple source groups:stdout - 1]
+[TestFeatures/multiple policy sources with multiple source groups:stdout - 1]
 {
   "success": false,
   "components": [
@@ -641,12 +645,12 @@ Error: success criteria not met
 }
 ---
 
-[multiple policy sources with multiple source groups:stderr - 1]
+[TestFeatures/multiple policy sources with multiple source groups:stderr - 1]
 Error: success criteria not met
 
 ---
 
-[mismatched image digest in signature:stdout - 1]
+[TestFeatures/mismatched image digest in signature:stdout - 1]
 {
   "success": false,
   "components": [
@@ -715,12 +719,12 @@ Error: success criteria not met
 }
 ---
 
-[mismatched image digest in signature:stderr - 1]
+[TestFeatures/mismatched image digest in signature:stderr - 1]
 Error: success criteria not met
 
 ---
 
-[policy rule filtering:stdout - 1]
+[TestFeatures/policy rule filtering:stdout - 1]
 {
   "success": true,
   "components": [
@@ -809,11 +813,11 @@ Error: success criteria not met
 }
 ---
 
-[policy rule filtering:stderr - 1]
+[TestFeatures/policy rule filtering:stderr - 1]
 
 ---
 
-[policy rule filtering on imageRef:stdout - 1]
+[TestFeatures/policy rule filtering on imageRef:stdout - 1]
 {
   "success": true,
   "components": [
@@ -911,11 +915,11 @@ Error: success criteria not met
 }
 ---
 
-[policy rule filtering on imageRef:stderr - 1]
+[TestFeatures/policy rule filtering on imageRef:stderr - 1]
 
 ---
 
-[policy rule filtering on imageUrl:stdout - 1]
+[TestFeatures/policy rule filtering on imageUrl:stdout - 1]
 {
   "success": true,
   "components": [
@@ -1013,11 +1017,11 @@ Error: success criteria not met
 }
 ---
 
-[policy rule filtering on imageUrl:stderr - 1]
+[TestFeatures/policy rule filtering on imageUrl:stderr - 1]
 
 ---
 
-[application snapshot reference:stdout - 1]
+[TestFeatures/application snapshot reference:stdout - 1]
 {
   "success": true,
   "snapshot": "acceptance/happy",
@@ -1091,11 +1095,11 @@ Error: success criteria not met
 }
 ---
 
-[application snapshot reference:stderr - 1]
+[TestFeatures/application snapshot reference:stderr - 1]
 
 ---
 
-[multiple policy sources with one source group:stdout - 1]
+[TestFeatures/multiple policy sources with one source group:stdout - 1]
 {
   "success": false,
   "components": [
@@ -1200,12 +1204,12 @@ Error: success criteria not met
 }
 ---
 
-[multiple policy sources with one source group:stderr - 1]
+[TestFeatures/multiple policy sources with one source group:stderr - 1]
 Error: success criteria not met
 
 ---
 
-[unexpected image signature cert:stdout - 1]
+[TestFeatures/unexpected image signature cert:stdout - 1]
 {
   "success": false,
   "components": [
@@ -1245,12 +1249,12 @@ Error: success criteria not met
 }
 ---
 
-[unexpected image signature cert:stderr - 1]
+[TestFeatures/unexpected image signature cert:stderr - 1]
 Error: success criteria not met
 
 ---
 
-[invalid image signature:stdout - 1]
+[TestFeatures/invalid image signature:stdout - 1]
 {
   "success": false,
   "components": [
@@ -1292,12 +1296,12 @@ Error: success criteria not met
 }
 ---
 
-[invalid image signature:stderr - 1]
+[TestFeatures/invalid image signature:stderr - 1]
 Error: success criteria not met
 
 ---
 
-[policy rule filtering for successes:stdout - 1]
+[TestFeatures/policy rule filtering for successes:stdout - 1]
 {
   "success": true,
   "components": [
@@ -1380,20 +1384,20 @@ Error: success criteria not met
 }
 ---
 
-[policy rule filtering for successes:stderr - 1]
+[TestFeatures/policy rule filtering for successes:stderr - 1]
 
 ---
 
-[happy day with missing git config:stdout - 1]
+[TestFeatures/happy day with missing git config:stdout - 1]
 
 ---
 
-[happy day with missing git config:stderr - 1]
+[TestFeatures/happy day with missing git config:stderr - 1]
 Error: no suitable config file found at git::${GITHOST}/git/happy-config.git?ref=${LATEST_COMMIT}
 
 ---
 
-[using attestation time as effective time:stdout - 1]
+[TestFeatures/using attestation time as effective time:stdout - 1]
 {
   "success": false,
   "components": [
@@ -1468,12 +1472,12 @@ Error: no suitable config file found at git::${GITHOST}/git/happy-config.git?ref
 }
 ---
 
-[using attestation time as effective time:stderr - 1]
+[TestFeatures/using attestation time as effective time:stderr - 1]
 Error: success criteria not met
 
 ---
 
-[inline application snapshot:stdout - 1]
+[TestFeatures/inline application snapshot:stdout - 1]
 {
   "success": true,
   "components": [
@@ -1546,11 +1550,11 @@ Error: success criteria not met
 }
 ---
 
-[inline application snapshot:stderr - 1]
+[TestFeatures/inline application snapshot:stderr - 1]
 
 ---
 
-[happy day with keyless:stdout - 1]
+[TestFeatures/happy day with keyless:stdout - 1]
 {
   "success": true,
   "components": [
@@ -1677,11 +1681,11 @@ Error: success criteria not met
 }
 ---
 
-[happy day with keyless:stderr - 1]
+[TestFeatures/happy day with keyless:stderr - 1]
 
 ---
 
-[mismatched image digest in attestation:stdout - 1]
+[TestFeatures/mismatched image digest in attestation:stdout - 1]
 {
   "success": false,
   "components": [
@@ -1725,12 +1729,12 @@ Error: success criteria not met
 }
 ---
 
-[mismatched image digest in attestation:stderr - 1]
+[TestFeatures/mismatched image digest in attestation:stderr - 1]
 Error: success criteria not met
 
 ---
 
-[artifact relocation:stdout - 1]
+[TestFeatures/artifact relocation:stdout - 1]
 {
   "success": true,
   "components": [
@@ -1803,10 +1807,11 @@ Error: success criteria not met
 }
 ---
 
-[artifact relocation:stderr - 1]
+[TestFeatures/artifact relocation:stderr - 1]
 
 ---
-[detailed failures output:stdout - 1]
+
+[TestFeatures/detailed failures output:stdout - 1]
 {
   "success": false,
   "components": [
@@ -1933,11 +1938,12 @@ Error: success criteria not met
 }
 ---
 
-[detailed failures output:stderr - 1]
+[TestFeatures/detailed failures output:stderr - 1]
 Error: success criteria not met
 
 ---
-[detailed failures output:${TMPDIR}/output.txt - 1]
+
+[TestFeatures/detailed failures output:${TMPDIR}/output.txt - 1]
 Success: false
 Result: FAILURE
 Violations: 3, Warnings: 0, Successes: 4
@@ -1994,7 +2000,8 @@ Results:
 For more information about policy issues, see the policy documentation: https://conforma.dev/docs/policy/
 
 ---
-[future failure is a deny when using effective-date flag:stdout - 1]
+
+[TestFeatures/future failure is a deny when using effective-date flag:stdout - 1]
 {
   "success": false,
   "components": [
@@ -2069,12 +2076,12 @@ For more information about policy issues, see the policy documentation: https://
 }
 ---
 
-[future failure is a deny when using effective-date flag:stderr - 1]
+[TestFeatures/future failure is a deny when using effective-date flag:stderr - 1]
 Error: success criteria not met
 
 ---
 
-[Using OCI bundles:stdout - 1]
+[TestFeatures/Using OCI bundles:stdout - 1]
 {
   "success": true,
   "components": [
@@ -2148,15 +2155,15 @@ Error: success criteria not met
 }
 ---
 
-[Using OCI bundles:stderr - 1]
+[TestFeatures/Using OCI bundles:stderr - 1]
 
 ---
 
-[Dropping rego capabilities:stdout - 1]
+[TestFeatures/Dropping rego capabilities:stdout - 1]
 
 ---
 
-[Dropping rego capabilities:stderr - 1]
+[TestFeatures/Dropping rego capabilities:stderr - 1]
 Error: error validating image ${REGISTRY}/acceptance/ec-happy-day of component Unnamed: load: loading policies: get compiler: 3 errors occurred:
 ${TEMP}/ec-work-${RANDOM}/policy/${RANDOM}/main.rego:14: rego_type_error: undefined function opa.runtime
 ${TEMP}/ec-work-${RANDOM}/policy/${RANDOM}/main.rego:22: rego_type_error: undefined function http.send
@@ -2164,7 +2171,7 @@ ${TEMP}/ec-work-${RANDOM}/policy/${RANDOM}/main.rego:33: rego_type_error: undefi
 
 ---
 
-[happy day:stdout - 1]
+[TestFeatures/happy day:stdout - 1]
 {
   "success": true,
   "components": [
@@ -2237,11 +2244,11 @@ ${TEMP}/ec-work-${RANDOM}/policy/${RANDOM}/main.rego:33: rego_type_error: undefi
 }
 ---
 
-[happy day:stderr - 1]
+[TestFeatures/happy day:stderr - 1]
 
 ---
 
-[happy day with extra rule data:stdout - 1]
+[TestFeatures/happy day with extra rule data:stdout - 1]
 {
   "success": true,
   "components": [
@@ -2317,21 +2324,21 @@ ${TEMP}/ec-work-${RANDOM}/policy/${RANDOM}/main.rego:33: rego_type_error: undefi
 }
 ---
 
-[happy day with extra rule data:stderr - 1]
+[TestFeatures/happy day with extra rule data:stderr - 1]
 
 ---
 
-[happy day with invalid extra rule data:stdout - 1]
+[TestFeatures/happy day with invalid extra rule data:stdout - 1]
 
 ---
 
-[happy day with invalid extra rule data:stderr - 1]
+[TestFeatures/happy day with invalid extra rule data:stderr - 1]
 Error: incorrect syntax for --extra-rule-data 0
 incorrect syntax for --extra-rule-data 1
 
 ---
 
-[rule dependencies:stdout - 1]
+[TestFeatures/rule dependencies:stdout - 1]
 {
   "success": false,
   "components": [
@@ -2414,12 +2421,12 @@ incorrect syntax for --extra-rule-data 1
 }
 ---
 
-[rule dependencies:stderr - 1]
+[TestFeatures/rule dependencies:stderr - 1]
 Error: success criteria not met
 
 ---
 
-[successes are not duplicated:stdout - 1]
+[TestFeatures/successes are not duplicated:stdout - 1]
 {
   "success": false,
   "components": [
@@ -2506,43 +2513,11 @@ Error: success criteria not met
 }
 ---
 
-[successes are not duplicated:stderr - 1]
+[TestFeatures/successes are not duplicated:stderr - 1]
 
 ---
 
-[Custom rule data:${TMPDIR}/custom-rule-data.yaml - 1]
-- - config:
-      default_sigstore_opts:
-        certificate_identity: ""
-        certificate_identity_regexp: ""
-        certificate_oidc_issuer: ""
-        certificate_oidc_issuer_regexp: ""
-        ignore_rekor: false
-        public_key: |
-${__________known_PUBLIC_KEY}
-        rekor_url: ${REKOR}
-      policy:
-        when_ns: 1401494400000000000
-    rule_data__configuration__:
-      custom: data1
-  - config:
-      default_sigstore_opts:
-        certificate_identity: ""
-        certificate_identity_regexp: ""
-        certificate_oidc_issuer: ""
-        certificate_oidc_issuer_regexp: ""
-        ignore_rekor: false
-        public_key: |
-${__________known_PUBLIC_KEY}
-        rekor_url: ${REKOR}
-      policy:
-        when_ns: 1401494400000000000
-    rule_data__configuration__:
-      other: data2
-
----
-
-[image config:stdout - 1]
+[TestFeatures/image config:stdout - 1]
 {
   "success": true,
   "components": [
@@ -2639,11 +2614,11 @@ ${__________known_PUBLIC_KEY}
 }
 ---
 
-[image config:stderr - 1]
+[TestFeatures/image config:stderr - 1]
 
 ---
 
-[Output attestations:stdout - 1]
+[TestFeatures/Output attestations:stdout - 1]
 {
   "success": true,
   "components": [
@@ -2690,11 +2665,11 @@ ${__________known_PUBLIC_KEY}
 }
 ---
 
-[Output attestations:stderr - 1]
+[TestFeatures/Output attestations:stderr - 1]
 
 ---
 
-[Output attestations:${TMPDIR}/attestation.jsonl - 1]
+[TestFeatures/Output attestations:${TMPDIR}/attestation.jsonl - 1]
 {
   "_type": "https://in-toto.io/Statement/v0.1",
   "predicateType": "https://slsa.dev/provenance/v0.2",
@@ -2718,7 +2693,7 @@ ${__________known_PUBLIC_KEY}
 }
 ---
 
-[policy input output:stdout - 1]
+[TestFeatures/policy input output:stdout - 1]
 {
   "attestations": [
     {
@@ -2800,11 +2775,11 @@ ${__________known_PUBLIC_KEY}
 }
 ---
 
-[policy input output:stderr - 1]
+[TestFeatures/policy input output:stderr - 1]
 
 ---
 
-[ignore rekor:stdout - 1]
+[TestFeatures/ignore rekor:stdout - 1]
 {
   "success": true,
   "components": [
@@ -2850,62 +2825,15 @@ ${__________known_PUBLIC_KEY}
 }
 ---
 
-[ignore rekor:stderr - 1]
+[TestFeatures/ignore rekor:stderr - 1]
 
 ---
 
-[rekor entries required:stdout - 1]
-{
-  "success": false,
-  "components": [
-    {
-      "name": "Unnamed",
-      "containerImage": "${REGISTRY}/acceptance/rekor-by-default@sha256:${REGISTRY_acceptance/rekor-by-default:latest_DIGEST}",
-      "source": {},
-      "violations": [
-        {
-          "msg": "No image attestations found matching the given public key. Verify the correct public key was provided, and one or more attestations were created. Error: no matching attestations: searching log query: \u0026{0 } (*models.Error) is not supported by the TextConsumer, can be resolved by supporting TextUnmarshaler interface",
-          "metadata": {
-            "code": "builtin.attestation.signature_check"
-          }
-        },
-        {
-          "msg": "No image signatures found matching the given public key. Verify the correct public key was provided, and a signature was created. Error: no matching signatures: searching log query: \u0026{0 } (*models.Error) is not supported by the TextConsumer, can be resolved by supporting TextUnmarshaler interface",
-          "metadata": {
-            "code": "builtin.image.signature_check"
-          }
-        }
-      ],
-      "success": false
-    }
-  ],
-  "key": "${known_PUBLIC_KEY_JSON}",
-  "policy": {
-    "sources": [
-      {
-        "policy": [
-          "git::${GITHOST}/git/rekor-by-default.git?ref=${LATEST_COMMIT}"
-        ]
-      }
-    ],
-    "rekorUrl": "${REKOR}",
-    "publicKey": "${known_PUBLIC_KEY}"
-  },
-  "ec-version": "${EC_VERSION}",
-  "effective-time": "${TIMESTAMP}"
-}
----
-
-[rekor entries required:stderr - 1]
-Error: success criteria not met
+[TestFeatures/OLM manifests:stderr - 1]
 
 ---
 
-[OLM manifests:stderr - 1]
-
----
-
-[OLM manifests:${TMPDIR}/input.json - 1]
+[TestFeatures/OLM manifests:${TMPDIR}/input.json - 1]
 {
   "attestations": [
     {
@@ -3174,7 +3102,7 @@ Error: success criteria not met
 }
 ---
 
-[OLM manifests:stdout - 1]
+[TestFeatures/OLM manifests:stdout - 1]
 {
   "success": true,
   "components": [
@@ -3252,16 +3180,16 @@ Error: success criteria not met
 }
 ---
 
-[Unsupported policies:stdout - 1]
+[TestFeatures/Unsupported policies:stdout - 1]
 
 ---
 
-[Unsupported policies:stderr - 1]
+[TestFeatures/Unsupported policies:stderr - 1]
 Error: error validating image ${REGISTRY}/acceptance/image of component Unnamed: the rule "deny = true if { true }" returns an unsupported value, at main.rego:5
 
 ---
 
-[fetch OCI blob:stdout - 1]
+[TestFeatures/fetch OCI blob:stdout - 1]
 {
   "success": true,
   "components": [
@@ -3340,11 +3268,11 @@ Error: error validating image ${REGISTRY}/acceptance/image of component Unnamed:
 }
 ---
 
-[fetch OCI blob:stderr - 1]
+[TestFeatures/fetch OCI blob:stderr - 1]
 
 ---
 
-[policy rule filtering per source:stdout - 1]
+[TestFeatures/policy rule filtering per source:stdout - 1]
 {
   "success": true,
   "components": [
@@ -3427,11 +3355,11 @@ Error: error validating image ${REGISTRY}/acceptance/image of component Unnamed:
 }
 ---
 
-[policy rule filtering per source:stderr - 1]
+[TestFeatures/policy rule filtering per source:stderr - 1]
 
 ---
 
-[PURL functions:stdout - 1]
+[TestFeatures/PURL functions:stdout - 1]
 {
   "success": false,
   "components": [
@@ -3524,13 +3452,13 @@ Error: error validating image ${REGISTRY}/acceptance/image of component Unnamed:
 }
 ---
 
-[PURL functions:stderr - 1]
+[TestFeatures/PURL functions:stderr - 1]
 time="${TIMESTAMP}" level=error msg="failed to parse PURL" error="purl scheme is not \"pkg\": \"\"" function=ec.purl.parse purl=this-is-not-a-valid-purl
 Error: success criteria not met
 
 ---
 
-[fetch OCI image manifest:stdout - 1]
+[TestFeatures/fetch OCI image manifest:stdout - 1]
 {
   "success": true,
   "components": [
@@ -3603,11 +3531,11 @@ Error: success criteria not met
 }
 ---
 
-[fetch OCI image manifest:stderr - 1]
+[TestFeatures/fetch OCI image manifest:stderr - 1]
 
 ---
 
-[sigstore functions:stdout - 1]
+[TestFeatures/sigstore functions:stdout - 1]
 {
   "success": true,
   "components": [
@@ -3680,1163 +3608,11 @@ Error: success criteria not met
 }
 ---
 
-[sigstore functions:stderr - 1]
+[TestFeatures/sigstore functions:stderr - 1]
 
 ---
 
-[many components and sources:stdout - 1]
-{
-  "success": true,
-  "snapshot": "acceptance/multitude",
-  "components": [
-    {
-      "name": "component9",
-      "containerImage": "${REGISTRY}/multitude/image-9@sha256:${REGISTRY_multitude/image-9:latest_DIGEST}",
-      "source": {},
-      "successes": [
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.syntax_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.image.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        }
-      ],
-      "success": true,
-      "signatures": [
-        {
-          "keyid": "",
-          "sig": "${IMAGE_SIGNATURE_multitude/image-9}"
-        }
-      ],
-      "attestations": [
-        {
-          "type": "https://in-toto.io/Statement/v0.1",
-          "predicateType": "https://slsa.dev/provenance/v0.2",
-          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
-          "signatures": [
-            {
-              "keyid": "",
-              "sig": "${ATTESTATION_SIGNATURE_multitude/image-9}"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "component8",
-      "containerImage": "${REGISTRY}/multitude/image-8@sha256:${REGISTRY_multitude/image-8:latest_DIGEST}",
-      "source": {},
-      "successes": [
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.syntax_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.image.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        }
-      ],
-      "success": true,
-      "signatures": [
-        {
-          "keyid": "",
-          "sig": "${IMAGE_SIGNATURE_multitude/image-8}"
-        }
-      ],
-      "attestations": [
-        {
-          "type": "https://in-toto.io/Statement/v0.1",
-          "predicateType": "https://slsa.dev/provenance/v0.2",
-          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
-          "signatures": [
-            {
-              "keyid": "",
-              "sig": "${ATTESTATION_SIGNATURE_multitude/image-8}"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "component7",
-      "containerImage": "${REGISTRY}/multitude/image-7@sha256:${REGISTRY_multitude/image-7:latest_DIGEST}",
-      "source": {},
-      "successes": [
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.syntax_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.image.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        }
-      ],
-      "success": true,
-      "signatures": [
-        {
-          "keyid": "",
-          "sig": "${IMAGE_SIGNATURE_multitude/image-7}"
-        }
-      ],
-      "attestations": [
-        {
-          "type": "https://in-toto.io/Statement/v0.1",
-          "predicateType": "https://slsa.dev/provenance/v0.2",
-          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
-          "signatures": [
-            {
-              "keyid": "",
-              "sig": "${ATTESTATION_SIGNATURE_multitude/image-7}"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "component6",
-      "containerImage": "${REGISTRY}/multitude/image-6@sha256:${REGISTRY_multitude/image-6:latest_DIGEST}",
-      "source": {},
-      "successes": [
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.syntax_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.image.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        }
-      ],
-      "success": true,
-      "signatures": [
-        {
-          "keyid": "",
-          "sig": "${IMAGE_SIGNATURE_multitude/image-6}"
-        }
-      ],
-      "attestations": [
-        {
-          "type": "https://in-toto.io/Statement/v0.1",
-          "predicateType": "https://slsa.dev/provenance/v0.2",
-          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
-          "signatures": [
-            {
-              "keyid": "",
-              "sig": "${ATTESTATION_SIGNATURE_multitude/image-6}"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "component5",
-      "containerImage": "${REGISTRY}/multitude/image-5@sha256:${REGISTRY_multitude/image-5:latest_DIGEST}",
-      "source": {},
-      "successes": [
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.syntax_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.image.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        }
-      ],
-      "success": true,
-      "signatures": [
-        {
-          "keyid": "",
-          "sig": "${IMAGE_SIGNATURE_multitude/image-5}"
-        }
-      ],
-      "attestations": [
-        {
-          "type": "https://in-toto.io/Statement/v0.1",
-          "predicateType": "https://slsa.dev/provenance/v0.2",
-          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
-          "signatures": [
-            {
-              "keyid": "",
-              "sig": "${ATTESTATION_SIGNATURE_multitude/image-5}"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "component4",
-      "containerImage": "${REGISTRY}/multitude/image-4@sha256:${REGISTRY_multitude/image-4:latest_DIGEST}",
-      "source": {},
-      "successes": [
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.syntax_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.image.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        }
-      ],
-      "success": true,
-      "signatures": [
-        {
-          "keyid": "",
-          "sig": "${IMAGE_SIGNATURE_multitude/image-4}"
-        }
-      ],
-      "attestations": [
-        {
-          "type": "https://in-toto.io/Statement/v0.1",
-          "predicateType": "https://slsa.dev/provenance/v0.2",
-          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
-          "signatures": [
-            {
-              "keyid": "",
-              "sig": "${ATTESTATION_SIGNATURE_multitude/image-4}"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "component3",
-      "containerImage": "${REGISTRY}/multitude/image-3@sha256:${REGISTRY_multitude/image-3:latest_DIGEST}",
-      "source": {},
-      "successes": [
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.syntax_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.image.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        }
-      ],
-      "success": true,
-      "signatures": [
-        {
-          "keyid": "",
-          "sig": "${IMAGE_SIGNATURE_multitude/image-3}"
-        }
-      ],
-      "attestations": [
-        {
-          "type": "https://in-toto.io/Statement/v0.1",
-          "predicateType": "https://slsa.dev/provenance/v0.2",
-          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
-          "signatures": [
-            {
-              "keyid": "",
-              "sig": "${ATTESTATION_SIGNATURE_multitude/image-3}"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "component2",
-      "containerImage": "${REGISTRY}/multitude/image-2@sha256:${REGISTRY_multitude/image-2:latest_DIGEST}",
-      "source": {},
-      "successes": [
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.syntax_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.image.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        }
-      ],
-      "success": true,
-      "signatures": [
-        {
-          "keyid": "",
-          "sig": "${IMAGE_SIGNATURE_multitude/image-2}"
-        }
-      ],
-      "attestations": [
-        {
-          "type": "https://in-toto.io/Statement/v0.1",
-          "predicateType": "https://slsa.dev/provenance/v0.2",
-          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
-          "signatures": [
-            {
-              "keyid": "",
-              "sig": "${ATTESTATION_SIGNATURE_multitude/image-2}"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "component1",
-      "containerImage": "${REGISTRY}/multitude/image-1@sha256:${REGISTRY_multitude/image-1:latest_DIGEST}",
-      "source": {},
-      "successes": [
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.syntax_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.image.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        }
-      ],
-      "success": true,
-      "signatures": [
-        {
-          "keyid": "",
-          "sig": "${IMAGE_SIGNATURE_multitude/image-1}"
-        }
-      ],
-      "attestations": [
-        {
-          "type": "https://in-toto.io/Statement/v0.1",
-          "predicateType": "https://slsa.dev/provenance/v0.2",
-          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
-          "signatures": [
-            {
-              "keyid": "",
-              "sig": "${ATTESTATION_SIGNATURE_multitude/image-1}"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "component0",
-      "containerImage": "${REGISTRY}/multitude/image-0@sha256:${REGISTRY_multitude/image-0:latest_DIGEST}",
-      "source": {},
-      "successes": [
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.attestation.syntax_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "builtin.image.signature_check"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        },
-        {
-          "msg": "Pass",
-          "metadata": {
-            "code": "main.acceptor"
-          }
-        }
-      ],
-      "success": true,
-      "signatures": [
-        {
-          "keyid": "",
-          "sig": "${IMAGE_SIGNATURE_multitude/image-0}"
-        }
-      ],
-      "attestations": [
-        {
-          "type": "https://in-toto.io/Statement/v0.1",
-          "predicateType": "https://slsa.dev/provenance/v0.2",
-          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
-          "signatures": [
-            {
-              "keyid": "",
-              "sig": "${ATTESTATION_SIGNATURE_multitude/image-0}"
-            }
-          ]
-        }
-      ]
-    }
-  ],
-  "key": "${known_PUBLIC_KEY_JSON}",
-  "policy": {
-    "sources": [
-      {
-        "policy": [
-          "git::${GITHOST}/git/multitude-policy.git?ref=${LATEST_COMMIT}"
-        ],
-        "ruleData": {
-          "key": "value"
-        }
-      },
-      {
-        "policy": [
-          "git::${GITHOST}/git/multitude-policy.git?ref=${LATEST_COMMIT}"
-        ],
-        "ruleData": {
-          "something": "here"
-        }
-      },
-      {
-        "policy": [
-          "git::${GITHOST}/git/multitude-policy.git?ref=${LATEST_COMMIT}"
-        ],
-        "ruleData": {
-          "key": "different"
-        }
-      },
-      {
-        "policy": [
-          "git::${GITHOST}/git/multitude-policy.git?ref=${LATEST_COMMIT}"
-        ],
-        "ruleData": {
-          "hello": "world"
-        }
-      },
-      {
-        "policy": [
-          "git::${GITHOST}/git/multitude-policy.git?ref=${LATEST_COMMIT}"
-        ],
-        "ruleData": {
-          "foo": "bar"
-        }
-      },
-      {
-        "policy": [
-          "git::${GITHOST}/git/multitude-policy.git?ref=${LATEST_COMMIT}"
-        ],
-        "ruleData": {
-          "peek": "poke"
-        }
-      },
-      {
-        "policy": [
-          "git::${GITHOST}/git/multitude-policy.git?ref=${LATEST_COMMIT}"
-        ],
-        "ruleData": {
-          "hide": "seek"
-        }
-      },
-      {
-        "policy": [
-          "git::${GITHOST}/git/multitude-policy.git?ref=${LATEST_COMMIT}"
-        ],
-        "ruleData": {
-          "hokus": "pokus"
-        }
-      },
-      {
-        "policy": [
-          "git::${GITHOST}/git/multitude-policy.git?ref=${LATEST_COMMIT}"
-        ],
-        "ruleData": {
-          "mr": "mxyzptlk"
-        }
-      },
-      {
-        "policy": [
-          "git::${GITHOST}/git/multitude-policy.git?ref=${LATEST_COMMIT}"
-        ],
-        "ruleData": {
-          "more": "data"
-        }
-      }
-    ],
-    "rekorUrl": "${REKOR}",
-    "publicKey": "${known_PUBLIC_KEY}"
-  },
-  "ec-version": "${EC_VERSION}",
-  "effective-time": "${TIMESTAMP}"
-}
----
-
-[many components and sources:stderr - 1]
-
----
-
-[Format options:stdout - 1]
+[TestFeatures/Format options:stdout - 1]
 Success: false
 Result: FAILURE
 Violations: 3, Warnings: 0, Successes: 4
@@ -4862,12 +3638,12 @@ For more information about policy issues, see the policy documentation: https://
 
 ---
 
-[Format options:stderr - 1]
+[TestFeatures/Format options:stderr - 1]
 Error: success criteria not met
 
 ---
 
-[Format options:${TMPDIR}/output.json - 1]
+[TestFeatures/Format options:${TMPDIR}/output.json - 1]
 {
   "success": false,
   "components": [
@@ -4965,7 +3741,7 @@ Error: success criteria not met
 }
 ---
 
-[fetch OCI image files:stdout - 1]
+[TestFeatures/fetch OCI image files:stdout - 1]
 {
   "success": true,
   "components": [
@@ -5038,11 +3814,11 @@ Error: success criteria not met
 }
 ---
 
-[fetch OCI image files:stderr - 1]
+[TestFeatures/fetch OCI image files:stderr - 1]
 
 ---
 
-[severity is dynamically adjusted:stdout - 1]
+[TestFeatures/severity is dynamically adjusted:stdout - 1]
 {
   "success": false,
   "components": [
@@ -5143,12 +3919,12 @@ Error: success criteria not met
 }
 ---
 
-[severity is dynamically adjusted:stderr - 1]
+[TestFeatures/severity is dynamically adjusted:stderr - 1]
 Error: success criteria not met
 
 ---
 
-[policy rule filtering fails due to inexistent inclusion patterns:stdout - 1]
+[TestFeatures/policy rule filtering fails due to inexistent inclusion patterns:stdout - 1]
 {
   "success": true,
   "components": [
@@ -5243,11 +4019,11 @@ Error: success criteria not met
 }
 ---
 
-[policy rule filtering fails due to inexistent inclusion patterns:stderr - 1]
+[TestFeatures/policy rule filtering fails due to inexistent inclusion patterns:stderr - 1]
 
 ---
 
-[signatures with embedded bundles verify without external rekor queries:stdout - 1]
+[TestFeatures/signatures with embedded bundles verify without external rekor queries:stdout - 1]
 {
   "success": true,
   "components": [
@@ -5294,11 +4070,11 @@ Error: success criteria not met
 }
 ---
 
-[signatures with embedded bundles verify without external rekor queries:stderr - 1]
+[TestFeatures/signatures with embedded bundles verify without external rekor queries:stderr - 1]
 
 ---
 
-[SLSA v1 attestation support:stdout - 1]
+[TestFeatures/SLSA v1 attestation support:stdout - 1]
 {
   "success": true,
   "components": [
@@ -5371,11 +4147,11 @@ Error: success criteria not met
 }
 ---
 
-[SLSA v1 attestation support:stderr - 1]
+[TestFeatures/SLSA v1 attestation support:stderr - 1]
 
 ---
 
-[volatile config warnings schema contract:stdout - 1]
+[TestFeatures/volatile config warnings schema contract:stdout - 1]
 {
   "success": true,
   "components": [
@@ -5460,11 +4236,11 @@ Error: success criteria not met
 }
 ---
 
-[volatile config warnings schema contract:stderr - 1]
+[TestFeatures/volatile config warnings schema contract:stderr - 1]
 
 ---
 
-[invalid image signature with valid att sig and skip-image-sig-check flag:stdout - 1]
+[TestFeatures/invalid image signature with valid att sig and skip-image-sig-check flag:stdout - 1]
 {
   "success": true,
   "components": [
@@ -5525,11 +4301,11 @@ Error: success criteria not met
 }
 ---
 
-[invalid image signature with valid att sig and skip-image-sig-check flag:stderr - 1]
+[TestFeatures/invalid image signature with valid att sig and skip-image-sig-check flag:stderr - 1]
 
 ---
 
-[happy day with skip-image-sig-check flag:stdout - 1]
+[TestFeatures/happy day with skip-image-sig-check flag:stdout - 1]
 {
   "success": true,
   "components": [
@@ -5590,11 +4366,11 @@ Error: success criteria not met
 }
 ---
 
-[happy day with skip-image-sig-check flag:stderr - 1]
+[TestFeatures/happy day with skip-image-sig-check flag:stderr - 1]
 
 ---
 
-[discover tag-based artifact references:stdout - 1]
+[TestFeatures/discover tag-based artifact references:stdout - 1]
 {
   "success": true,
   "components": [
@@ -5685,11 +4461,11 @@ Error: success criteria not met
 }
 ---
 
-[discover tag-based artifact references:stderr - 1]
+[TestFeatures/discover tag-based artifact references:stderr - 1]
 
 ---
 
-[discover artifact referrers via OCI Referrers API:stdout - 1]
+[TestFeatures/discover artifact referrers via OCI Referrers API:stdout - 1]
 {
   "success": true,
   "components": [
@@ -5774,6 +4550,6 @@ Error: success criteria not met
 }
 ---
 
-[discover artifact referrers via OCI Referrers API:stderr - 1]
+[TestFeatures/discover artifact referrers via OCI Referrers API:stderr - 1]
 
 ---

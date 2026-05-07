@@ -1,39 +1,39 @@
 
-[Non strict with warnings:results - 1]
+[TestFeatures/Non strict with warnings:results - 1]
 {
   "TEST_OUTPUT": "{\"timestamp\":\"${TIMESTAMP}\",\"namespace\":\"\",\"successes\":3,\"failures\":0,\"warnings\":1,\"result\":\"WARNING\"}\n"
 }
 ---
 
-[Outputs are there:initialize-tuf - 1]
+[TestFeatures/Outputs are there:initialize-tuf - 1]
 ${TIMESTAMP} INFO Step was skipped due to when expressions were evaluated to false.
 
 ---
 
-[Golden container image:results - 1]
+[TestFeatures/Golden container image:results - 1]
 {
   "TEST_OUTPUT": "{\"timestamp\":\"${TIMESTAMP}\",\"namespace\":\"\",\"successes\":5,\"failures\":0,\"warnings\":0,\"result\":\"SUCCESS\"}\n"
 }
 ---
 
-[Initialize TUF fails:initialize-tuf - 1]
+[TestFeatures/Initialize TUF fails:initialize-tuf - 1]
 Error: Get "http://tuf.invalid/root.json": dial tcp: lookup tuf.invalid on 10.96.0.10:53: no such host
 
 ---
 
-[Titles and descriptions can be excluded:results - 1]
+[TestFeatures/Titles and descriptions can be excluded:results - 1]
 {
   "TEST_OUTPUT": "{\"timestamp\":\"${TIMESTAMP}\",\"namespace\":\"\",\"successes\":3,\"failures\":0,\"warnings\":0,\"result\":\"SUCCESS\"}\n"
 }
 ---
 
-[Strict with failures:results - 1]
+[TestFeatures/Strict with failures:results - 1]
 {
   "TEST_OUTPUT": "{\"timestamp\":\"${TIMESTAMP}\",\"namespace\":\"\",\"successes\":0,\"failures\":1,\"warnings\":0,\"result\":\"FAILURE\"}\n"
 }
 ---
 
-[Golden container image:show-config - 1]
+[TestFeatures/Golden container image:show-config - 1]
 {
   "policy": {
     "sources": [
@@ -56,36 +56,36 @@ Error: Get "http://tuf.invalid/root.json": dial tcp: lookup tuf.invalid on 10.96
 }
 ---
 
-[Extra rule data provided to task:results - 1]
+[TestFeatures/Extra rule data provided to task:results - 1]
 {
   "TEST_OUTPUT": "{\"timestamp\":\"${TIMESTAMP}\",\"namespace\":\"\",\"successes\":5,\"failures\":0,\"warnings\":0,\"result\":\"SUCCESS\"}\n"
 }
 ---
 
-[Initialize TUF succeeds:initialize-tuf - 1]
+[TestFeatures/Initialize TUF succeeds:initialize-tuf - 1]
 ${TIMESTAMP} INFO Step was skipped due to when expressions were evaluated to false.
 
 ---
 
-[Strict with warnings:results - 1]
+[TestFeatures/Strict with warnings:results - 1]
 {
   "TEST_OUTPUT": "{\"timestamp\":\"${TIMESTAMP}\",\"namespace\":\"\",\"successes\":3,\"failures\":0,\"warnings\":1,\"result\":\"WARNING\"}\n"
 }
 ---
 
-[Non strict with failures:results - 1]
+[TestFeatures/Non strict with failures:results - 1]
 {
   "TEST_OUTPUT": "{\"timestamp\":\"${TIMESTAMP}\",\"namespace\":\"\",\"successes\":0,\"failures\":1,\"warnings\":0,\"result\":\"FAILURE\"}\n"
 }
 ---
 
-[PUBLIC_KEY param overwrites key from policy:results - 1]
+[TestFeatures/PUBLIC_KEY param overwrites key from policy:results - 1]
 {
   "TEST_OUTPUT": "{\"timestamp\":\"${TIMESTAMP}\",\"namespace\":\"\",\"successes\":3,\"failures\":0,\"warnings\":0,\"result\":\"SUCCESS\"}\n"
 }
 ---
 
-[Outputs are there:summary - 1]
+[TestFeatures/Outputs are there:summary - 1]
 {
   "timestamp": "${TIMESTAMP}",
   "namespace": "",
@@ -96,21 +96,21 @@ ${TIMESTAMP} INFO Step was skipped due to when expressions were evaluated to fal
 }
 ---
 
-[Initialize TUF fails:results - 1]
+[TestFeatures/Initialize TUF fails:results - 1]
 {}
 ---
 
-[Initialize TUF succeeds:results - 1]
+[TestFeatures/Initialize TUF succeeds:results - 1]
 {
   "TEST_OUTPUT": "{\"timestamp\":\"${TIMESTAMP}\",\"namespace\":\"\",\"successes\":5,\"failures\":0,\"warnings\":0,\"result\":\"SUCCESS\"}\n"
 }
 ---
 
-[Outputs are there:assert - 1]
+[TestFeatures/Outputs are there:assert - 1]
 true
 ---
 
-[Outputs are there:report-json - 1]
+[TestFeatures/Outputs are there:report-json - 1]
 {
   "success": true,
   "components": [
@@ -175,13 +175,13 @@ true
 }
 ---
 
-[Outputs are there:results - 1]
+[TestFeatures/Outputs are there:results - 1]
 {
   "TEST_OUTPUT": "{\"timestamp\":\"${TIMESTAMP}\",\"namespace\":\"\",\"successes\":3,\"failures\":0,\"warnings\":0,\"result\":\"SUCCESS\"}\n"
 }
 ---
 
-[Keyless signing verification cosign v3 style:report-json - 1]
+[TestFeatures/Keyless signing verification cosign v3 style:report-json - 1]
 {
   "success": true,
   "components": [
@@ -304,13 +304,13 @@ true
 }
 ---
 
-[Keyless signing verification cosign v3 style:results - 1]
+[TestFeatures/Keyless signing verification cosign v3 style:results - 1]
 {
   "TEST_OUTPUT": "{\"timestamp\":\"${TIMESTAMP}\",\"namespace\":\"\",\"successes\":5,\"failures\":0,\"warnings\":0,\"result\":\"SUCCESS\"}\n"
 }
 ---
 
-[Keyless signing verification cosign v2 style:report-json - 1]
+[TestFeatures/Keyless signing verification cosign v2 style:report-json - 1]
 {
   "success": true,
   "components": [
@@ -448,13 +448,13 @@ true
 }
 ---
 
-[Keyless signing verification cosign v2 style:results - 1]
+[TestFeatures/Keyless signing verification cosign v2 style:results - 1]
 {
   "TEST_OUTPUT": "{\"timestamp\":\"${TIMESTAMP}\",\"namespace\":\"\",\"successes\":5,\"failures\":0,\"warnings\":0,\"result\":\"SUCCESS\"}\n"
 }
 ---
 
-[Collect keyless signing parameters from ConfigMap:collect-signing-params - 1]
+[TestFeatures/Collect keyless signing parameters from ConfigMap:collect-signing-params - 1]
 Reading ConfigMap konflux-info/cluster-config
 ConfigMap found, extracting keyless signing parameters
 results.keylessSigningEnabled: true
@@ -467,7 +467,7 @@ results.tufUrl: https://tuf.internal.svc
 
 ---
 
-[Collect keyless signing parameters from ConfigMap with external url fallback:collect-signing-params - 1]
+[TestFeatures/Collect keyless signing parameters from ConfigMap with external url fallback:collect-signing-params - 1]
 Reading ConfigMap konflux-info/cluster-config-1
 ConfigMap found, extracting keyless signing parameters
 results.keylessSigningEnabled: true
@@ -480,7 +480,7 @@ results.tufUrl: https://tuf.example.com
 
 ---
 
-[Collect keyless signing parameters from ConfigMap with keyless signing disabled:collect-signing-params - 1]
+[TestFeatures/Collect keyless signing parameters from ConfigMap with keyless signing disabled:collect-signing-params - 1]
 Reading ConfigMap konflux-info/cluster-config-2
 ConfigMap found, extracting keyless signing parameters
 enableKeylessSigning is not set, using default empty values
@@ -494,7 +494,7 @@ results.tufUrl:
 
 ---
 
-[Collect keyless signing parameters when there is a malformed ConfigMap:collect-signing-params - 1]
+[TestFeatures/Collect keyless signing parameters when there is a malformed ConfigMap:collect-signing-params - 1]
 Reading ConfigMap konflux-info/cluster-config-3
 ConfigMap found, extracting keyless signing parameters
 enableKeylessSigning is not set, using default empty values
@@ -508,7 +508,7 @@ results.tufUrl:
 
 ---
 
-[Collect keyless signing parameters when the ConfigMap does not exist:collect-signing-params - 1]
+[TestFeatures/Collect keyless signing parameters when the ConfigMap does not exist:collect-signing-params - 1]
 Reading ConfigMap konflux-info/doesnt-exist-config
 ConfigMap not found, using default empty values
 results.keylessSigningEnabled: false
@@ -521,7 +521,7 @@ results.tufUrl:
 
 ---
 
-[Collect keyless signing parameters when the namespace does not exist:collect-signing-params - 1]
+[TestFeatures/Collect keyless signing parameters when the namespace does not exist:collect-signing-params - 1]
 Reading ConfigMap doesnt-exist-namespace/whatever
 ConfigMap not found, using default empty values
 results.keylessSigningEnabled: false
@@ -534,7 +534,7 @@ results.tufUrl:
 
 ---
 
-[Keyless signing verification cosign v2 style with regexp params:report-json - 1]
+[TestFeatures/Keyless signing verification cosign v2 style with regexp params:report-json - 1]
 {
   "success": true,
   "components": [
@@ -672,13 +672,13 @@ results.tufUrl:
 }
 ---
 
-[Keyless signing verification cosign v2 style with regexp params:results - 1]
+[TestFeatures/Keyless signing verification cosign v2 style with regexp params:results - 1]
 {
   "TEST_OUTPUT": "{\"timestamp\":\"${TIMESTAMP}\",\"namespace\":\"\",\"successes\":5,\"failures\":0,\"warnings\":0,\"result\":\"SUCCESS\"}\n"
 }
 ---
 
-[Keyless signing verification cosign v3 style with regexp params:report-json - 1]
+[TestFeatures/Keyless signing verification cosign v3 style with regexp params:report-json - 1]
 {
   "success": false,
   "components": [
@@ -729,7 +729,7 @@ results.tufUrl:
 }
 ---
 
-[Keyless signing verification cosign v3 style with regexp params:results - 1]
+[TestFeatures/Keyless signing verification cosign v3 style with regexp params:results - 1]
 {
   "TEST_OUTPUT": "{\"timestamp\":\"${TIMESTAMP}\",\"namespace\":\"\",\"successes\":0,\"failures\":2,\"warnings\":0,\"result\":\"FAILURE\"}\n"
 }
