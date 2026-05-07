@@ -169,7 +169,8 @@ spec:
       # than use the floating oci::quay.io/conforma/release-policy:konflux tag.
       # Instead of needing to bump this in hundreds of separate ECPs, we'll do
       # it here instead. If you don't want this behavior then provide an empty
-      # string value for this param.
+      # string value for this param. To update this digest use the script in
+      # hack/update-policy-digest-in-tasks.sh
       default: "sha256:1b296a925b4021f4b4959ea289596925a8735540e554f3ba7754a651731a216f"
 
     - name: WORKERS
