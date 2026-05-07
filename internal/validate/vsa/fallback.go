@@ -20,12 +20,13 @@ import (
 	"context"
 	"fmt"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/conforma/cli/internal/evaluator"
 	"github.com/conforma/cli/internal/output"
 	"github.com/conforma/cli/internal/policy"
 	"github.com/conforma/cli/internal/policy/source"
 	"github.com/conforma/cli/internal/utils"
-	log "github.com/sirupsen/logrus"
 )
 
 // FallbackValidationContext holds precomputed fallback validation resources
