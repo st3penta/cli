@@ -1,0 +1,553 @@
+
+[OPA happy day:stdout - 1]
+{
+  "success": true,
+  "components": [
+    {
+      "name": "Unnamed",
+      "containerImage": "${REGISTRY}/acceptance/opa-happy-day@sha256:${REGISTRY_acceptance/opa-happy-day:latest_DIGEST}",
+      "source": {},
+      "successes": [
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "builtin.attestation.signature_check"
+          }
+        },
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "builtin.attestation.syntax_check"
+          }
+        },
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "builtin.image.signature_check"
+          }
+        },
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "main.acceptor"
+          }
+        }
+      ],
+      "success": true,
+      "signatures": [
+        {
+          "keyid": "",
+          "sig": "${IMAGE_SIGNATURE_acceptance/opa-happy-day}"
+        }
+      ],
+      "attestations": [
+        {
+          "type": "https://in-toto.io/Statement/v0.1",
+          "predicateType": "https://slsa.dev/provenance/v0.2",
+          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
+          "signatures": [
+            {
+              "keyid": "",
+              "sig": "${ATTESTATION_SIGNATURE_acceptance/opa-happy-day}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "key": "${known_PUBLIC_KEY_JSON}",
+  "policy": {
+    "sources": [
+      {
+        "policy": [
+          "git::${GITHOST}/git/happy-day-policy.git?ref=${LATEST_COMMIT}"
+        ]
+      }
+    ],
+    "rekorUrl": "${REKOR}",
+    "publicKey": "${known_PUBLIC_KEY}"
+  },
+  "ec-version": "${EC_VERSION}",
+  "effective-time": "${TIMESTAMP}"
+}
+---
+
+[OPA happy day:stderr - 1]
+
+---
+
+[OPA volatile config warnings:stdout - 1]
+{
+  "success": true,
+  "components": [
+    {
+      "name": "Unnamed",
+      "containerImage": "${REGISTRY}/acceptance/opa-volatile-config@sha256:${REGISTRY_acceptance/opa-volatile-config:latest_DIGEST}",
+      "source": {},
+      "warnings": [
+        {
+          "msg": "Volatile exclude rule 'test.component_scoped_rule' has no expiration date set"
+        },
+        {
+          "msg": "Volatile exclude rule 'test.component_scoped_rule' is scoped to component 'Unnamed'"
+        },
+        {
+          "msg": "Volatile exclude rule 'test.rule_expiring_soon' will expire (effective until: ${TIMESTAMP})"
+        },
+        {
+          "msg": "Volatile exclude rule 'test.rule_pending_activation' is pending activation (effective on: ${TIMESTAMP})"
+        },
+        {
+          "msg": "Volatile exclude rule 'test.rule_with_no_expiration' has no expiration date set"
+        }
+      ],
+      "success": true,
+      "signatures": [
+        {
+          "keyid": "",
+          "sig": "${IMAGE_SIGNATURE_acceptance/opa-volatile-config}"
+        }
+      ],
+      "attestations": [
+        {
+          "type": "https://in-toto.io/Statement/v0.1",
+          "predicateType": "https://slsa.dev/provenance/v0.2",
+          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
+          "signatures": [
+            {
+              "keyid": "",
+              "sig": "${ATTESTATION_SIGNATURE_acceptance/opa-volatile-config}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "key": "${known_PUBLIC_KEY_JSON}",
+  "policy": {
+    "sources": [
+      {
+        "name": "volatile-test-source",
+        "policy": [
+          "git::${GITHOST}/git/volatile-config-policy.git?ref=${LATEST_COMMIT}"
+        ],
+        "volatileConfig": {
+          "exclude": [
+            {
+              "value": "test.rule_with_no_expiration"
+            },
+            {
+              "value": "test.rule_expiring_soon",
+              "effectiveUntil": "${TIMESTAMP}"
+            },
+            {
+              "value": "test.rule_pending_activation",
+              "effectiveOn": "${TIMESTAMP}"
+            },
+            {
+              "value": "test.component_scoped_rule",
+              "componentNames": [
+                "Unnamed"
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "publicKey": "${known_PUBLIC_KEY}"
+  },
+  "ec-version": "${EC_VERSION}",
+  "effective-time": "${TIMESTAMP}"
+}
+---
+
+[OPA volatile config warnings:stderr - 1]
+
+---
+
+[OPA future failure is converted to a warning:stdout - 1]
+{
+  "success": true,
+  "components": [
+    {
+      "name": "Unnamed",
+      "containerImage": "${REGISTRY}/acceptance/opa-future-deny@sha256:${REGISTRY_acceptance/opa-future-deny:latest_DIGEST}",
+      "source": {},
+      "warnings": [
+        {
+          "msg": "Fails in 2099",
+          "metadata": {
+            "effective_on": "${TIMESTAMP}"
+          }
+        }
+      ],
+      "successes": [
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "builtin.attestation.signature_check"
+          }
+        },
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "builtin.attestation.syntax_check"
+          }
+        },
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "builtin.image.signature_check"
+          }
+        }
+      ],
+      "success": true,
+      "signatures": [
+        {
+          "keyid": "",
+          "sig": "${IMAGE_SIGNATURE_acceptance/opa-future-deny}"
+        }
+      ],
+      "attestations": [
+        {
+          "type": "https://in-toto.io/Statement/v0.1",
+          "predicateType": "https://slsa.dev/provenance/v0.2",
+          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
+          "signatures": [
+            {
+              "keyid": "",
+              "sig": "${ATTESTATION_SIGNATURE_acceptance/opa-future-deny}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "key": "${known_PUBLIC_KEY_JSON}",
+  "policy": {
+    "sources": [
+      {
+        "policy": [
+          "git::${GITHOST}/git/future-deny-policy.git?ref=${LATEST_COMMIT}"
+        ]
+      }
+    ],
+    "rekorUrl": "${REKOR}",
+    "publicKey": "${known_PUBLIC_KEY}"
+  },
+  "ec-version": "${EC_VERSION}",
+  "effective-time": "${TIMESTAMP}"
+}
+---
+
+[OPA future failure is converted to a warning:stderr - 1]
+
+---
+
+[OPA policy rule filtering:stdout - 1]
+{
+  "success": true,
+  "components": [
+    {
+      "name": "Unnamed",
+      "containerImage": "${REGISTRY}/acceptance/opa-filtering@sha256:${REGISTRY_acceptance/opa-filtering:latest_DIGEST}",
+      "source": {},
+      "successes": [
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "builtin.attestation.signature_check"
+          }
+        },
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "builtin.attestation.syntax_check"
+          }
+        },
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "builtin.image.signature_check"
+          }
+        },
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "filtering.always_pass"
+          }
+        },
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "filtering.always_pass_with_collection"
+          }
+        }
+      ],
+      "success": true,
+      "signatures": [
+        {
+          "keyid": "",
+          "sig": "${IMAGE_SIGNATURE_acceptance/opa-filtering}"
+        }
+      ],
+      "attestations": [
+        {
+          "type": "https://in-toto.io/Statement/v0.1",
+          "predicateType": "https://slsa.dev/provenance/v0.2",
+          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
+          "signatures": [
+            {
+              "keyid": "",
+              "sig": "${ATTESTATION_SIGNATURE_acceptance/opa-filtering}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "key": "${known_PUBLIC_KEY_JSON}",
+  "policy": {
+    "sources": [
+      {
+        "policy": [
+          "git::${GITHOST}/git/happy-day-policy.git?ref=${LATEST_COMMIT}"
+        ],
+        "config": {
+          "exclude": [
+            "filtering.always_fail",
+            "filtering.always_fail_with_collection"
+          ],
+          "include": [
+            "@stamps",
+            "filtering.always_pass"
+          ]
+        }
+      }
+    ],
+    "rekorUrl": "${REKOR}",
+    "publicKey": "${known_PUBLIC_KEY}"
+  },
+  "ec-version": "${EC_VERSION}",
+  "effective-time": "${TIMESTAMP}"
+}
+---
+
+[OPA policy rule filtering:stderr - 1]
+
+---
+
+[OPA rejection:stdout - 1]
+{
+  "success": false,
+  "components": [
+    {
+      "name": "Unnamed",
+      "containerImage": "${REGISTRY}/acceptance/opa-reject@sha256:${REGISTRY_acceptance/opa-reject:latest_DIGEST}",
+      "source": {},
+      "violations": [
+        {
+          "msg": "Fails always (term1)",
+          "metadata": {
+            "code": "main.reject_with_term",
+            "term": "term1"
+          }
+        },
+        {
+          "msg": "Fails always (term2)",
+          "metadata": {
+            "code": "main.reject_with_term",
+            "term": [
+              "term2",
+              "term3"
+            ]
+          }
+        },
+        {
+          "msg": "Fails always",
+          "metadata": {
+            "code": "main.rejector"
+          }
+        }
+      ],
+      "successes": [
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "builtin.attestation.signature_check"
+          }
+        },
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "builtin.attestation.syntax_check"
+          }
+        },
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "builtin.image.signature_check"
+          }
+        }
+      ],
+      "success": false,
+      "signatures": [
+        {
+          "keyid": "",
+          "sig": "${IMAGE_SIGNATURE_acceptance/opa-reject}"
+        }
+      ],
+      "attestations": [
+        {
+          "type": "https://in-toto.io/Statement/v0.1",
+          "predicateType": "https://slsa.dev/provenance/v0.2",
+          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
+          "signatures": [
+            {
+              "keyid": "",
+              "sig": "${ATTESTATION_SIGNATURE_acceptance/opa-reject}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "key": "${known_PUBLIC_KEY_JSON}",
+  "policy": {
+    "sources": [
+      {
+        "policy": [
+          "git::${GITHOST}/git/reject-policy.git?ref=${LATEST_COMMIT}"
+        ]
+      }
+    ],
+    "rekorUrl": "${REKOR}",
+    "publicKey": "${known_PUBLIC_KEY}"
+  },
+  "ec-version": "${EC_VERSION}",
+  "effective-time": "${TIMESTAMP}"
+}
+---
+
+[OPA rejection:stderr - 1]
+Error: success criteria not met
+
+---
+
+[OPA multiple policy sources:stdout - 1]
+{
+  "success": false,
+  "components": [
+    {
+      "name": "Unnamed",
+      "containerImage": "${REGISTRY}/acceptance/opa-multiple-sources@sha256:${REGISTRY_acceptance/opa-multiple-sources:latest_DIGEST}",
+      "source": {},
+      "violations": [
+        {
+          "msg": "Fails always (term1)",
+          "metadata": {
+            "code": "main.reject_with_term",
+            "term": "term1"
+          }
+        },
+        {
+          "msg": "Fails always (term2)",
+          "metadata": {
+            "code": "main.reject_with_term",
+            "term": [
+              "term2",
+              "term3"
+            ]
+          }
+        },
+        {
+          "msg": "Fails always",
+          "metadata": {
+            "code": "main.rejector"
+          }
+        }
+      ],
+      "warnings": [
+        {
+          "msg": "Has a warning"
+        }
+      ],
+      "successes": [
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "builtin.attestation.signature_check"
+          }
+        },
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "builtin.attestation.syntax_check"
+          }
+        },
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "builtin.image.signature_check"
+          }
+        },
+        {
+          "msg": "Pass",
+          "metadata": {
+            "code": "main.acceptor"
+          }
+        }
+      ],
+      "success": false,
+      "signatures": [
+        {
+          "keyid": "",
+          "sig": "${IMAGE_SIGNATURE_acceptance/opa-multiple-sources}"
+        }
+      ],
+      "attestations": [
+        {
+          "type": "https://in-toto.io/Statement/v0.1",
+          "predicateType": "https://slsa.dev/provenance/v0.2",
+          "predicateBuildType": "https://tekton.dev/attestations/chains/pipelinerun@v2",
+          "signatures": [
+            {
+              "keyid": "",
+              "sig": "${ATTESTATION_SIGNATURE_acceptance/opa-multiple-sources}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "key": "${known_PUBLIC_KEY_JSON}",
+  "policy": {
+    "sources": [
+      {
+        "policy": [
+          "git::${GITHOST}/git/repository1.git?ref=adeaf76384dd4391e18e8ce5fadef1a5c7414f06"
+        ]
+      },
+      {
+        "policy": [
+          "git::${GITHOST}/git/repository2.git?ref=7e2406bbafba94a4ecf1b5e59f9211c6597f58f7"
+        ]
+      },
+      {
+        "policy": [
+          "git::${GITHOST}/git/repository3.git?ref=${LATEST_COMMIT}"
+        ]
+      }
+    ],
+    "rekorUrl": "${REKOR}",
+    "publicKey": "${known_PUBLIC_KEY}"
+  },
+  "ec-version": "${EC_VERSION}",
+  "effective-time": "${TIMESTAMP}"
+}
+---
+
+[OPA multiple policy sources:stderr - 1]
+Error: success criteria not met
+
+---
