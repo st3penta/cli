@@ -440,7 +440,9 @@ func (a *ApplicationSnapshotImage) BuildInput(_ context.Context) (map[string]any
 			Files:      a.files,
 			Source:     a.component.Source,
 		},
-		AppSnapshot: a.snapshot,
+		AppSnapshot:   a.snapshot,
+		ComponentName: a.component.Name,
+		PolicySpec:    a.policySpec,
 	}
 
 	if a.parentRef != nil {
