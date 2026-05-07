@@ -18,6 +18,7 @@ package evaluator
 
 import (
 	"fmt"
+	"regexp"
 	"time"
 
 	ecc "github.com/conforma/crds/api/v1alpha1"
@@ -106,6 +107,14 @@ func (c *Criteria) get(imageRef string, componentName string) []string {
 		if componentItems, ok := c.componentItems[componentName]; ok {
 			items = append(items, componentItems...)
 		}
+		// For multi-arch image index components, also match by the original component
+		// name. During expansion, "foo" becomes "foo-sha256:<digest>-arm64" etc., but
+		// volatile config references the original name.
+		if origName := originalComponentName(componentName); origName != componentName {
+			if componentItems, ok := c.componentItems[origName]; ok {
+				items = append(items, componentItems...)
+			}
+		}
 	}
 
 	// Add any exceptions that pertain to all images.
@@ -117,6 +126,19 @@ func (c *Criteria) getWithKey(key string) []string {
 		return items
 	}
 	return []string{}
+}
+
+// multiArchSuffixRe matches the suffix appended to component names during multi-arch
+// image index expansion (see applicationsnapshot/input.go imageIndexWorker). The format
+// is "-sha256:<hex digest>-<architecture>", e.g. "-sha256:abc123...-arm64".
+var multiArchSuffixRe = regexp.MustCompile(`-sha256:[0-9a-f]{64}-\S+$`)
+
+// originalComponentName returns the component name before multi-arch image index
+// expansion. For example, component "foo" is expanded into per-arch components like
+// "foo-sha256:<digest>-arm64". This allows component-scoped volatile config
+// (includes/excludes) to apply to per-arch components as well as the original.
+func originalComponentName(componentName string) string {
+	return multiArchSuffixRe.ReplaceAllString(componentName, "")
 }
 
 func computeIncludeExclude(src ecc.Source, p ConfigProvider) (*Criteria, *Criteria) {
