@@ -1,5 +1,5 @@
 
-[success:stdout - 1]
+[TestFeatures/success:stdout - 1]
 [
   {
     "filename": "acceptance/examples/empty_input.json",
@@ -9,11 +9,11 @@
 ]
 ---
 
-[success:stderr - 1]
+[TestFeatures/success:stderr - 1]
 
 ---
 
-[appstudio success:stdout - 1]
+[TestFeatures/appstudio success:stdout - 1]
 {
   "timestamp": "${TIMESTAMP}",
   "namespace": "main",
@@ -25,6 +25,6 @@
 }
 ---
 
-[appstudio success:stderr - 1]
+[TestFeatures/appstudio success:stderr - 1]
 
 ---

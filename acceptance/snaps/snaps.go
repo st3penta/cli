@@ -69,7 +69,7 @@ func (e errCapture) SkipNow() {
 }
 
 func (e errCapture) Name() string {
-	return e.scenario.Name + ":" + e.qualifier
+	return "TestFeatures/" + e.scenario.Name + ":" + e.qualifier
 }
 
 func (e *errCapture) Error(args ...interface{}) {

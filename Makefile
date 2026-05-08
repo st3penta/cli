@@ -126,6 +126,14 @@ acceptance: ## Run all acceptance tests
 	ACCEPTANCE_WORKDIR="$$(mktemp -d)"; \
 	cleanup() { \
 		cp "$${ACCEPTANCE_WORKDIR}"/features/__snapshots__/* "$(ROOT_DIR)"/features/__snapshots__/ || true; \
+		if [ -n "$${UPDATE_SNAPS}" ]; then \
+			for f in "$(ROOT_DIR)"/features/__snapshots__/*.snap; do \
+				[ -f "$$f" ] || continue; \
+				if [ ! -f "$${ACCEPTANCE_WORKDIR}/features/__snapshots__/$$(basename $$f)" ]; then \
+					rm -f "$$f"; \
+				fi; \
+			done; \
+		fi; \
 		rm -rf "$${ACCEPTANCE_WORKDIR}"; \
 	}; \
 	mkdir -p "$${ACCEPTANCE_WORKDIR}/coverage"; \

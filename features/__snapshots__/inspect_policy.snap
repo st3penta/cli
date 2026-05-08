@@ -1,5 +1,5 @@
 
-[inspecting a data source:stdout - 1]
+[TestFeatures/inspecting a data source:stdout - 1]
 {
   "rule_data": {
     "banana_fail_reason": "spider attack"
@@ -8,29 +8,29 @@
 }
 ---
 
-[inspecting a data source:stderr - 1]
+[TestFeatures/inspecting a data source:stderr - 1]
 
 ---
 
-[short names output:stdout - 1]
+[TestFeatures/short names output:stdout - 1]
 kitty.purr
 
 ---
 
-[short names output:stderr - 1]
+[TestFeatures/short names output:stderr - 1]
 
 ---
 
-[inspecting a data source with a merge error:stdout - 1]
+[TestFeatures/inspecting a data source with a merge error:stdout - 1]
 
 ---
 
-[inspecting a data source with a merge error:stderr - 1]
+[TestFeatures/inspecting a data source with a merge error:stderr - 1]
 Error: Merge error. The 'rule_data' key was found more than once!
 
 ---
 
-[json output:stdout - 1]
+[TestFeatures/json output:stdout - 1]
 {
   "git::${GITHOST}/git/policy.git?ref=${LATEST_COMMIT}": [
     {
@@ -66,11 +66,11 @@ Error: Merge error. The 'rule_data' key was found more than once!
 }
 ---
 
-[json output:stderr - 1]
+[TestFeatures/json output:stderr - 1]
 
 ---
 
-[default output:stdout - 1]
+[TestFeatures/default output:stdout - 1]
 # Source: git::${GITHOST}/git/policy.git?ref=${LATEST_COMMIT}
 
 kitty.purr (deny)
@@ -81,11 +81,11 @@ Fluffy
 
 ---
 
-[default output:stderr - 1]
+[TestFeatures/default output:stderr - 1]
 
 ---
 
-[sources from ECP:stdout - 1]
+[TestFeatures/sources from ECP:stdout - 1]
 # Source: git::${GITHOST}/git/policy1.git?ref=f81eaf65be8da58460ff920408ba1313051184a1
 
 kitty.purr (deny)
@@ -110,6 +110,6 @@ This rule will always fail
 
 ---
 
-[sources from ECP:stderr - 1]
+[TestFeatures/sources from ECP:stderr - 1]
 
 ---

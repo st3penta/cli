@@ -1,5 +1,5 @@
 
-[VSA expiration flag functionality:stdout - 1]
+[TestFeatures/VSA expiration flag functionality:stdout - 1]
 {
   "success": true,
   "components": [
@@ -46,12 +46,12 @@
 }
 ---
 
-[VSA expiration flag functionality:stderr - 1]
+[TestFeatures/VSA expiration flag functionality:stderr - 1]
 time="${TIMESTAMP}" level=warning msg="Failed to check for existing VSA for image ${REGISTRY}/acceptance/vsa-expiration-image@sha256:${REGISTRY_acceptance/vsa-expiration-image:latest_DIGEST}: failed to retrieve VSA envelope: no entries found in Rekor for image digest: sha256:${REGISTRY_acceptance/vsa-expiration-image:latest_DIGEST}"
 
 ---
 
-[VSA generation with local storage backend:stdout - 1]
+[TestFeatures/VSA generation with local storage backend:stdout - 1]
 {
   "success": true,
   "components": [
@@ -98,11 +98,11 @@ time="${TIMESTAMP}" level=warning msg="Failed to check for existing VSA for imag
 }
 ---
 
-[VSA generation with local storage backend:stderr - 1]
+[TestFeatures/VSA generation with local storage backend:stderr - 1]
 
 ---
 
-[VSA expiration with existing valid VSA:stdout - 1]
+[TestFeatures/VSA expiration with existing valid VSA:stdout - 1]
 {
   "success": true,
   "components": [
@@ -149,11 +149,11 @@ time="${TIMESTAMP}" level=warning msg="Failed to check for existing VSA for imag
 }
 ---
 
-[VSA expiration with existing valid VSA:stderr - 1]
+[TestFeatures/VSA expiration with existing valid VSA:stderr - 1]
 
 ---
 
-[VSA generation with Rekor storage backend:stdout - 1]
+[TestFeatures/VSA generation with Rekor storage backend:stdout - 1]
 {
   "success": true,
   "components": [
@@ -200,11 +200,11 @@ time="${TIMESTAMP}" level=warning msg="Failed to check for existing VSA for imag
 }
 ---
 
-[VSA generation with Rekor storage backend:stderr - 1]
+[TestFeatures/VSA generation with Rekor storage backend:stderr - 1]
 
 ---
 
-[VSA generation with invalid storage backend configuration:stdout - 1]
+[TestFeatures/VSA generation with invalid storage backend configuration:stdout - 1]
 {
   "success": true,
   "components": [
@@ -251,13 +251,13 @@ time="${TIMESTAMP}" level=warning msg="Failed to check for existing VSA for imag
 }
 ---
 
-[VSA generation with invalid storage backend configuration:stderr - 1]
+[TestFeatures/VSA generation with invalid storage backend configuration:stderr - 1]
 time="${TIMESTAMP}" level=warning msg="invalid storage config 'invalid-backend@somewhere': unsupported backend 'invalid-backend'. Supported backends: rekor, local"
 time="${TIMESTAMP}" level=warning msg="invalid storage config 'invalid-backend@somewhere': unsupported backend 'invalid-backend'. Supported backends: rekor, local"
 
 ---
 
-[VSA generation with multiple storage backends:stdout - 1]
+[TestFeatures/VSA generation with multiple storage backends:stdout - 1]
 {
   "success": true,
   "components": [
@@ -304,11 +304,11 @@ time="${TIMESTAMP}" level=warning msg="invalid storage config 'invalid-backend@s
 }
 ---
 
-[VSA generation with multiple storage backends:stderr - 1]
+[TestFeatures/VSA generation with multiple storage backends:stderr - 1]
 
 ---
 
-[VSA generation without upload backends shows warning:stdout - 1]
+[TestFeatures/VSA generation without upload backends shows warning:stdout - 1]
 {
   "success": true,
   "components": [
@@ -355,7 +355,7 @@ time="${TIMESTAMP}" level=warning msg="invalid storage config 'invalid-backend@s
 }
 ---
 
-[VSA generation without upload backends shows warning:stderr - 1]
+[TestFeatures/VSA generation without upload backends shows warning:stderr - 1]
 time="${TIMESTAMP}" level=error msg="[VSA] VSA files generated but not uploaded (no --vsa-upload backends specified)"
 
 ---
