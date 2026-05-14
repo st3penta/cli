@@ -1771,6 +1771,7 @@ func TestOCIImageReferrers(t *testing.T) {
 					require.NotNil(t, obj.Get(ast.StringTerm("mediaType")), "descriptor should have mediaType")
 					require.NotNil(t, obj.Get(ast.StringTerm("size")), "descriptor should have size")
 					require.NotNil(t, obj.Get(ast.StringTerm("artifactType")), "descriptor should have artifactType")
+					require.NotNil(t, obj.Get(ast.StringTerm("annotations")), "descriptor should have annotations")
 				}
 
 				// Verify the referrers match (order-independent)
@@ -1778,4 +1779,29 @@ func TestOCIImageReferrers(t *testing.T) {
 			}
 		})
 	}
+
+	// Verify annotations field is present as an object on every referrer descriptor
+	t.Run("annotations field is an object", func(t *testing.T) {
+		ClearCaches()
+
+		bctx := rego.BuiltinContext{Context: context.Background()}
+		got, err := ociImageReferrers(bctx, ast.StringTerm(digestRef))
+		require.NoError(t, err)
+		require.NotNil(t, got)
+
+		arr, ok := got.Value.(*ast.Array)
+		require.True(t, ok)
+		require.Greater(t, arr.Len(), 0)
+
+		for i := 0; i < arr.Len(); i++ {
+			obj, ok := arr.Elem(i).Value.(ast.Object)
+			require.True(t, ok)
+
+			annTerm := obj.Get(ast.StringTerm("annotations"))
+			require.NotNil(t, annTerm, "descriptor %d should have annotations field", i)
+
+			_, ok = annTerm.Value.(ast.Object)
+			require.True(t, ok, "descriptor %d annotations should be an object", i)
+		}
+	})
 }

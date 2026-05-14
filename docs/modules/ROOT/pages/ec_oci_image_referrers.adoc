@@ -12,4 +12,4 @@ Discover artifacts attached to an image via OCI Referrers API.
 
 == Return
 
-`referrers` (`array<object<artifactType: string, digest: string, mediaType: string, ref: string, size: number>>`): list of referrer descriptors discovered via OCI Referrers API
+`referrers` (`array<object<annotations: object[string: string], artifactType: string, digest: string, mediaType: string, ref: string, size: number>>`): list of referrer descriptors discovered via OCI Referrers API
