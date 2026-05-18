@@ -446,6 +446,7 @@ func registerOCIImageTagRefs() {
 }
 
 func registerOCIImageReferrers() {
+	annotations := types.NewObject(nil, types.NewDynamicProperty(types.S, types.S))
 	descriptor := types.NewObject(
 		[]*types.StaticProperty{
 			{Key: "mediaType", Value: types.S},
@@ -453,6 +454,7 @@ func registerOCIImageReferrers() {
 			{Key: "digest", Value: types.S},
 			{Key: "artifactType", Value: types.S},
 			{Key: "ref", Value: types.S},
+			{Key: "annotations", Value: annotations},
 		},
 		nil,
 	)
@@ -1511,6 +1513,7 @@ func ociImageReferrers(bctx rego.BuiltinContext, a *ast.Term) (*ast.Term, error)
 			ast.Item(ast.StringTerm("digest"), ast.StringTerm(descriptor.Digest.String())),
 			ast.Item(ast.StringTerm("artifactType"), ast.StringTerm(descriptor.ArtifactType)),
 			ast.Item(ast.StringTerm("ref"), ast.StringTerm(referrerRef)),
+			ast.Item(ast.StringTerm("annotations"), newAnnotationsTerm(descriptor.Annotations)),
 		)
 
 		referrerDescriptors = append(referrerDescriptors, descriptorTerm)
