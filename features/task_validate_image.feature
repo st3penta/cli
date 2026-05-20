@@ -62,7 +62,7 @@ Feature: Verify Enterprise Contract Tekton Tasks
     When version 0.1 of the task named "verify-enterprise-contract" is run with parameters:
       | IMAGES               | {"components": [{"containerImage": "quay.io/hacbs-contract-demo/golden-container@sha256:e76a4ae9dd8a52a0d191fd34ca133af5b4f2609536d32200a4a40a09fdc93a0d"}]} |
       | POLICY_CONFIGURATION | ${NAMESPACE}/${POLICY_NAME}                                                                                                                                  |
-      | POLICY_BUNDLE_DIGEST | sha256:1b296a925b4021f4b4959ea289596925a8735540e554f3ba7754a651731a216f                                                                                      |
+      | POLICY_BUNDLE_DIGEST | sha256:f904979d405a39a3cc492439b379b4b117c622bbe7126a0e1ba76527ec3ce6a2                                                                                      |
       | STRICT               | false                                                                                                                                                        |
       | IGNORE_REKOR         | true                                                                                                                                                         |
     Then the task should succeed
