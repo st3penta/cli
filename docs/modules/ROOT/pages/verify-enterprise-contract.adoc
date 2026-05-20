@@ -68,6 +68,9 @@ paths can be provided by using the `:` separator.
 +
 *Default*: `now`
 *EXTRA_RULE_DATA* (`string`):: Merge additional Rego variables into the policy data. Use syntax "key=value,key2=value2..."
+*POLICY_BUNDLE_DIGEST* (`string`):: Optional OCI digest to pin the release policy bundle. When provided, the policy configuration is resolved and the reference oci::quay.io/conforma/release-policy:konflux is replaced with oci::quay.io/conforma/release-policy@<digest>. Accepts a full digest (sha256:abc123...) or just the hex hash (abc123...).
++
+*Default*: `sha256:1b296a925b4021f4b4959ea289596925a8735540e554f3ba7754a651731a216f`
 *WORKERS* (`string`):: Number of parallel workers to use for policy evaluation.
 +
 *Default*: `1`

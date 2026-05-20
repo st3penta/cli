@@ -27,6 +27,7 @@ ARG KUBECTL_BINARY
 COPY ${EC_BINARY} /usr/local/bin/ec
 COPY ${KUBECTL_BINARY} /usr/local/bin/kubectl
 COPY hack/reduce-snapshot.sh /usr/local/bin/
+COPY hack/pin-konflux-policy-bundle.sh /usr/local/bin/
 
 RUN ln -s /usr/local/bin/ec /usr/local/bin/conforma
 

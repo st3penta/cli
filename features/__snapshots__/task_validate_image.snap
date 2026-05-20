@@ -33,6 +33,12 @@ Error: Get "http://tuf.invalid/root.json": dial tcp: lookup tuf.invalid on 10.96
 }
 ---
 
+[TestFeatures/Golden container image:pin-policy-bundle - 1]
+Applying policy bundle digest override: sha256:1b296a925b4021f4b4959ea289596925a8735540e554f3ba7754a651731a216f
+'oci::quay.io/conforma/release-policy:konflux' not found in policy configuration, nothing to do.
+
+---
+
 [TestFeatures/Golden container image:show-config - 1]
 {
   "policy": {
@@ -732,5 +738,35 @@ results.tufUrl:
 [TestFeatures/Keyless signing verification cosign v3 style with regexp params:results - 1]
 {
   "TEST_OUTPUT": "{\"timestamp\":\"${TIMESTAMP}\",\"namespace\":\"\",\"successes\":0,\"failures\":2,\"warnings\":0,\"result\":\"FAILURE\"}\n"
+}
+---
+
+[TestFeatures/Pin policy bundle digest:pin-policy-bundle - 1]
+Applying policy bundle digest override: sha256:1b296a925b4021f4b4959ea289596925a8735540e554f3ba7754a651731a216f
+Replaced: oci::quay.io/conforma/release-policy:konflux
+    with: oci::quay.io/conforma/release-policy@sha256:1b296a925b4021f4b4959ea289596925a8735540e554f3ba7754a651731a216f
+Modified policy written to: /tekton/home/policy-with-pinned-bundle.yaml
+
+---
+
+[TestFeatures/Pin policy bundle digest:show-config - 1]
+{
+  "policy": {
+    "sources": [
+      {
+        "policy": [
+          "oci::quay.io/conforma/release-policy@sha256:1b296a925b4021f4b4959ea289596925a8735540e554f3ba7754a651731a216f"
+        ],
+        "config": {
+          "include": [
+            "slsa_provenance_available"
+          ]
+        }
+      }
+    ],
+    "publicKey": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAERhr8Zj4dZW67zucg8fDr11M4lmRp\nzN6SIcIjkvH39siYg1DkCoa2h2xMUZ10ecbM3/ECqvBV55YwQ2rcIEa7XQ==\n-----END PUBLIC KEY-----"
+  },
+  "key": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAERhr8Zj4dZW67zucg8fDr11M4lmRp\nzN6SIcIjkvH39siYg1DkCoa2h2xMUZ10ecbM3/ECqvBV55YwQ2rcIEa7XQ==\n-----END PUBLIC KEY-----\n",
+  "effective-time": "${TIMESTAMP}"
 }
 ---

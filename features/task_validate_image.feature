@@ -34,9 +34,42 @@ Feature: Verify Enterprise Contract Tekton Tasks
       | STRICT               | true                                                                                                                                                         |
       | IGNORE_REKOR         | true                                                                                                                                                         |
     Then the task should succeed
+     And the task logs for step "pin-policy-bundle" should match the snapshot
      And the task logs for step "report" should match the snapshot
      And the task results should match the snapshot
      And the task logs for step "show-config" should match the snapshot
+
+  Scenario: Pin policy bundle digest
+    Given a working namespace
+    Given a cluster policy with content:
+      ```
+      {
+        "publicKey": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAERhr8Zj4dZW67zucg8fDr11M4lmRp\nzN6SIcIjkvH39siYg1DkCoa2h2xMUZ10ecbM3/ECqvBV55YwQ2rcIEa7XQ==\n-----END PUBLIC KEY-----",
+        "sources": [
+          {
+            "policy": [
+              "oci::quay.io/conforma/release-policy:konflux"
+            ],
+            "config": {
+              "include": [
+                "slsa_provenance_available"
+              ]
+            }
+          }
+        ]
+      }
+      ```
+    When version 0.1 of the task named "verify-enterprise-contract" is run with parameters:
+      | IMAGES               | {"components": [{"containerImage": "quay.io/hacbs-contract-demo/golden-container@sha256:e76a4ae9dd8a52a0d191fd34ca133af5b4f2609536d32200a4a40a09fdc93a0d"}]} |
+      | POLICY_CONFIGURATION | ${NAMESPACE}/${POLICY_NAME}                                                                                                                                  |
+      | POLICY_BUNDLE_DIGEST | sha256:1b296a925b4021f4b4959ea289596925a8735540e554f3ba7754a651731a216f                                                                                      |
+      | STRICT               | false                                                                                                                                                        |
+      | IGNORE_REKOR         | true                                                                                                                                                         |
+    Then the task should succeed
+     And the task logs for step "pin-policy-bundle" should match the snapshot
+     And the task logs for step "show-config" should match the snapshot
+     # The show-config step is enough to confirm the ECP was modified. No need
+     # to look at the other output
 
   Scenario: Extra rule data provided to task
     Given a working namespace
