@@ -343,6 +343,135 @@ warn contains result if {
 		require.Len(t, results, 1)
 		assert.Equal(t, "this is a warning", results[0].Message)
 	})
+
+	t.Run("unexpected result type surfaces as message", func(t *testing.T) {
+		intPolicy := `package inttest
+
+import rego.v1
+
+deny contains result if {
+	input.value == "bad"
+	result := 42
+}
+`
+		intEngine, _ := setupOPAEngine(t, intPolicy)
+		oi := &opaEvaluator{engine: intEngine}
+
+		results, err := oi.evalOPAQuery(ctx, map[string]any{"value": "bad"}, "data.inttest.deny")
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		assert.Contains(t, results[0].Message, "unexpected policy result type")
+	})
+}
+
+func TestCollectRuleNames(t *testing.T) {
+	policyContent := `package collect.test
+
+import rego.v1
+
+deny contains result if {
+	result := "fail"
+}
+
+warn contains result if {
+	result := "warning"
+}
+
+deny_extra contains result if {
+	result := "extra"
+}
+
+allow if { true }
+`
+	engine, _ := setupOPAEngine(t, policyContent)
+	o := &opaEvaluator{engine: engine}
+
+	t.Run("collects deny and warn rules", func(t *testing.T) {
+		names := o.collectRuleNames("collect.test")
+		assert.Contains(t, names, "deny")
+		assert.Contains(t, names, "warn")
+		assert.Contains(t, names, "deny_extra")
+		assert.Len(t, names, 3)
+	})
+
+	t.Run("excludes non-deny/warn rules", func(t *testing.T) {
+		names := o.collectRuleNames("collect.test")
+		for _, n := range names {
+			assert.NotEqual(t, "allow", n)
+		}
+	})
+
+	t.Run("returns nil for unknown namespace", func(t *testing.T) {
+		names := o.collectRuleNames("unknown.ns")
+		assert.Nil(t, names)
+	})
+}
+
+func TestEvaluateRule(t *testing.T) {
+	policyContent := `package rule.test
+
+import rego.v1
+
+deny contains result if {
+	input.fail == true
+	result := "denied"
+}
+
+warn contains result if {
+	input.warn == true
+	result := "warned"
+}
+`
+	engine, _ := setupOPAEngine(t, policyContent)
+	o := &opaEvaluator{engine: engine}
+	ctx := context.Background()
+
+	t.Run("failure result", func(t *testing.T) {
+		result, err := o.evaluateRule(ctx, map[string]any{"fail": true}, "rule.test", "deny")
+		require.NoError(t, err)
+		require.Len(t, result.failures, 1)
+		assert.Equal(t, "denied", result.failures[0].Message)
+		assert.Empty(t, result.warnings)
+		assert.Empty(t, result.exceptions)
+	})
+
+	t.Run("warning result", func(t *testing.T) {
+		result, err := o.evaluateRule(ctx, map[string]any{"warn": true}, "rule.test", "warn")
+		require.NoError(t, err)
+		require.Len(t, result.warnings, 1)
+		assert.Equal(t, "warned", result.warnings[0].Message)
+		assert.Empty(t, result.failures)
+	})
+
+	t.Run("success when rule passes", func(t *testing.T) {
+		result, err := o.evaluateRule(ctx, map[string]any{"fail": false}, "rule.test", "deny")
+		require.NoError(t, err)
+		assert.Empty(t, result.failures)
+		assert.Equal(t, 1, result.successes)
+	})
+
+	t.Run("exception suppresses failures", func(t *testing.T) {
+		excPolicy := `package rule.exc
+
+import rego.v1
+
+deny contains result if {
+	input.fail == true
+	result := "denied"
+}
+
+exception contains rules if {
+	rules := ["", ""]
+}
+`
+		excEngine, _ := setupOPAEngine(t, excPolicy)
+		oe := &opaEvaluator{engine: excEngine}
+
+		result, err := oe.evaluateRule(ctx, map[string]any{"fail": true}, "rule.exc", "deny")
+		require.NoError(t, err)
+		assert.NotEmpty(t, result.exceptions)
+		assert.Empty(t, result.failures)
+	})
 }
 
 func TestQueryNamespace(t *testing.T) {
@@ -550,21 +679,12 @@ deny contains result if {
 }
 
 func TestEnsureInitialized(t *testing.T) {
-	t.Run("returns error from init", func(t *testing.T) {
-		expectedErr := fmt.Errorf("init failed")
+	t.Run("returns error when no policy sources", func(t *testing.T) {
 		o := &opaEvaluator{
 			initOnce: &sync.Once{},
-			initErr:  expectedErr,
-		}
-		// initOnce already "ran" since initErr is set — but sync.Once
-		// hasn't been used yet. Let's set it up properly.
-		once := &sync.Once{}
-		o.initOnce = once
-		o.initErr = nil
-
-		// Force initialization to fail by having no policy sources
-		o.basePolicyEvaluator = basePolicyEvaluator{
-			fs: afero.NewMemMapFs(),
+			basePolicyEvaluator: basePolicyEvaluator{
+				fs: afero.NewMemMapFs(),
+			},
 		}
 
 		err := o.ensureInitialized(context.Background())

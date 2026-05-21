@@ -861,7 +861,11 @@ func AddStepsTo(sc *godog.ScenarioContext) {
 	sc.Step(`^a track bundle file named "([^"]*)" containing$`, createTrackBundleFile)
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		if v := os.Getenv("EC_USE_OPA"); v != "" {
-			ctx, _ = theEnvironmentVarilableIsSet(ctx, "EC_USE_OPA="+v)
+			var err error
+			ctx, err = theEnvironmentVarilableIsSet(ctx, "EC_USE_OPA="+v)
+			if err != nil {
+				return ctx, fmt.Errorf("setting EC_USE_OPA: %w", err)
+			}
 		}
 		return ctx, nil
 	})

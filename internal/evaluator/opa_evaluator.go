@@ -240,8 +240,31 @@ func (o *opaEvaluator) queryNamespace(ctx context.Context, fileName string, inpu
 		Namespace: namespace,
 	}
 
+	ruleNames := o.collectRuleNames(namespace)
+
+	var successes int
+	for _, ruleName := range ruleNames {
+		ruleResult, err := o.evaluateRule(ctx, input, namespace, ruleName)
+		if err != nil {
+			return Outcome{}, err
+		}
+		successes += ruleResult.successes
+		outcome.Failures = append(outcome.Failures, ruleResult.failures...)
+		outcome.Warnings = append(outcome.Warnings, ruleResult.warnings...)
+		outcome.Exceptions = append(outcome.Exceptions, ruleResult.exceptions...)
+	}
+
+	resultCount := len(outcome.Failures) + len(outcome.Warnings) + len(outcome.Exceptions) + successes
+	if resultCount < len(ruleNames) {
+		successes += len(ruleNames) - resultCount
+	}
+	outcome.Successes = make([]Result, successes)
+
+	return outcome, nil
+}
+
+func (o *opaEvaluator) collectRuleNames(namespace string) []string {
 	var ruleNames []string
-	var ruleCount int
 	for _, module := range o.engine.Modules() {
 		ns := strings.Replace(module.Package.Path.String(), "data.", "", 1)
 		if ns != namespace {
@@ -252,10 +275,9 @@ func (o *opaEvaluator) queryNamespace(ctx context.Context, fileName string, inpu
 			if !isOPAFailure(name) && !isOPAWarning(name) {
 				continue
 			}
-			ruleCount++
 			found := false
 			for _, existing := range ruleNames {
-				if strings.EqualFold(existing, name) {
+				if existing == name {
 					found = true
 					break
 				}
@@ -265,52 +287,53 @@ func (o *opaEvaluator) queryNamespace(ctx context.Context, fileName string, inpu
 			}
 		}
 	}
+	return ruleNames
+}
 
-	var successes int
-	for _, ruleName := range ruleNames {
-		exceptionQuery := fmt.Sprintf("data.%s.exception[_][_] == %q", namespace, stripRulePrefix(ruleName))
-		exceptionResults, err := o.evalOPAQuery(ctx, input, exceptionQuery)
-		if err != nil {
-			return Outcome{}, fmt.Errorf("query exception: %w", err)
-		}
+type ruleEvalResult struct {
+	failures   []Result
+	warnings   []Result
+	exceptions []Result
+	successes  int
+}
 
-		var exceptions []Result
-		for _, er := range exceptionResults {
-			if er.Message == "" {
-				exceptions = append(exceptions, Result{Message: exceptionQuery})
-			}
-		}
+func (o *opaEvaluator) evaluateRule(ctx context.Context, input any, namespace string, ruleName string) (ruleEvalResult, error) {
+	var result ruleEvalResult
 
-		ruleQuery := fmt.Sprintf("data.%s.%s", namespace, ruleName)
-		ruleResults, err := o.evalOPAQuery(ctx, input, ruleQuery)
-		if err != nil {
-			return Outcome{}, fmt.Errorf("query rule: %w", err)
-		}
-
-		for _, rr := range ruleResults {
-			if len(exceptions) > 0 {
-				continue
-			}
-			if rr.Message == "" {
-				successes++
-				continue
-			}
-			if isOPAFailure(ruleName) {
-				outcome.Failures = append(outcome.Failures, rr)
-			} else {
-				outcome.Warnings = append(outcome.Warnings, rr)
-			}
-		}
-		outcome.Exceptions = append(outcome.Exceptions, exceptions...)
+	exceptionQuery := fmt.Sprintf("data.%s.exception[_][_] == %q", namespace, stripRulePrefix(ruleName))
+	exceptionResults, err := o.evalOPAQuery(ctx, input, exceptionQuery)
+	if err != nil {
+		return result, fmt.Errorf("query exception: %w", err)
 	}
 
-	resultCount := len(outcome.Failures) + len(outcome.Warnings) + len(outcome.Exceptions) + successes
-	if resultCount < ruleCount {
-		successes += ruleCount - resultCount
+	for _, er := range exceptionResults {
+		if er.Message == "" {
+			result.exceptions = append(result.exceptions, Result{Message: exceptionQuery})
+		}
 	}
-	outcome.Successes = make([]Result, successes)
 
-	return outcome, nil
+	ruleQuery := fmt.Sprintf("data.%s.%s", namespace, ruleName)
+	ruleResults, err := o.evalOPAQuery(ctx, input, ruleQuery)
+	if err != nil {
+		return result, fmt.Errorf("query rule: %w", err)
+	}
+
+	for _, rr := range ruleResults {
+		if len(result.exceptions) > 0 {
+			continue
+		}
+		if rr.Message == "" {
+			result.successes++
+			continue
+		}
+		if isOPAFailure(ruleName) {
+			result.failures = append(result.failures, rr)
+		} else {
+			result.warnings = append(result.warnings, rr)
+		}
+	}
+
+	return result, nil
 }
 
 func (o *opaEvaluator) evalOPAQuery(ctx context.Context, input any, query string) ([]Result, error) {
@@ -371,6 +394,11 @@ func (o *opaEvaluator) evalOPAQuery(ctx context.Context, input any, query string
 					results = append(results, Result{
 						Message:  msg,
 						Metadata: metadata,
+					})
+				default:
+					results = append(results, Result{
+						Message:  fmt.Sprintf("unexpected policy result type %T: %v", v, v),
+						Metadata: map[string]any{},
 					})
 				}
 			}
