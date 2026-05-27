@@ -320,6 +320,8 @@ func (o *opaEvaluator) evaluateRule(ctx context.Context, input any, namespace st
 
 	for _, rr := range ruleResults {
 		if len(result.exceptions) > 0 {
+			// log the exception query as skipped
+			log.Debugf("exception query %s skipped", exceptionQuery)
 			continue
 		}
 		if rr.Message == "" {
