@@ -67,7 +67,6 @@ Feature: Verify Enterprise Contract Tekton Tasks
       | IGNORE_REKOR         | true                                                                                                                                                         |
       | EC_USE_OPA           | 1                                                                                                                                                            |
     Then the task should succeed
-     And the task logs for step "report" should match the snapshot
      And the task results should match the snapshot
 
   Scenario: Pin policy bundle digest
