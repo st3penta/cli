@@ -859,16 +859,6 @@ func AddStepsTo(sc *godog.ScenarioContext) {
 	sc.Step(`^the "([^"]*)" file should match the snapshot$`, matchFileSnapshot)
 	sc.Step(`^a file named "([^"]*)" containing$`, createGenericFile)
 	sc.Step(`^a track bundle file named "([^"]*)" containing$`, createTrackBundleFile)
-	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
-		if v := os.Getenv("EC_USE_OPA"); v != "" {
-			var err error
-			ctx, err = theEnvironmentVarilableIsSet(ctx, "EC_USE_OPA="+v)
-			if err != nil {
-				return ctx, fmt.Errorf("setting EC_USE_OPA: %w", err)
-			}
-		}
-		return ctx, nil
-	})
 	sc.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 		if err != nil {
 			logExecution(ctx)
