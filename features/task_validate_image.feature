@@ -39,6 +39,37 @@ Feature: Verify Enterprise Contract Tekton Tasks
      And the task results should match the snapshot
      And the task logs for step "show-config" should match the snapshot
 
+  Scenario: Golden container image with OPA evaluator
+    Given a working namespace
+    Given a cluster policy with content:
+      ```
+      {
+        "publicKey": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAERhr8Zj4dZW67zucg8fDr11M4lmRp\nzN6SIcIjkvH39siYg1DkCoa2h2xMUZ10ecbM3/ECqvBV55YwQ2rcIEa7XQ==\n-----END PUBLIC KEY-----",
+        "sources": [
+          {
+            "policy": [
+              "github.com/conforma/policy//policy/release?ref=0de5461c14413484575e63e96ddb514d8ab954b5",
+              "github.com/conforma/policy//policy/lib?ref=0de5461c14413484575e63e96ddb514d8ab954b5"
+            ],
+            "config": {
+              "include": [
+                "slsa_provenance_available"
+              ]
+            }
+          }
+        ]
+      }
+      ```
+    When version 0.1 of the task named "verify-enterprise-contract" is run with parameters:
+      | IMAGES               | {"components": [{"containerImage": "quay.io/hacbs-contract-demo/golden-container@sha256:e76a4ae9dd8a52a0d191fd34ca133af5b4f2609536d32200a4a40a09fdc93a0d"}]} |
+      | POLICY_CONFIGURATION | ${NAMESPACE}/${POLICY_NAME}                                                                                                                                  |
+      | STRICT               | true                                                                                                                                                         |
+      | IGNORE_REKOR         | true                                                                                                                                                         |
+      | EC_USE_OPA           | 1                                                                                                                                                            |
+    Then the task should succeed
+     And the task logs for step "report" should match the snapshot
+     And the task results should match the snapshot
+
   Scenario: Pin policy bundle digest
     Given a working namespace
     Given a cluster policy with content:
