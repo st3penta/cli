@@ -185,6 +185,11 @@ spec:
       description: Number of parallel workers to use for policy evaluation.
       default: "1"
 
+    - name: EC_USE_OPA
+      type: string
+      description: Use the OPA evaluator instead of the default conftest evaluator. Set to "1" to enable.
+      default: ""
+
     - name: SINGLE_COMPONENT
       description: Reduce the Snapshot to only the component whose build caused the Snapshot to be created
       type: string
@@ -423,6 +428,8 @@ spec:
           value: "$(params.RETRY_FACTOR)"
         - name: RETRY_JITTER
           value: "$(params.RETRY_JITTER)"
+        - name: EC_USE_OPA
+          value: "$(params.EC_USE_OPA)"
         - name: HOMEDIR
           value: "$(params.HOMEDIR)"
         - name: SSL_CERT_DIR
