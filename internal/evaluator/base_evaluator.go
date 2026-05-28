@@ -232,7 +232,7 @@ func (b *basePolicyEvaluator) prepareDataDirs(ctx context.Context) ([]string, er
 			return nil
 		})
 		if err != nil {
-			continue
+			nil, err
 		}
 	}
 
