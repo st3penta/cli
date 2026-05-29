@@ -23,6 +23,8 @@ var (
 )
 ```
 
+The existing `var initialize = sync.OnceFunc(_initialize)` wiring is preserved unchanged. Tests continue to reset via `initialize = sync.OnceFunc(_initialize)` in cleanup.
+
 ### `_initialize` function
 
 Replace transport global mutation with gatherer construction. Build a shared base transport (DefaultTransport, optionally wrapped with tracing), create independent retry transports, pass via `WithTransport` to constructors. Assign atomically after both succeed to prevent partial initialization.
@@ -94,8 +96,12 @@ var gatherFunc = func(ctx context.Context, source, destination string) (metadata
 ### Import changes
 
 - Keep `"github.com/conforma/go-gather/registry"` import — still used by the git/file fallback path
-- Add `net_http "net/http"` for `net_http.DefaultTransport` reference
+- Add `net_http "net/http"` for `net_http.DefaultTransport` reference (production file uses `http` alias for `internal/http`, so stdlib `net/http` must use a different alias)
 - The `goci` and `ghttp` imports remain
+
+**Import alias convention:**
+- Production (`downloader.go`): `http` → `internal/http`, `net_http` → `net/http`
+- Tests (`downloader_test.go`): `http` → `net/http` (stdlib), `echttp` → `internal/http` (matches existing convention)
 
 ### Removals
 
@@ -122,8 +128,8 @@ Still swaps `gatherFunc` with a mock closure and restores in defer.
 ### `TestOCIClientConfiguration`
 
 - `OCIGatherer.transport` is private — cannot inspect directly
-- **Strategy:** Convert to a behavioral test. Call `_initialize()`, then exercise `ociGatherer.Gather` against an httptest registry. Verify retry behavior by having the server return transient errors and confirming the gatherer retries according to the configured policy. This validates that `WithTransport` wired the retry transport correctly without needing to inspect private fields.
-- Alternative: verify `ociGatherer` is non-nil and the correct type, accept that transport-level verification is covered by `TestOCITracing`
+- **Strategy:** Call `_initialize()`, then assert `ociGatherer` is non-nil and the correct type (`*goci.OCIGatherer`). Accept that transport-level wiring verification is covered by `TestOCITracing`, which exercises the full gather path through a real httptest registry and verifies trace logs appear (confirming the tracing+retry transport stack was used). This avoids duplicating integration-test infrastructure and keeps the unit test focused on initialization correctness.
+- **Concrete assertion:** `assert.IsType(t, &goci.OCIGatherer{}, ociGatherer)`
 
 ### `TestHTTPClientConfiguration`
 
