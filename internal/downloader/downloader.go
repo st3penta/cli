@@ -19,6 +19,7 @@ package downloader
 import (
 	"context"
 	"fmt"
+	net_http "net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -43,19 +44,33 @@ type downloadImpl interface {
 
 var log = logrus.StandardLogger()
 
+var (
+	ociGatherer  *goci.OCIGatherer
+	httpGatherer *ghttp.HTTPGatherer
+)
+
 var gatherFunc = func(ctx context.Context, source, destination string) (metadata.Metadata, error) {
 	initialize()
-	g, err := registry.GetGatherer(source)
-	if err != nil {
-		return nil, err
+
+	switch {
+	case ociGatherer.Matcher(source):
+		return ociGatherer.Gather(ctx, source, destination)
+	case httpGatherer.Matcher(source):
+		return httpGatherer.Gather(ctx, source, destination)
+	default:
+		g, err := registry.GetGatherer(source)
+		if err != nil {
+			return nil, err
+		}
+		return g.Gather(ctx, source, destination)
 	}
-	return g.Gather(ctx, source, destination)
 }
 
 var _initialize = func() {
+	var base net_http.RoundTripper = net_http.DefaultTransport
+
 	if log.IsLevelEnabled(logrus.TraceLevel) {
-		goci.Transport = http.NewTracingRoundTripperWithLogger(goci.Transport)
-		ghttp.Transport = http.NewTracingRoundTripperWithLogger(ghttp.Transport)
+		base = http.NewTracingRoundTripperWithLogger(base)
 	}
 
 	backoff := retry.ExponentialBackoff(http.DefaultBackoff.Duration, http.DefaultBackoff.Factor, http.DefaultBackoff.Jitter)
@@ -69,13 +84,16 @@ var _initialize = func() {
 		return policy
 	}
 
-	ociTransport := retry.NewTransport(goci.Transport)
+	ociTransport := retry.NewTransport(base)
 	ociTransport.Policy = policyfn
-	goci.Transport = ociTransport
+	oci := goci.NewOCIGatherer(goci.WithTransport(ociTransport))
 
-	httpTransport := retry.NewTransport(ghttp.Transport)
+	httpTransport := retry.NewTransport(base)
 	httpTransport.Policy = policyfn
-	ghttp.Transport = httpTransport
+	h := ghttp.NewHTTPGatherer(ghttp.WithTransport(httpTransport))
+
+	ociGatherer = oci
+	httpGatherer = h
 }
 
 var initialize = sync.OnceFunc(_initialize)
