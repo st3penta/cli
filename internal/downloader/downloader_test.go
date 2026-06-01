@@ -266,6 +266,10 @@ func TestHTTPTracing(t *testing.T) {
 	assert.Equal(t, 3, found)
 }
 
+// TestOCIClientConfiguration verifies _initialize constructs an OCI gatherer.
+// OCIGatherer.transport is unexported, so we cannot verify the retry transport
+// directly (unlike TestHTTPClientConfiguration). TestOCITracing provides
+// integration-level verification that the transport stack is wired correctly.
 func TestOCIClientConfiguration(t *testing.T) {
 	t.Cleanup(func() {
 		ociGatherer = nil
