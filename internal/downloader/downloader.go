@@ -52,18 +52,23 @@ var (
 var gatherFunc = func(ctx context.Context, source, destination string) (metadata.Metadata, error) {
 	initialize()
 
+	// Dispatch to custom gatherers only for unambiguous scheme prefixes.
+	// Bare hostnames (e.g. quay.io/..., 127.0.0.1/...) fall through to
+	// the registry, which checks git matchers before OCI matchers.
 	switch {
-	case ociGatherer.Matcher(source):
+	case strings.HasPrefix(source, "oci://") || strings.HasPrefix(source, "oci::"):
 		return ociGatherer.Gather(ctx, source, destination)
-	case httpGatherer.Matcher(source):
-		return httpGatherer.Gather(ctx, source, destination)
-	default:
-		g, err := registry.GetGatherer(source)
-		if err != nil {
-			return nil, err
+	case strings.HasPrefix(source, "https://") || strings.HasPrefix(source, "http://"):
+		if httpGatherer.Matcher(source) {
+			return httpGatherer.Gather(ctx, source, destination)
 		}
-		return g.Gather(ctx, source, destination)
 	}
+
+	g, err := registry.GetGatherer(source)
+	if err != nil {
+		return nil, err
+	}
+	return g.Gather(ctx, source, destination)
 }
 
 var _initialize = func() {

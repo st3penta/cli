@@ -159,7 +159,6 @@ func TestOCITracing(t *testing.T) {
 	t.Cleanup(trace.Stop)
 
 	log.Level = logrus.TraceLevel
-	initialize = _initialize // we want it to re-execute for the test
 	t.Cleanup(func() {
 		log.Level = logrus.InfoLevel
 		initialize = sync.OnceFunc(_initialize)
@@ -179,7 +178,12 @@ func TestOCITracing(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, remote.Push(ref, img))
 
-	_, err = gatherFunc(context.Background(), ref.String(), t.TempDir())
+	// Initialize directly then call ociGatherer.Gather to test the OCI
+	// tracing path. Bare localhost refs fall through to the registry's
+	// default gatherer (no tracing), so we invoke the gatherer directly.
+	_initialize()
+
+	_, err = ociGatherer.Gather(context.Background(), ref.String(), t.TempDir())
 	require.NoError(t, err)
 
 	trace.Stop()
@@ -215,6 +219,7 @@ func TestHTTPTracing(t *testing.T) {
 	t.Cleanup(trace.Stop)
 
 	log.Level = logrus.TraceLevel
+	initialize = _initialize
 	t.Cleanup(func() {
 		log.Level = logrus.InfoLevel
 		initialize = sync.OnceFunc(_initialize)
@@ -228,13 +233,7 @@ func TestHTTPTracing(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	// Initialize directly to set up tracing transport, then call
-	// httpGatherer.Gather to test the HTTP path specifically.
-	// (127.0.0.1 matches the OCI registry pattern, so gatherFunc
-	// would dispatch to the OCI gatherer instead of HTTP.)
-	_initialize()
-
-	_, err := httpGatherer.Gather(context.Background(), fmt.Sprintf("%s/foo", server.URL), path.Join(t.TempDir(), "dl"))
+	_, err := gatherFunc(context.Background(), fmt.Sprintf("%s/foo", server.URL), path.Join(t.TempDir(), "dl"))
 	require.NoError(t, err)
 
 	trace.Stop()
