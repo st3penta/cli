@@ -59,9 +59,9 @@ Acceptance tests require `/etc/hosts` entries:
 
 Read these before modifying the corresponding areas:
 
-- `internal/evaluator/DESIGN.md` — rule filtering: why two resolvers, two-pass design, scoring precedence, adding filters
-- `internal/validate/vsa/DESIGN.md` — VSA: storage backends, DSSE signing rationale, expiration model
-- `acceptance/README.md` — acceptance test framework, Testcontainers, WireMock, snapshot testing
+- [internal/evaluator/DESIGN.md](internal/evaluator/DESIGN.md) — rule filtering: why two resolvers, two-pass design, scoring precedence, adding filters
+- [internal/validate/vsa/DESIGN.md](internal/validate/vsa/DESIGN.md) — VSA: storage backends, DSSE signing rationale, expiration model
+- [acceptance/README.md](acceptance/README.md) — acceptance test framework, Testcontainers, WireMock, snapshot testing
 
 ## Troubleshooting
 
