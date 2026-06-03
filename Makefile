@@ -177,6 +177,10 @@ feature_%: ## Run acceptance tests for a single feature file, e.g. make feature_
 # (Replace spaces with underscores in the scenario name.)
 scenario_%: build ## Run acceptance tests for a single scenario, e.g. make scenario_inline_policy
 	@cd acceptance && go test -test.run 'TestFeatures/$*'
+	@# With UPDATE_SNAPS=true all the other snap files will be deleted. Let's put them back.
+	@if [ -n "$$UPDATE_SNAPS" ]; then \
+	  git ls-files --deleted -- '../features/__snapshots__/*.snap' | xargs -r git checkout --; \
+	fi
 
 benchmark/%/data.tar.gz:
 	@cd benchmark/$*
