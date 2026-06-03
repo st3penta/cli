@@ -38,17 +38,24 @@ type key int
 
 const downloadImplKey key = 0
 
+// downloadImpl defines the interface for downloading files.
 type downloadImpl interface {
 	Download(context.Context, string, []string) error
 }
 
 var log = logrus.StandardLogger()
 
+// ociGatherer and httpGatherer hold gatherer instances configured with
+// tracing and retry transports via WithTransport. Initialized once by
+// _initialize via sync.OnceFunc.
 var (
 	ociGatherer  *goci.OCIGatherer
 	httpGatherer *ghttp.HTTPGatherer
 )
 
+// gatherFunc dispatches sources to the appropriate gatherer. OCI and HTTP
+// scheme prefixes route to custom gatherers; all other sources fall through
+// to the go-gather registry.
 var gatherFunc = func(ctx context.Context, source, destination string) (metadata.Metadata, error) {
 	initialize()
 
@@ -71,6 +78,8 @@ var gatherFunc = func(ctx context.Context, source, destination string) (metadata
 	return g.Gather(ctx, source, destination)
 }
 
+// _initialize builds the transport stack (optional tracing + retry) and
+// constructs the OCI and HTTP gatherer instances.
 var _initialize = func() {
 	var base net_http.RoundTripper = net_http.DefaultTransport
 
