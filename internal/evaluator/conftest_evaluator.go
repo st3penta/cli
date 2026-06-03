@@ -661,7 +661,7 @@ func (c conftestEvaluator) Evaluate(ctx context.Context, target EvaluationTarget
 		result.Skipped = skipped
 
 		// Replace the placeholder successes slice with the actual successes.
-		result.Successes = c.computeSuccesses(result, rules, target.Target, target.ComponentName, missingIncludes, unifiedFilter)
+		result.Successes = c.computeSuccesses(result, rules, target.Target, target.ComponentName, missingIncludes, unifiedFilter, effectiveTime)
 
 		totalRules += len(result.Warnings) + len(result.Failures) + len(result.Successes)
 
@@ -802,6 +802,7 @@ func (c conftestEvaluator) computeSuccesses(
 	componentName string,
 	missingIncludes map[string]bool,
 	unifiedFilter PostEvaluationFilter,
+	effectiveTime time.Time,
 ) []Result {
 	// what rules, by code, have we seen in the Conftest results, use map to
 	// take advantage of hashing for quicker lookup
@@ -858,7 +859,7 @@ func (c conftestEvaluator) computeSuccesses(
 		if unifiedFilter != nil {
 			// Use the unified filter to check if this success should be included
 			filteredResults, _ := unifiedFilter.FilterResults(
-				[]Result{success}, rules, imageRef, componentName, missingIncludes, time.Now())
+				[]Result{success}, rules, imageRef, componentName, missingIncludes, effectiveTime)
 
 			if len(filteredResults) == 0 {
 				log.Debugf("Skipping result success: %#v", success)

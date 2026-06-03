@@ -16,6 +16,12 @@ ${TIMESTAMP} INFO Step was skipped due to when expressions were evaluated to fal
 }
 ---
 
+[TestFeatures/Golden container image with OPA evaluator:results - 1]
+{
+  "TEST_OUTPUT": "{\"timestamp\":\"${TIMESTAMP}\",\"namespace\":\"\",\"successes\":5,\"failures\":0,\"warnings\":0,\"result\":\"SUCCESS\"}\n"
+}
+---
+
 [TestFeatures/Initialize TUF fails:initialize-tuf - 1]
 Error: Get "http://tuf.invalid/root.json": dial tcp: lookup tuf.invalid on 10.96.0.10:53: no such host
 

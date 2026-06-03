@@ -326,6 +326,100 @@ func TestWriteInputFileMultipleAttestations(t *testing.T) {
 	assert.JSONEq(t, string(inputJSON), string(bytes))
 }
 
+func TestBuildInput(t *testing.T) {
+	t.Run("basic round-trip", func(t *testing.T) {
+		a := ApplicationSnapshotImage{
+			reference:    name.MustParseReference("registry.io/repository/image:tag"),
+			attestations: []attestation.Attestation{createSimpleAttestation(nil)},
+			snapshot: app.SnapshotSpec{
+				Components: []app.SnapshotComponent{
+					{ContainerImage: "registry.io/repository/image:tag"},
+				},
+			},
+			component: app.SnapshotComponent{
+				Name:           "my-component",
+				ContainerImage: "registry.io/repository/image:tag",
+			},
+		}
+
+		parsed, inputJSON, err := a.BuildInput(context.Background())
+		require.NoError(t, err)
+		assert.NotNil(t, parsed)
+		assert.NotEmpty(t, inputJSON)
+
+		img, ok := parsed["image"].(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, "registry.io/repository/image:tag", img["ref"])
+
+		assert.Equal(t, "my-component", parsed["component_name"])
+
+		var fromJSON map[string]any
+		require.NoError(t, json.Unmarshal(inputJSON, &fromJSON))
+		assert.Equal(t, parsed["component_name"], fromJSON["component_name"])
+	})
+
+	t.Run("with parent image", func(t *testing.T) {
+		a := ApplicationSnapshotImage{
+			reference:        name.MustParseReference("registry.io/repository/image:tag"),
+			parentRef:        name.MustParseReference("registry.io/repository/parent:latest"),
+			parentConfigJSON: json.RawMessage(`{"Labels":{"io.k8s.display-name":"Base"}}`),
+		}
+
+		parsed, _, err := a.BuildInput(context.Background())
+		require.NoError(t, err)
+
+		img, ok := parsed["image"].(map[string]any)
+		require.True(t, ok)
+		parent, ok := img["parent"].(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, "registry.io/repository/parent:latest", parent["ref"])
+	})
+
+	t.Run("without parent image", func(t *testing.T) {
+		a := ApplicationSnapshotImage{
+			reference: name.MustParseReference("registry.io/repository/image:tag"),
+		}
+
+		parsed, _, err := a.BuildInput(context.Background())
+		require.NoError(t, err)
+
+		img, ok := parsed["image"].(map[string]any)
+		require.True(t, ok)
+		parent, exists := img["parent"]
+		if exists {
+			parentMap, ok := parent.(map[string]any)
+			assert.True(t, !ok || parentMap["ref"] == nil || parentMap["ref"] == "")
+		}
+	})
+
+	t.Run("matches WriteInputFile output", func(t *testing.T) {
+		a := ApplicationSnapshotImage{
+			reference:    name.MustParseReference("registry.io/repository/image:tag"),
+			attestations: []attestation.Attestation{createSimpleAttestation(nil)},
+			snapshot: app.SnapshotSpec{
+				Components: []app.SnapshotComponent{
+					{ContainerImage: "registry.io/repository/image:tag"},
+				},
+			},
+			component: app.SnapshotComponent{
+				Name:           "test-component",
+				ContainerImage: "registry.io/repository/image:tag",
+			},
+		}
+
+		parsed, buildJSON, err := a.BuildInput(context.Background())
+		require.NoError(t, err)
+
+		fs := afero.NewMemMapFs()
+		ctx := utils.WithFS(context.Background(), fs)
+		_, writeJSON, err := a.WriteInputFile(ctx)
+		require.NoError(t, err)
+
+		assert.JSONEq(t, string(writeJSON), string(buildJSON))
+		assert.NotNil(t, parsed)
+	})
+}
+
 func TestNewApplicationSnapshotImage(t *testing.T) {
 	ctx := context.Background()
 

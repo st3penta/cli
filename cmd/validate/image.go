@@ -320,7 +320,8 @@ func validateImageCmd(validate imageValidationFunc) *cobra.Command {
 				var c evaluator.Evaluator
 				var err error
 				if utils.IsOpaEnabled() {
-					c, err = newOPAEvaluator()
+					c, err = newOPAEvaluator(
+						cmd.Context(), policySources, data.policy, sourceGroup, nil)
 				} else {
 					// Use the unified filtering approach with the specified filter type
 					c, err = evaluator.NewConftestEvaluatorWithFilterType(
