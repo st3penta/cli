@@ -627,14 +627,13 @@ func isImageSignatureAttestation(sig cosignOCI.Signature) bool {
 // attestations to achieve full parity with v2 signature output. Also, there might
 // be some cosign methods we can use instead of doing it ourselves here.
 func extractSignaturesFromBundle(sig cosignOCI.Signature) ([]signature.EntitySignature, error) {
-	reader, err := sig.Uncompressed()
+	payload, err := sig.Payload()
 	if err != nil {
 		return nil, fmt.Errorf("cannot read signature data: %w", err)
 	}
-	defer reader.Close()
 
 	var attestationPayload cosign.AttestationPayload
-	if err := json.NewDecoder(reader).Decode(&attestationPayload); err != nil {
+	if err := json.Unmarshal(payload, &attestationPayload); err != nil {
 		return nil, fmt.Errorf("cannot parse DSSE envelope: %w", err)
 	}
 
