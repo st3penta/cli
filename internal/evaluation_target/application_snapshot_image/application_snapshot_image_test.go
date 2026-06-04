@@ -1175,6 +1175,156 @@ func createBundleDSSESignature(t *testing.T, statement any) oci.Signature {
 }
 
 // createDSSESignature creates a test signature with a DSSE envelope containing the given statement
+func TestParseAttestationsFromSignatures(t *testing.T) {
+	ref := name.MustParseReference("registry.io/repository/image:tag")
+
+	//nolint:staticcheck
+	slsaV02Statement := in_toto.ProvenanceStatementSLSA02{
+		StatementHeader: in_toto.StatementHeader{
+			Type:          in_toto.StatementInTotoV01,
+			PredicateType: v02.PredicateSLSAProvenance,
+			Subject: []in_toto.Subject{
+				{
+					Name:   "test-image",
+					Digest: common.DigestSet{"sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"},
+				},
+			},
+		},
+		Predicate: v02.ProvenancePredicate{
+			BuildType: pipelineRunBuildType,
+			Builder:   common.ProvenanceBuilder{ID: "https://tekton.dev/chains/v2"},
+		},
+	}
+
+	//nolint:staticcheck
+	slsaV1Statement := in_toto.ProvenanceStatementSLSA1{
+		StatementHeader: in_toto.StatementHeader{
+			Type:          in_toto.StatementInTotoV01,
+			PredicateType: "https://slsa.dev/provenance/v1",
+			Subject: []in_toto.Subject{
+				{
+					Name:   "test-image",
+					Digest: common.DigestSet{"sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"},
+				},
+			},
+		},
+		Predicate: slsav1.ProvenancePredicate{
+			BuildDefinition: slsav1.ProvenanceBuildDefinition{
+				BuildType:          "https://tekton.dev/attestations/chains/pipelinerun@v2",
+				ExternalParameters: json.RawMessage(`{}`),
+			},
+			RunDetails: slsav1.ProvenanceRunDetails{
+				Builder: slsav1.Builder{ID: "https://tekton.dev/chains/v2"},
+			},
+		},
+	}
+
+	//nolint:staticcheck
+	spdxStatement := in_toto.Statement{
+		StatementHeader: in_toto.StatementHeader{
+			Type:          in_toto.StatementInTotoV01,
+			PredicateType: "https://spdx.dev/Document",
+			Subject: []in_toto.Subject{
+				{
+					Name:   "test-image",
+					Digest: common.DigestSet{"sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"},
+				},
+			},
+		},
+		Predicate: json.RawMessage(`{"spdxVersion":"SPDX-2.3"}`),
+	}
+
+	//nolint:staticcheck
+	unknownStatement := in_toto.Statement{
+		StatementHeader: in_toto.StatementHeader{
+			Type:          in_toto.StatementInTotoV01,
+			PredicateType: "https://example.com/unknown/v1",
+			Subject: []in_toto.Subject{
+				{
+					Name:   "test-image",
+					Digest: common.DigestSet{"sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"},
+				},
+			},
+		},
+		Predicate: json.RawMessage(`{"custom":"data"}`),
+	}
+
+	cases := []struct {
+		name              string
+		signatures        []oci.Signature
+		expectErr         bool
+		expectedAttCount  int
+		expectedPredTypes []string
+	}{
+		{
+			name:             "no signatures",
+			signatures:       []oci.Signature{},
+			expectedAttCount: 0,
+		},
+		{
+			name:              "SLSA v0.2",
+			signatures:        []oci.Signature{createDSSESignature(t, slsaV02Statement)},
+			expectedAttCount:  1,
+			expectedPredTypes: []string{v02.PredicateSLSAProvenance},
+		},
+		{
+			name:              "SLSA v1.0",
+			signatures:        []oci.Signature{createDSSESignature(t, slsaV1Statement)},
+			expectedAttCount:  1,
+			expectedPredTypes: []string{"https://slsa.dev/provenance/v1"},
+		},
+		{
+			name:              "SPDX document",
+			signatures:        []oci.Signature{createDSSESignature(t, spdxStatement)},
+			expectedAttCount:  1,
+			expectedPredTypes: []string{"https://spdx.dev/Document"},
+		},
+		{
+			name:              "unknown predicate type",
+			signatures:        []oci.Signature{createDSSESignature(t, unknownStatement)},
+			expectedAttCount:  1,
+			expectedPredTypes: []string{"https://example.com/unknown/v1"},
+		},
+		{
+			name: "multiple mixed types",
+			signatures: []oci.Signature{
+				createDSSESignature(t, slsaV02Statement),
+				createDSSESignature(t, slsaV1Statement),
+				createDSSESignature(t, spdxStatement),
+				createDSSESignature(t, unknownStatement),
+			},
+			expectedAttCount: 4,
+			expectedPredTypes: []string{
+				v02.PredicateSLSAProvenance,
+				"https://slsa.dev/provenance/v1",
+				"https://spdx.dev/Document",
+				"https://example.com/unknown/v1",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := ApplicationSnapshotImage{reference: ref}
+
+			err := a.parseAttestationsFromSignatures(tc.signatures)
+
+			if tc.expectErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedAttCount, len(a.attestations))
+
+				if tc.expectedPredTypes != nil {
+					for i, expectedType := range tc.expectedPredTypes {
+						assert.Equal(t, expectedType, a.attestations[i].PredicateType())
+					}
+				}
+			}
+		})
+	}
+}
+
 func createDSSESignature(t *testing.T, statement any) oci.Signature {
 	t.Helper()
 

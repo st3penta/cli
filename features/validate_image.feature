@@ -56,6 +56,65 @@ Feature: evaluate enterprise contract
     # builtin.attestation.image_check is not found in the success output
     Then the output should match the snapshot
 
+  Scenario: invalid att signature with valid image sig and skip-att-sig-check flag
+    Given a key pair named "known"
+    Given a key pair named "unknown"
+    Given an image named "acceptance/invalid-att-signature"
+
+    # We're going to use the "known" public key when validating, so the image
+    # sig check should pass but the att sig check should fail (if it wasn't skipped).
+    Given a valid image signature of "acceptance/invalid-att-signature" image signed by the "known" key
+    Given a valid attestation of "acceptance/invalid-att-signature" signed by the "unknown" key
+
+    Given a git repository named "invalid-att-signature" with
+      | main.rego | examples/happy_day.rego |
+    Given policy configuration named "invalid-att-signature-policy" with specification
+    """
+    {
+      "sources": [
+        {
+          "policy": [
+            "git::https://${GITHOST}/git/invalid-att-signature.git"
+          ]
+        }
+      ]
+    }
+    """
+    # Notice we're using the --skip-att-sig-check flag, which is the reason this is
+    # green even though attestation is signed with a different key to the one we're providing
+    When ec command is run with "validate image --image ${REGISTRY}/acceptance/invalid-att-signature --policy acceptance/invalid-att-signature-policy --public-key ${known_PUBLIC_KEY} --skip-att-sig-check --rekor-url ${REKOR} --show-successes --output json"
+    Then the exit status should be 0
+    Then the output should match the snapshot
+
+  Scenario: skip both image and att sig checks for debugging
+    Given a key pair named "known"
+    Given a key pair named "unknown"
+    Given an image named "acceptance/skip-both-sig-checks"
+
+    # Both signatures use the wrong key. Without the skip flags this would fail.
+    Given a valid image signature of "acceptance/skip-both-sig-checks" image signed by the "unknown" key
+    Given a valid attestation of "acceptance/skip-both-sig-checks" signed by the "unknown" key
+
+    Given a git repository named "skip-both-sig-checks" with
+      | main.rego | examples/happy_day.rego |
+    Given policy configuration named "skip-both-sig-checks-policy" with specification
+    """
+    {
+      "sources": [
+        {
+          "policy": [
+            "git::https://${GITHOST}/git/skip-both-sig-checks.git"
+          ]
+        }
+      ]
+    }
+    """
+    # This is the expected real-world debugging usage: skip all signature checks
+    # to focus on policy evaluation when the signing key is unavailable
+    When ec command is run with "validate image --image ${REGISTRY}/acceptance/skip-both-sig-checks --policy acceptance/skip-both-sig-checks-policy --public-key ${known_PUBLIC_KEY} --skip-image-sig-check --skip-att-sig-check --rekor-url ${REKOR} --show-successes --output json"
+    Then the exit status should be 0
+    Then the output should match the snapshot
+
   Scenario: happy day with git config and yaml
     Given a key pair named "known"
     Given an image named "acceptance/ec-happy-day"
