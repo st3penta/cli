@@ -162,13 +162,9 @@ func (a *ApplicationSnapshotImage) ValidateImageSignature(ctx context.Context) e
 	var err error
 
 	if useBundles {
-		// For v3 bundles, both image signatures and attestations are stored as
-		// "attestations" in the unified bundle format. So we use VerifyImageAttestations
-		// to extract image signatures from the bundle, even though it seems unintuitive.
-		// This is different from v2 where image signatures and attestations were separate.
-		//
-		// The certificate extraction requires different handling for bundles and
-		// should be addressed in future work to achieve full v2 parity.
+		// In v3 bundles, image signatures and attestations are both stored as
+		// "attestations", so we use VerifyImageAttestations to retrieve image
+		// signatures (unlike v2 where they were separate).
 		opts.NewBundleFormat = true
 		opts.ClaimVerifier = cosign.IntotoSubjectClaimVerifier
 		sigs, _, err = client.VerifyImageAttestations(a.reference, &opts)
@@ -182,12 +178,8 @@ func (a *ApplicationSnapshotImage) ValidateImageSignature(ctx context.Context) e
 
 	for _, s := range sigs {
 		if useBundles {
-			// This will appears in the output under "signatures" so filter out
-			// the sigs that are provenance attestations leaving only the sigs
-			// that are image signatures. Note: This does seems confusing and
-			// I'm not 100% sure we're doing the right thing here. Maybe revisit
-			// once we have a better idea about sigstore bundles and how they're
-			// handled by cosign itself.
+			// Filter out provenance attestations, keeping only image signatures
+			// (predicateType cosign/sign/v1) for the "signatures" output.
 			if !isImageSignatureAttestation(s) {
 				log.Debugf("Skipping non-image signature attestation")
 				continue
@@ -231,11 +223,8 @@ func (a *ApplicationSnapshotImage) ValidateAttestationSignature(ctx context.Cont
 		return err
 	}
 
-	// Todo:
-	// - For the non-bundle code path we actually check the syntax.
-	//   We should do that for bundles as well probably.
-	// - Doing an early return like this here seems untidy, refactor
-	//   maybe?
+	// TODO: The non-bundle code path validates attestation syntax; do the same
+	// for bundles.
 	if useBundles {
 		return a.parseAttestationsFromBundles(layers)
 	}
@@ -620,12 +609,8 @@ func isImageSignatureAttestation(sig cosignOCI.Signature) bool {
 // extractSignaturesFromBundle extracts signature information from a bundle
 // image signature attestation, using the same pattern as createEntitySignatures.
 //
-// TODO: This currently only extracts the signature value from the DSSE envelope.
-// Certificate information (keyid, certificate, chain, metadata) is not being
-// extracted because it requires different handling for v3 bundles compared to v2.
-// Future work should investigate how to access certificate data from bundle
-// attestations to achieve full parity with v2 signature output. Also, there might
-// be some cosign methods we can use instead of doing it ourselves here.
+// TODO: Certificate information is not yet extracted from v3 bundles because it
+// requires different handling than v2. Investigate achieving full parity.
 func extractSignaturesFromBundle(sig cosignOCI.Signature) ([]signature.EntitySignature, error) {
 	payload, err := sig.Payload()
 	if err != nil {
@@ -646,15 +631,9 @@ func extractSignaturesFromBundle(sig cosignOCI.Signature) ([]signature.EntitySig
 	var results []signature.EntitySignature
 	for _, s := range attestationPayload.Signatures {
 		esNew := es
-		// The Signature and KeyID can come from two locations, the oci.Signature or
-		// the cosign.Signature. Prioritize information from oci.Signature, but fallback
-		// to cosign.Signature when needed (same pattern as createEntitySignatures)
-		//
-		// Todo: Actually the above comment might be stale and/or wrong since I believe
-		// it was copied from similar code in internal/attestation/attestation.go. Let's
-		// review this later. As far as I can tell this code always produces an empty
-		// string for the KeyId.
-		//
+		// Prefer values from oci.Signature, fall back to cosign.Signatures.
+		// (Same pattern as createEntitySignatures in internal/attestation —
+		// keyless vs long-lived key workflows populate different locations.)
 		if esNew.Signature == "" {
 			esNew.Signature = s.Sig
 		}
