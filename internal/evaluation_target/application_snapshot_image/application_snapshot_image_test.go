@@ -1461,3 +1461,158 @@ func TestValidateAttestationSignature(t *testing.T) {
 		})
 	}
 }
+
+func TestIsImageSignatureAttestation(t *testing.T) {
+	cases := []struct {
+		name     string
+		sig      oci.Signature
+		expected bool
+	}{
+		{
+			name: "DSSE with cosign sign predicate",
+			sig: createBundleDSSESignature(t, map[string]string{
+				"predicateType": cosignSignPredicateType,
+			}),
+			expected: true,
+		},
+		{
+			name: "DSSE with SLSA provenance predicate",
+			sig: createBundleDSSESignature(t, map[string]string{
+				"predicateType": v02.PredicateSLSAProvenance,
+			}),
+			expected: false,
+		},
+		{
+			name: "non-DSSE payload treated as simple signing",
+			sig: func() oci.Signature {
+				s, err := static.NewSignature([]byte(`{"some": "data"}`), "sig")
+				require.NoError(t, err)
+				return s
+			}(),
+			expected: true,
+		},
+		{
+			name: "empty payload treated as simple signing",
+			sig: func() oci.Signature {
+				s, err := static.NewSignature([]byte(`{}`), "sig")
+				require.NoError(t, err)
+				return s
+			}(),
+			expected: true,
+		},
+		{
+			name: "DSSE with invalid base64 payload",
+			sig: func() oci.Signature {
+				envelope, err := json.Marshal(map[string]string{
+					"payloadType": "application/vnd.in-toto+json",
+					"payload":     "!!!not-base64!!!",
+				})
+				require.NoError(t, err)
+				s, err := static.NewSignature(envelope, "sig")
+				require.NoError(t, err)
+				return s
+			}(),
+			expected: false,
+		},
+		{
+			name: "DSSE with non-JSON inner payload",
+			sig: func() oci.Signature {
+				envelope, err := json.Marshal(map[string]string{
+					"payloadType": "application/vnd.in-toto+json",
+					"payload":     base64.StdEncoding.EncodeToString([]byte("not json")),
+				})
+				require.NoError(t, err)
+				s, err := static.NewSignature(envelope, "sig")
+				require.NoError(t, err)
+				return s
+			}(),
+			expected: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, isImageSignatureAttestation(tc.sig))
+		})
+	}
+}
+
+func TestExtractSignaturesFromBundle(t *testing.T) {
+	t.Run("single signature", func(t *testing.T) {
+		sig := makeBundleSig(t, []cosign.Signatures{
+			{KeyID: "key-1", Sig: "c2lnLTE="},
+		})
+
+		results, err := extractSignaturesFromBundle(sig)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		assert.Equal(t, "c2lnLTE=", results[0].Signature)
+		assert.Equal(t, "key-1", results[0].KeyID)
+	})
+
+	t.Run("multiple signatures", func(t *testing.T) {
+		sig := makeBundleSig(t, []cosign.Signatures{
+			{KeyID: "key-a", Sig: "c2lnLWE="},
+			{KeyID: "key-b", Sig: "c2lnLWI="},
+		})
+
+		results, err := extractSignaturesFromBundle(sig)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		assert.Equal(t, "c2lnLWE=", results[0].Signature)
+		assert.Equal(t, "key-a", results[0].KeyID)
+		assert.Equal(t, "c2lnLWI=", results[1].Signature)
+		assert.Equal(t, "key-b", results[1].KeyID)
+	})
+
+	t.Run("base signature takes priority over cosign signature", func(t *testing.T) {
+		sig := makeBundleSigWithBase64(t, "base-sig-value", []cosign.Signatures{
+			{KeyID: "key-1", Sig: "should-not-override"},
+		})
+
+		results, err := extractSignaturesFromBundle(sig)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		assert.Equal(t, "base-sig-value", results[0].Signature)
+	})
+
+	t.Run("invalid payload returns error", func(t *testing.T) {
+		sig, err := static.NewSignature([]byte("not json"), "sig")
+		require.NoError(t, err)
+
+		_, err = extractSignaturesFromBundle(sig)
+		assert.ErrorContains(t, err, "cannot parse DSSE envelope")
+	})
+
+	t.Run("empty signatures list returns empty results", func(t *testing.T) {
+		sig := makeBundleSig(t, []cosign.Signatures{})
+
+		results, err := extractSignaturesFromBundle(sig)
+		require.NoError(t, err)
+		assert.Empty(t, results)
+	})
+}
+
+// makeBundleSig creates a static.Signature whose Uncompressed() returns a
+// cosign.AttestationPayload with the given signatures. The base Base64Signature
+// is empty so the cosign.Signatures values are used.
+func makeBundleSig(t *testing.T, sigs []cosign.Signatures) oci.Signature {
+	t.Helper()
+	return makeBundleSigWithBase64(t, "", sigs)
+}
+
+func makeBundleSigWithBase64(t *testing.T, base64Sig string, sigs []cosign.Signatures) oci.Signature {
+	t.Helper()
+
+	ap := cosign.AttestationPayload{
+		PayloadType: "application/vnd.in-toto+json",
+		PayLoad:     base64.StdEncoding.EncodeToString([]byte(`{}`)),
+		Signatures:  sigs,
+	}
+	payload, err := json.Marshal(ap)
+	require.NoError(t, err)
+
+	s, err := static.NewSignature(payload, base64Sig)
+	require.NoError(t, err)
+	return s
+}
