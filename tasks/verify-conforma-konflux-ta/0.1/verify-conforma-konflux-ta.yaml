@@ -27,7 +27,7 @@ metadata:
     app.kubernetes.io/version: "0.1"
 
 spec:
-  description: Verify the enterprise contract is met
+  description: Verify the Conforma policy is met
   params:
     - name: SNAPSHOT_FILENAME
       type: string

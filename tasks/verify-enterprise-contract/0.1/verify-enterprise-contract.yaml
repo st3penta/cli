@@ -20,14 +20,14 @@ kind: Task
 metadata:
   name: verify-enterprise-contract
   annotations:
-    tekton.dev/displayName: Verify Enterprise Contract
+    tekton.dev/displayName: Verify Conforma
     tekton.dev/pipelines.minVersion: "0.19"
     tekton.dev/tags: ec, chains, signature, conftest
   labels:
     app.kubernetes.io/version: "0.1"
 
 spec:
-  description: Verify the enterprise contract is met
+  description: Verify the Conforma policy is met
   params:
     - name: IMAGES
       type: string
