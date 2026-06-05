@@ -1115,6 +1115,112 @@ Feature: evaluate enterprise contract
     Then the exit status should be 0
     Then the output should match the snapshot
 
+  # Tests for EC-1824: multi-arch per-component volatile exceptions.
+  # When validate image encounters an image index, imageIndexWorker (input.go:264) expands
+  # the component name from "foo" to "foo-sha256:<digest>-<arch>". The fix in Criteria.get()
+  # uses originalComponentName() to strip that suffix so volatile config componentNames
+  # entries referencing the original name still match.
+  # These tests use --images with an ApplicationSnapshot file to set the component name
+  # to the expanded format directly, validating the originalComponentName() wiring.
+
+  Scenario: volatile config exclude matches multi-arch expanded component name
+    Given a key pair named "known"
+    Given an image named "acceptance/multi-arch-volatile"
+    Given a valid image signature of "acceptance/multi-arch-volatile" image signed by the "known" key
+    Given a valid attestation of "acceptance/multi-arch-volatile" signed by the "known" key
+    Given a git repository named "happy-day-policy" with
+      | filtering.rego | examples/filtering.rego |
+    Given a file named "${TMPDIR}/multi-arch-images.json" containing
+    """
+    {
+      "components": [
+        {
+          "containerImage": "${REGISTRY}/acceptance/multi-arch-volatile",
+          "name": "multi-arch-test-sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2-arm64"
+        }
+      ]
+    }
+    """
+    Given policy configuration named "ec-policy" with specification
+    """
+    {
+      "sources": [
+        {
+          "volatileConfig": {
+            "exclude": [
+              {
+                "value": "filtering.always_fail",
+                "componentNames": ["multi-arch-test"]
+              },
+              {
+                "value": "filtering.always_fail_with_collection",
+                "componentNames": ["multi-arch-test"]
+              }
+            ]
+          },
+          "config": {
+            "include": ["@stamps", "filtering.always_pass", "filtering.always_fail"]
+          },
+          "policy": [
+            "git::https://${GITHOST}/git/happy-day-policy.git"
+          ]
+        }
+      ]
+    }
+    """
+    When ec command is run with "validate image --images ${TMPDIR}/multi-arch-images.json --policy acceptance/ec-policy --public-key ${known_PUBLIC_KEY} --ignore-rekor --show-successes --output json"
+    Then the exit status should be 0
+    Then the output should match the snapshot
+
+  Scenario: volatile config exclude does not match different multi-arch component
+    Given a key pair named "known"
+    Given an image named "acceptance/multi-arch-volatile-neg"
+    Given a valid image signature of "acceptance/multi-arch-volatile-neg" image signed by the "known" key
+    Given a valid attestation of "acceptance/multi-arch-volatile-neg" signed by the "known" key
+    Given a git repository named "happy-day-policy" with
+      | filtering.rego | examples/filtering.rego |
+    Given a file named "${TMPDIR}/multi-arch-images-neg.json" containing
+    """
+    {
+      "components": [
+        {
+          "containerImage": "${REGISTRY}/acceptance/multi-arch-volatile-neg",
+          "name": "other-component-sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2-amd64"
+        }
+      ]
+    }
+    """
+    Given policy configuration named "ec-policy" with specification
+    """
+    {
+      "sources": [
+        {
+          "volatileConfig": {
+            "exclude": [
+              {
+                "value": "filtering.always_fail",
+                "componentNames": ["multi-arch-test"]
+              },
+              {
+                "value": "filtering.always_fail_with_collection",
+                "componentNames": ["multi-arch-test"]
+              }
+            ]
+          },
+          "config": {
+            "include": ["@stamps", "filtering.always_pass", "filtering.always_fail"]
+          },
+          "policy": [
+            "git::https://${GITHOST}/git/happy-day-policy.git"
+          ]
+        }
+      ]
+    }
+    """
+    When ec command is run with "validate image --images ${TMPDIR}/multi-arch-images-neg.json --policy acceptance/ec-policy --public-key ${known_PUBLIC_KEY} --ignore-rekor --show-successes --output json"
+    Then the exit status should be 1
+    Then the output should match the snapshot
+
   Scenario: Unsupported policies
     Given a key pair named "known"
     Given an image named "acceptance/image"
