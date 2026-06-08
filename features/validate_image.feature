@@ -1115,13 +1115,8 @@ Feature: evaluate enterprise contract
     Then the exit status should be 0
     Then the output should match the snapshot
 
-  # Tests for EC-1824: multi-arch per-component volatile exceptions.
-  # When validate image encounters an image index, imageIndexWorker (input.go:264) expands
-  # the component name from "foo" to "foo-sha256:<digest>-<arch>". The fix in Criteria.get()
-  # uses originalComponentName() to strip that suffix so volatile config componentNames
-  # entries referencing the original name still match.
-  # These tests use --images with an ApplicationSnapshot file to set the component name
-  # to the expanded format directly, validating the originalComponentName() wiring.
+  # EC-1824: verify volatile config componentNames excludes work with
+  # multi-arch expanded component names (e.g., "foo-sha256:<digest>-arm64").
 
   Scenario: volatile config exclude matches multi-arch expanded component name
     Given a key pair named "known"
