@@ -63,6 +63,7 @@ const (
 	ociImageIndexName          = "ec.oci.image_index"
 	ociImageTagRefsName        = "ec.oci.image_tag_refs"
 	ociImageReferrersName      = "ec.oci.image_referrers"
+	ociParsedBlobName          = "ec.oci.parsed_blob"
 	maxTarEntrySizeConst       = 500 * 1024 * 1024 // 500MB
 )
 
@@ -91,6 +92,28 @@ func registerOCIBlob() {
 	ast.RegisterBuiltin(&ast.Builtin{
 		Name:             decl.Name,
 		Description:      "Fetch a blob from an OCI registry.",
+		Decl:             decl.Decl,
+		Nondeterministic: decl.Nondeterministic,
+	})
+}
+
+func registerOCIParsedBlob() {
+	decl := rego.Function{
+		Name: ociParsedBlobName,
+		Decl: types.NewFunction(
+			types.Args(
+				types.Named("ref", types.S).Description("OCI blob reference"),
+			),
+			types.Named("value", types.A).Description("the parsed JSON value from the OCI blob"),
+		),
+		Memoize:          true,
+		Nondeterministic: true,
+	}
+
+	rego.RegisterBuiltin1(&decl, ociParsedBlob)
+	ast.RegisterBuiltin(&ast.Builtin{
+		Name:             decl.Name,
+		Description:      "Fetch a blob from an OCI registry and return the parsed JSON value. Results are cached per component.",
 		Decl:             decl.Decl,
 		Nondeterministic: decl.Nondeterministic,
 	})
@@ -603,6 +626,71 @@ func ociBlobInternal(bctx rego.BuiltinContext, a *ast.Term, verifyDigest bool) (
 	return result.(*ast.Term), nil
 }
 
+func ociParsedBlob(bctx rego.BuiltinContext, a *ast.Term) (*ast.Term, error) {
+	logger := log.WithField("function", ociParsedBlobName)
+
+	uri, ok := a.Value.(ast.String)
+	if !ok {
+		logger.Error("input is not a string")
+		return nil, nil
+	}
+	refStr := string(uri)
+	logger = logger.WithField("ref", refStr)
+
+	cc := componentCacheFromContext(bctx.Context)
+
+	if cached, found := cc.parsedBlobCache.Load(refStr); found {
+		logger.Debug("Parsed blob served from cache")
+		return cached.(*ast.Term), nil
+	}
+
+	result, err, _ := cc.parsedBlobFlight.Do(refStr, func() (any, error) {
+		if cached, found := cc.parsedBlobCache.Load(refStr); found {
+			logger.Debug("Parsed blob served from cache (after singleflight)")
+			return cached, nil
+		}
+
+		rawTerm, err := ociBlobInternal(bctx, a, true)
+		if err != nil || rawTerm == nil {
+			return nil, nil //nolint:nilerr
+		}
+
+		rawStr, ok := rawTerm.Value.(ast.String)
+		if !ok {
+			logger.Error("blob value is not a string")
+			return nil, nil //nolint:nilerr
+		}
+
+		var parsed any
+		if err := json.Unmarshal([]byte(string(rawStr)), &parsed); err != nil {
+			logger.WithFields(log.Fields{
+				"action": "unmarshal",
+				"error":  err,
+			}).Error("failed to unmarshal blob as JSON")
+			return nil, nil //nolint:nilerr
+		}
+
+		value, err := ast.InterfaceToValue(parsed)
+		if err != nil {
+			logger.WithFields(log.Fields{
+				"action": "convert to ast",
+				"error":  err,
+			}).Error("failed to convert parsed JSON to AST value")
+			return nil, nil //nolint:nilerr
+		}
+
+		term := ast.NewTerm(value)
+		cc.parsedBlobCache.Store(refStr, term)
+		logger.Debug("Parsed blob cached")
+		return term, nil
+	})
+
+	if err != nil || result == nil {
+		return nil, nil
+	}
+	return result.(*ast.Term), nil
+}
+
 func ociDescriptor(bctx rego.BuiltinContext, a *ast.Term) (*ast.Term, error) {
 	logger := log.WithField("function", ociDescriptorName)
 
@@ -807,10 +895,12 @@ func ClearCaches() {
 // Lighter caches (manifests, descriptors, image indexes) remain global because they
 // are small and benefit from cross-component sharing (e.g., shared task bundle manifests).
 type ComponentCache struct {
-	blobCache   sync.Map
-	blobFlight  singleflight.Group
-	filesCache  sync.Map
-	filesFlight singleflight.Group
+	blobCache        sync.Map
+	blobFlight       singleflight.Group
+	filesCache       sync.Map
+	filesFlight      singleflight.Group
+	parsedBlobCache  sync.Map
+	parsedBlobFlight singleflight.Group
 }
 
 type componentCacheKey struct{}
@@ -1634,6 +1724,7 @@ func isNotFoundError(err error) bool {
 
 func init() {
 	registerOCIBlob()
+	registerOCIParsedBlob()
 	registerOCIBlobFiles()
 	registerOCIDescriptor()
 	registerOCIImageFiles()
