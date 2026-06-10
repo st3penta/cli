@@ -3647,12 +3647,6 @@ Error: success criteria not met
         }
       ],
       "success": true,
-      "signatures": [
-        {
-          "keyid": "",
-          "sig": ""
-        }
-      ],
       "attestations": [
         {
           "type": "https://in-toto.io/Statement/v0.1",
