@@ -23,6 +23,8 @@
 # - POLICY_BUNDLE_DIGEST: OCI digest to pin to (e.g. "sha256:abc123..." or "abc123...").
 #   If empty, the script is a no-op.
 # - HOME: Home directory (defaults to /tekton/home in Tekton tasks).
+#
+# Tests: bash hack/pin-konflux-policy-bundle_test.sh
 
 set -o errexit
 set -o nounset
@@ -78,6 +80,13 @@ REPLACEMENT="oci::quay.io/conforma/release-policy@${POLICY_BUNDLE_DIGEST}"
 
 if ! grep -q "${ORIGINAL}" "$WORKING_POLICY"; then
   echo "'${ORIGINAL}' not found in policy configuration, nothing to do."
+  exit 0
+fi
+
+# If the reference is already digest-pinned (e.g. :konflux@sha256:...),
+# respect the existing pin rather than overriding it.
+if grep -q "${ORIGINAL}@sha256:" "$WORKING_POLICY"; then
+  echo "'${ORIGINAL}' already has a pinned digest, skipping override."
   exit 0
 fi
 
