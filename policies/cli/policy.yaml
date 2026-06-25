@@ -31,7 +31,7 @@ sources:
       - oci::quay.io/konflux-ci/tekton-catalog/data-acceptable-bundles:latest
     policy:
       # Let's not pin the digest here
-      - oci::quay.io/enterprise-contract/ec-release-policy:latest
+      - oci::quay.io/conforma/release-policy:latest
     config:
       include:
         - '@redhat'
