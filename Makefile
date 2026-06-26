@@ -197,8 +197,19 @@ benchmark_data: benchmark/simple/data.tar.gz ## Prepare data for benchmark
 .PHONY: benchmark
 benchmark: benchmark_simple ## Run benchmarks
 
+.PHONY: tools-ci
+tools-ci: ## Ensure all tools build cleanly
+	@echo "• tkn:" && \
+	go run -modfile tools/go.mod github.com/tektoncd/cli/cmd/tkn version && \
+	echo "• kustomize:" && \
+	go run -modfile tools/go.mod sigs.k8s.io/kustomize/kustomize/v5 version && \
+	echo "• helm:" && \
+	go run -modfile tools/go.mod helm.sh/helm/v3/cmd/helm version && \
+	echo "• conftest:" && \
+	go run -modfile tools/go.mod github.com/open-policy-agent/conftest --version
+
 .PHONY: ci
-ci: test lint-fix acceptance ## Run the usual required CI tasks
+ci: test lint-fix acceptance tools-ci ## Run the usual required CI tasks
 
 ##@ Linters
 
