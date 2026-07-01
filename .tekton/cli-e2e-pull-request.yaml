@@ -22,7 +22,7 @@ spec:
     value: https://github.com/conforma/e2e-tests.git
   - name: revision
     # renovate: datasource=git-refs depName=https://github.com/conforma/e2e-tests branch=main
-    value: f7b2b9e3f74168c3d76457c28adc2cb152773bc2
+    value: f49f4a2bcdd55e3c033fa34f51f9eb80a0067c45
   - name: oci-container-repo
     value: quay.io/conforma/e2e-tests
   - name: oci-container-repo-credentials-secret
@@ -38,7 +38,7 @@ spec:
       value: https://github.com/conforma/e2e-tests.git
     - name: revision
       # renovate: datasource=git-refs depName=https://github.com/conforma/e2e-tests branch=main
-      value: f7b2b9e3f74168c3d76457c28adc2cb152773bc2
+      value: f49f4a2bcdd55e3c033fa34f51f9eb80a0067c45
     - name: pathInRepo
       value: .tekton/pipelines/conforma-e2e/pipeline.yaml
   taskRunTemplate:
