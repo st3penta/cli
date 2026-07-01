@@ -31,6 +31,10 @@ spec:
     value: mapt-kind-secret
   - name: deprovision-aws-credentials-secret
     value: mapt-kind-secret
+  - name: custom-ec-cli-url
+    value: '{{source_url}}'
+  - name: custom-ec-cli-revision
+    value: '{{revision}}'
   pipelineRef:
     resolver: git
     params:
