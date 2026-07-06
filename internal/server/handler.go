@@ -19,7 +19,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -87,7 +86,12 @@ func (s *Server) handleValidateInput(w http.ResponseWriter, r *http.Request) {
 		results, err := e.Evaluate(evalCtx, evaluator.EvaluationTarget{Inputs: []string{tmpPath}})
 		if err != nil {
 			log.WithField("error", err).Error("Evaluation failed")
-			writeError(w, http.StatusInternalServerError, fmt.Sprintf("evaluation failed: %v", err))
+			// Avoid leaking internal details (file paths, engine errors) to API clients.
+			msg := "evaluation failed"
+			if evalCtx.Err() == context.DeadlineExceeded {
+				msg = "evaluation timed out"
+			}
+			writeError(w, http.StatusInternalServerError, msg)
 			return
 		}
 		allResults = append(allResults, results...)
@@ -124,7 +128,8 @@ func (s *Server) handleValidateInput(w http.ResponseWriter, r *http.Request) {
 		s.cfg.ShowPolicyDocsLink,
 	)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to build report: %v", err))
+		log.WithField("error", err).Error("Failed to build report")
+		writeError(w, http.StatusInternalServerError, "failed to build report")
 		return
 	}
 

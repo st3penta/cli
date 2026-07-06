@@ -297,7 +297,7 @@ func TestHandleValidateInput_EvaluationTimeout(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	var resp errorResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.Contains(t, resp.Error, "context deadline exceeded")
+	assert.Equal(t, "evaluation timed out", resp.Error)
 }
 
 func TestServerLifecycle(t *testing.T) {
