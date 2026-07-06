@@ -73,6 +73,17 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 
 			Input files can be specified as positional arguments or via the --file flag (deprecated).
 			If both are provided, the values are combined.
+
+			When --server is provided, a persistent HTTP server is started instead of running a one-shot
+			evaluation. Policies are loaded once at startup. The server exposes the following endpoints:
+
+			  POST /v1/validate/input  - Evaluate input (JSON or YAML body)
+			  GET  /live               - Liveness probe (always 200)
+			  GET  /ready              - Readiness probe (200 when policies are loaded)
+
+			The evaluation endpoint returns the same JSON structure as --output json. HTTP 200 is returned
+			for all completed evaluations (the "success" field distinguishes pass/fail). Restart the server
+			to pick up policy changes.
 			`),
 		Example: hd.Doc(`
 			Validate a single file using positional arguments
@@ -99,6 +110,19 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 
 			  ec validate input /path/to/file.yaml --policy github.com/user/repo
 
+			Start a persistent HTTP server for policy evaluation over REST:
+
+			  ec validate input --server --policy my-policy.yaml
+
+			Start the server on a custom port:
+
+			  ec validate input --server --server-port 9090 --policy my-policy.yaml
+
+			Send a request to the evaluation endpoint:
+
+			  curl -s -X POST -H 'Content-Type: application/json' --data-binary @input.json http://localhost:8080/v1/validate/input
+
+			  curl -s -X POST -H 'Content-Type: application/yaml' --data-binary @input.yaml http://localhost:8080/v1/validate/input
 `),
 		PreRunE: func(cmd *cobra.Command, args []string) (allErrors error) {
 			// Merge positional arguments into filePaths
