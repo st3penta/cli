@@ -169,7 +169,11 @@ func aGETRequestIsSentToTheServer(ctx context.Context, urlPath string) (context.
 	}
 
 	url := fmt.Sprintf("http://127.0.0.1:%d%s", state.port, urlPath)
-	resp, err := http.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return ctx, fmt.Errorf("GET %s: %w", urlPath, err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return ctx, fmt.Errorf("GET %s: %w", urlPath, err)
 	}
@@ -197,7 +201,12 @@ func aPOSTRequestIsSentToTheServerWithBody(ctx context.Context, urlPath string, 
 	})
 
 	url := fmt.Sprintf("http://127.0.0.1:%d%s", state.port, urlPath)
-	resp, err := http.Post(url, "application/json", strings.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
+	if err != nil {
+		return ctx, fmt.Errorf("POST %s: %w", urlPath, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return ctx, fmt.Errorf("POST %s: %w", urlPath, err)
 	}
@@ -230,7 +239,12 @@ func aPOSTRequestIsSentToTheServerWithFile(ctx context.Context, urlPath, filePat
 	}
 
 	url := fmt.Sprintf("http://127.0.0.1:%d%s", state.port, urlPath)
-	resp, err := http.Post(url, "application/yaml", strings.NewReader(string(data)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(data)))
+	if err != nil {
+		return ctx, fmt.Errorf("POST %s: %w", urlPath, err)
+	}
+	req.Header.Set("Content-Type", "application/yaml")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return ctx, fmt.Errorf("POST %s: %w", urlPath, err)
 	}
