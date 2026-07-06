@@ -17,11 +17,13 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -32,6 +34,8 @@ import (
 )
 
 const maxRequestBodySize = 10 << 20 // 10 MB
+
+var evaluationTimeout = 90 * time.Second
 
 type errorResponse struct {
 	Error  string `json:"error"`
@@ -75,9 +79,12 @@ func (s *Server) handleValidateInput(w http.ResponseWriter, r *http.Request) {
 	}
 	tmpFile.Close()
 
+	evalCtx, evalCancel := context.WithTimeout(ctx, evaluationTimeout)
+	defer evalCancel()
+
 	var allResults []evaluator.Outcome
 	for _, e := range s.evaluators {
-		results, err := e.Evaluate(ctx, evaluator.EvaluationTarget{Inputs: []string{tmpPath}})
+		results, err := e.Evaluate(evalCtx, evaluator.EvaluationTarget{Inputs: []string{tmpPath}})
 		if err != nil {
 			log.WithField("error", err).Error("Evaluation failed")
 			writeError(w, http.StatusInternalServerError, fmt.Sprintf("evaluation failed: %v", err))

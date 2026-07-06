@@ -271,6 +271,35 @@ func TestRecoveryMiddleware(t *testing.T) {
 	assert.Equal(t, "internal server error", resp.Error)
 }
 
+type slowEvaluator struct {
+	mockEvaluator
+}
+
+func (m *slowEvaluator) Evaluate(ctx context.Context, target evaluator.EvaluationTarget) ([]evaluator.Outcome, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestHandleValidateInput_EvaluationTimeout(t *testing.T) {
+	orig := evaluationTimeout
+	evaluationTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { evaluationTimeout = orig })
+
+	s := newTestServer(&slowEvaluator{})
+
+	body := `{"kind": "Pipeline"}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/validate/input", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	s.handleValidateInput(rec, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	var resp errorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Contains(t, resp.Error, "context deadline exceeded")
+}
+
 func TestServerLifecycle(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
