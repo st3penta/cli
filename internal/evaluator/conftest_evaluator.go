@@ -430,7 +430,10 @@ func (c conftestEvaluator) Evaluate(ctx context.Context, target EvaluationTarget
 	nonAnnotatedRules := nonAnnotatedRules{}
 	// Track data source directories for prepareDataDirs
 	dataSourceDirs := []string{}
-	// Download all sources
+	// Resolve all policy sources. Despite calling GetPolicy on every Evaluate,
+	// actual downloads are cached via sync.OnceValues in getPolicyThroughCache,
+	// (so we are not downloading policies on each request when the `ec validate
+	// input --server` web service is running).
 	for _, s := range c.policySources {
 		dir, err := s.GetPolicy(ctx, c.workDir, false)
 		if err != nil {

@@ -64,9 +64,11 @@ func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 	s.registerRoutes(mux)
 
+	handler := recoveryMiddleware(mux)
+
 	httpServer := &http.Server{
 		Addr:              fmt.Sprintf(":%d", s.cfg.Port),
-		Handler:           mux,
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      120 * time.Second,
@@ -109,6 +111,7 @@ func (s *Server) Start(ctx context.Context) error {
 func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /live", s.handleLive)
 	mux.HandleFunc("GET /ready", s.handleReady)
+	mux.HandleFunc("POST /v1/validate/input", s.handleValidateInput)
 }
 
 func (s *Server) handleLive(w http.ResponseWriter, _ *http.Request) {
