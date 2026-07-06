@@ -1,0 +1,135 @@
+// Copyright The Conforma Contributors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
+package server
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net"
+	"net/http"
+	"sync/atomic"
+	"time"
+
+	log "github.com/sirupsen/logrus"
+
+	"github.com/conforma/cli/internal/evaluation_target/input"
+	"github.com/conforma/cli/internal/evaluator"
+	"github.com/conforma/cli/internal/policy"
+)
+
+type Config struct {
+	Port               int
+	Policy             policy.Policy
+	Info               bool
+	ShowSuccesses      bool
+	ShowWarnings       bool
+	ShowPolicyDocsLink bool
+}
+
+type Server struct {
+	cfg        Config
+	evaluators []evaluator.Evaluator
+	ready      atomic.Bool
+}
+
+func New(cfg Config) *Server {
+	return &Server{cfg: cfg}
+}
+
+func (s *Server) Start(ctx context.Context) error {
+	log.Infof("Loading policy sources...")
+	inp, err := input.NewInput(ctx, nil, s.cfg.Policy)
+	if err != nil {
+		return fmt.Errorf("loading policy sources: %w", err)
+	}
+	s.evaluators = inp.Evaluators
+	s.ready.Store(true)
+	log.Infof("Policy sources loaded, %d evaluator(s) ready", len(s.evaluators))
+
+	mux := http.NewServeMux()
+	s.registerRoutes(mux)
+
+	httpServer := &http.Server{
+		Addr:              fmt.Sprintf(":%d", s.cfg.Port),
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      120 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		ln, err := net.Listen("tcp", httpServer.Addr)
+		if err != nil {
+			errCh <- fmt.Errorf("listen on %s: %w", httpServer.Addr, err)
+			return
+		}
+		log.Infof("Server listening on %s", ln.Addr())
+		if err := httpServer.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+		}
+	}()
+
+	select {
+	case err := <-errCh:
+		s.destroyEvaluators()
+		return err
+	case <-ctx.Done():
+	}
+
+	log.Info("Shutting down server...")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		log.WithField("error", err).Warn("Server shutdown error")
+	}
+
+	s.destroyEvaluators()
+	log.Info("Server stopped")
+	return nil
+}
+
+func (s *Server) registerRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /live", s.handleLive)
+	mux.HandleFunc("GET /ready", s.handleReady)
+}
+
+func (s *Server) handleLive(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, `{"status":"ok"}`)
+}
+
+func (s *Server) handleReady(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if s.ready.Load() {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"status":"ready"}`)
+		return
+	}
+	w.WriteHeader(http.StatusServiceUnavailable)
+	fmt.Fprint(w, `{"status":"not ready"}`)
+}
+
+func (s *Server) destroyEvaluators() {
+	for _, e := range s.evaluators {
+		e.Destroy()
+	}
+}

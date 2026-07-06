@@ -69,6 +69,11 @@ mark (?) sign, for example: --output text=output.txt?show-successes=false
 * file (policy.yaml)
 * git reference (github.com/user/repo//default?ref=main), or
 * inline JSON ('{sources: {...}}')")
+--server:: Start a persistent HTTP server instead of running a one-shot evaluation.
+Mutually exclusive with input files. Policies are loaded once at startup.
+Note: the server has no built-in authentication or rate limiting.
+Use a reverse proxy or network policy to restrict access in production. (Default: false)
+--server-port:: Port for the HTTP server when running in server mode. (Default: 8080)
 -s, --strict:: Return non-zero status on non-successful validation (Default: true)
 --workers:: Number of workers to use for validation. Defaults to 5. (Default: 5)
 

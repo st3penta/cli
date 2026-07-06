@@ -33,6 +33,7 @@ import (
 	"github.com/conforma/cli/internal/input"
 	"github.com/conforma/cli/internal/output"
 	"github.com/conforma/cli/internal/policy"
+	"github.com/conforma/cli/internal/server"
 	"github.com/conforma/cli/internal/utils"
 	validate_utils "github.com/conforma/cli/internal/validate"
 )
@@ -53,10 +54,13 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 		policyConfiguration string
 		strict              bool
 		workers             int
+		serverMode          bool
+		serverPort          int
 	}{
 		strict:     true,
 		workers:    5,
 		filterType: "include-exclude", // Default to include-exclude filter
+		serverPort: 8080,
 	}
 	cmd := &cobra.Command{
 		Use:   "input [file ...] [flags]",
@@ -116,7 +120,11 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 				return strings.TrimSpace(s) == ""
 			})
 
-			if len(data.filePaths) == 0 {
+			if data.serverMode && len(data.filePaths) > 0 {
+				allErrors = errors.Join(allErrors, fmt.Errorf("--server and input files are mutually exclusive"))
+				return
+			}
+			if !data.serverMode && len(data.filePaths) == 0 {
 				allErrors = errors.Join(allErrors, fmt.Errorf("at least one input file must be specified as a positional argument or via the --file flag"))
 				return
 			}
@@ -138,6 +146,22 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 			return
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if data.serverMode {
+				showSuccesses, _ := cmd.Flags().GetBool("show-successes")
+				showWarnings, _ := cmd.Flags().GetBool("show-warnings")
+				showPolicyDocsLink, _ := cmd.Flags().GetBool("show-policy-docs-link")
+
+				srv := server.New(server.Config{
+					Port:               data.serverPort,
+					Policy:             data.policy,
+					Info:               data.info,
+					ShowSuccesses:      showSuccesses,
+					ShowWarnings:       showWarnings,
+					ShowPolicyDocsLink: showPolicyDocsLink,
+				})
+				return srv.Start(cmd.Context())
+			}
+
 			if trace.IsEnabled() {
 				ctx, task := trace.NewTask(cmd.Context(), "ec:validate-inputs")
 				cmd.SetContext(ctx)
@@ -309,6 +333,15 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 	if err := cmd.Flags().MarkHidden("file"); err != nil {
 		panic(err)
 	}
+
+	cmd.Flags().BoolVar(&data.serverMode, "server", false, hd.Doc(`
+		Start a persistent HTTP server instead of running a one-shot evaluation.
+		Mutually exclusive with input files. Policies are loaded once at startup.
+		Note: the server has no built-in authentication or rate limiting.
+		Use a reverse proxy or network policy to restrict access in production.`))
+
+	cmd.Flags().IntVar(&data.serverPort, "server-port", data.serverPort, hd.Doc(`
+		Port for the HTTP server when running in server mode.`))
 
 	if err := cmd.MarkFlagRequired("policy"); err != nil {
 		panic(err)
