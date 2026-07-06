@@ -52,7 +52,24 @@ func New(cfg Config) *Server {
 }
 
 func (s *Server) Start(ctx context.Context) error {
-	log.Infof("Loading policy sources...")
+	// The CLI default is "warn" but for the long-running http service we want
+	// to use "info" so startup, shutdown, and request details are logged.
+	// Don't downgrade if the user already requested a more verbose level using
+	// --debug or --verbose.
+	if log.GetLevel() < log.InfoLevel {
+		log.SetLevel(log.InfoLevel)
+	}
+	// Beware we're mutating the global logrus logger here, which is should be
+	// fine since server mode is a terminal execution path, but would need
+	// revisiting if the server was embedded.
+	log.SetFormatter(&log.JSONFormatter{})
+
+	log.WithFields(log.Fields{
+		"port":    s.cfg.Port,
+		"sources": len(s.cfg.Policy.Spec().Sources),
+	}).Info("Starting server")
+
+	log.Info("Loading policy sources...")
 	inp, err := input.NewInput(ctx, nil, s.cfg.Policy)
 	if err != nil {
 		return fmt.Errorf("loading policy sources: %w", err)
@@ -64,7 +81,7 @@ func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 	s.registerRoutes(mux)
 
-	handler := recoveryMiddleware(mux)
+	handler := requestLoggingMiddleware(recoveryMiddleware(mux))
 
 	httpServer := &http.Server{
 		Addr:              fmt.Sprintf(":%d", s.cfg.Port),
