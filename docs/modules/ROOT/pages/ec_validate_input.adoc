@@ -97,6 +97,9 @@ mark (?) sign, for example: --output text=output.txt?show-successes=false
 Mutually exclusive with input files. Policies are loaded once at startup.
 Note: the server has no built-in authentication or rate limiting.
 Use a reverse proxy or network policy to restrict access in production. (Default: false)
+--server-address:: Address for the HTTP server to bind to when running in server mode.
+Defaults to 127.0.0.1 (localhost only). Set to 0.0.0.0 to listen
+on all interfaces. (Default: 127.0.0.1)
 --server-port:: Port for the HTTP server when running in server mode. (Default: 8080)
 -s, --strict:: Return non-zero status on non-successful validation (Default: true)
 --workers:: Number of workers to use for validation. Defaults to 5. (Default: 5)

@@ -55,12 +55,14 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 		strict              bool
 		workers             int
 		serverMode          bool
+		serverAddress       string
 		serverPort          int
 	}{
-		strict:     true,
-		workers:    5,
-		filterType: "include-exclude", // Default to include-exclude filter
-		serverPort: 8080,
+		strict:        true,
+		workers:       5,
+		filterType:    "include-exclude", // Default to include-exclude filter
+		serverAddress: "127.0.0.1",
+		serverPort:    8080,
 	}
 	cmd := &cobra.Command{
 		Use:   "input [file ...] [flags]",
@@ -176,6 +178,7 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 				showPolicyDocsLink, _ := cmd.Flags().GetBool("show-policy-docs-link")
 
 				srv := server.New(server.Config{
+					Address:            data.serverAddress,
 					Port:               data.serverPort,
 					Policy:             data.policy,
 					Info:               data.info,
@@ -363,6 +366,11 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 		Mutually exclusive with input files. Policies are loaded once at startup.
 		Note: the server has no built-in authentication or rate limiting.
 		Use a reverse proxy or network policy to restrict access in production.`))
+
+	cmd.Flags().StringVar(&data.serverAddress, "server-address", data.serverAddress, hd.Doc(`
+		Address for the HTTP server to bind to when running in server mode.
+		Defaults to 127.0.0.1 (localhost only). Set to 0.0.0.0 to listen
+		on all interfaces.`))
 
 	cmd.Flags().IntVar(&data.serverPort, "server-port", data.serverPort, hd.Doc(`
 		Port for the HTTP server when running in server mode.`))

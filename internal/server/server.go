@@ -33,6 +33,7 @@ import (
 )
 
 type Config struct {
+	Address            string
 	Port               int
 	Policy             policy.Policy
 	Info               bool
@@ -65,6 +66,7 @@ func (s *Server) Start(ctx context.Context) error {
 	log.SetFormatter(&log.JSONFormatter{})
 
 	log.WithFields(log.Fields{
+		"address": s.cfg.Address,
 		"port":    s.cfg.Port,
 		"sources": len(s.cfg.Policy.Spec().Sources),
 	}).Info("Starting server")
@@ -84,7 +86,7 @@ func (s *Server) Start(ctx context.Context) error {
 	handler := requestLoggingMiddleware(recoveryMiddleware(mux))
 
 	httpServer := &http.Server{
-		Addr:              fmt.Sprintf(":%d", s.cfg.Port),
+		Addr:              fmt.Sprintf("%s:%d", s.cfg.Address, s.cfg.Port),
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
