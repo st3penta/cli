@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime/trace"
+	"slices"
 	"sort"
 	"strings"
 
@@ -58,24 +59,30 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 		filterType: "include-exclude", // Default to include-exclude filter
 	}
 	cmd := &cobra.Command{
-		Use:   "input",
+		Use:   "input [file ...] [flags]",
 		Short: "Validate arbitrary JSON or yaml file input conformance with the provided policies",
 		Long: hd.Doc(`
 			Validate conformance of arbitrary JSON or yaml file input with the provided policies
 
 			For each file, validation is performed to determine if the file conforms to rego policies
 			defined in the EnterpriseContractPolicy.
+
+			Input files can be specified as positional arguments or via the --file flag (deprecated).
+			If both are provided, the values are combined.
 			`),
 		Example: hd.Doc(`
-			Use an EnterpriseContractPolicy spec from a local YAML file to validate a single file
+			Validate a single file using positional arguments
+			ec validate input /path/to/file.json --policy my-policy.yaml
+
+			Validate multiple files using positional arguments
+			ec validate input /path/to/file.yaml /path/to/file2.yaml --policy my-policy.yaml
+
+			Validate all YAML files in a directory using shell glob expansion
+			ec validate input *.yaml --policy my-policy.yaml
+
+			Use the deprecated --file flag (still functional, multiple forms supported)
 			ec validate input --file /path/to/file.json --policy my-policy.yaml
-
-			Use an EnterpriseContractPolicy spec from a local YAML file to validate multiple files
-			The file flag can be repeated for multiple input files.
 			ec validate input --file /path/to/file.yaml --file /path/to/file2.yaml --policy my-policy.yaml
-
-			Use an EnterpriseContractPolicy spec from a local YAML file to validate multiple files
-			The file flag can take a comma separated series of files.
 			ec validate input --file="/path/to/file.json,/path/to/file2.json" --policy my-policy.yaml
 
 			Use a git url for the policy configuration. In the first example there should be a '.ec/policy.yaml'
@@ -84,12 +91,36 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 			of the git repo. For git repos not hosted on 'github.com' or 'gitlab.com', prefix the url with
 			'git::'. For the policy configuration files you can use json instead of yaml if you prefer.
 
-			  ec validate input --file /path/to/file.json --policy github.com/user/repo//default?ref=main
+			  ec validate input /path/to/file.json --policy github.com/user/repo//default?ref=main
 
-			  ec validate input --file /path/to/file.yaml --policy github.com/user/repo
+			  ec validate input /path/to/file.yaml --policy github.com/user/repo
 
 `),
 		PreRunE: func(cmd *cobra.Command, args []string) (allErrors error) {
+			// Merge positional arguments into filePaths
+			data.filePaths = append(data.filePaths, args...)
+
+			// Deduplicate file paths
+			seen := make(map[string]struct{}, len(data.filePaths))
+			unique := make([]string, 0, len(data.filePaths))
+			for _, f := range data.filePaths {
+				if _, ok := seen[f]; !ok {
+					seen[f] = struct{}{}
+					unique = append(unique, f)
+				}
+			}
+			data.filePaths = unique
+
+			// Strip empty and whitespace-only entries
+			data.filePaths = slices.DeleteFunc(data.filePaths, func(s string) bool {
+				return strings.TrimSpace(s) == ""
+			})
+
+			if len(data.filePaths) == 0 {
+				allErrors = errors.Join(allErrors, fmt.Errorf("at least one input file must be specified as a positional argument or via the --file flag"))
+				return
+			}
+
 			ctx := cmd.Context()
 
 			policyConfiguration, err := validate_utils.GetPolicyConfig(ctx, data.policyConfiguration)
@@ -231,7 +262,7 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringSliceVarP(&data.filePaths, "file", "f", data.filePaths, "path to input YAML/JSON file (required)")
+	cmd.Flags().StringSliceVarP(&data.filePaths, "file", "f", data.filePaths, "DEPRECATED: use positional arguments instead. Path to input YAML/JSON file")
 
 	cmd.Flags().StringVarP(&data.policyConfiguration, "policy", "p", data.policyConfiguration, hd.Doc(`
 		Policy configuration as:
@@ -275,7 +306,7 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 	cmd.Flags().BoolVar(&data.forceColor, "color", false, hd.Doc(`
 		Enable color when using text output even when the current terminal does not support it`))
 
-	if err := cmd.MarkFlagRequired("file"); err != nil {
+	if err := cmd.Flags().MarkHidden("file"); err != nil {
 		panic(err)
 	}
 

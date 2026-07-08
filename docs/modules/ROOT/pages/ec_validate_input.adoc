@@ -9,21 +9,27 @@ Validate conformance of arbitrary JSON or yaml file input with the provided poli
 For each file, validation is performed to determine if the file conforms to rego policies
 defined in the EnterpriseContractPolicy.
 
+Input files can be specified as positional arguments or via the --file flag (deprecated).
+If both are provided, the values are combined.
+
 [source,shell]
 ----
-ec validate input [flags]
+ec validate input [file ...] [flags]
 ----
 
 == Examples
-Use an EnterpriseContractPolicy spec from a local YAML file to validate a single file
+Validate a single file using positional arguments
+ec validate input /path/to/file.json --policy my-policy.yaml
+
+Validate multiple files using positional arguments
+ec validate input /path/to/file.yaml /path/to/file2.yaml --policy my-policy.yaml
+
+Validate all YAML files in a directory using shell glob expansion
+ec validate input *.yaml --policy my-policy.yaml
+
+Use the deprecated --file flag (still functional, multiple forms supported)
 ec validate input --file /path/to/file.json --policy my-policy.yaml
-
-Use an EnterpriseContractPolicy spec from a local YAML file to validate multiple files
-The file flag can be repeated for multiple input files.
 ec validate input --file /path/to/file.yaml --file /path/to/file2.yaml --policy my-policy.yaml
-
-Use an EnterpriseContractPolicy spec from a local YAML file to validate multiple files
-The file flag can take a comma separated series of files.
 ec validate input --file="/path/to/file.json,/path/to/file2.json" --policy my-policy.yaml
 
 Use a git url for the policy configuration. In the first example there should be a '.ec/policy.yaml'
@@ -32,9 +38,9 @@ example there should be a '.ec/policy.yaml' or a 'policy.yaml' file in the top l
 of the git repo. For git repos not hosted on 'github.com' or 'gitlab.com', prefix the url with
 'git::'. For the policy configuration files you can use json instead of yaml if you prefer.
 
-  ec validate input --file /path/to/file.json --policy github.com/user/repo//default?ref=main
+  ec validate input /path/to/file.json --policy github.com/user/repo//default?ref=main
 
-  ec validate input --file /path/to/file.yaml --policy github.com/user/repo
+  ec validate input /path/to/file.yaml --policy github.com/user/repo
 
 
 == Options
@@ -43,7 +49,7 @@ of the git repo. For git repos not hosted on 'github.com' or 'gitlab.com', prefi
 --effective-time:: Run policy checks with the provided time. Useful for testing rules with
 effective dates in the future. The value can be "now" (default) - for
 current time, or a RFC3339 formatted value, e.g. 2022-11-18T00:00:00Z. (Default: now)
--f, --file:: path to input YAML/JSON file (required) (Default: [])
+-f, --file:: DEPRECATED: use positional arguments instead. Path to input YAML/JSON file (Default: [])
 --filter-type:: Filter type to use for policy evaluation. Options: "include-exclude" (default) or "ec-policy".
 - "include-exclude": Uses traditional include/exclude filtering without pipeline intentions
 - "ec-policy": Uses Enterprise Contract policy filtering with pipeline intention support (Default: include-exclude)
