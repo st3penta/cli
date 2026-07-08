@@ -269,14 +269,17 @@ func Test_ValidateInputCmd_NoPolicyProvided(t *testing.T) {
 }
 
 func Test_ValidateInputCmd_NoFileProvided(t *testing.T) {
+	// No SetTestRekorPublicKey call: this test verifies PreRunE returns early
+	// before policy initialization (which would require Rekor key setup).
 	cmd, _ := setUpValidateInputCmd(nil, afero.NewMemMapFs())
 	cmd.SetArgs([]string{
 		"input",
 		"--policy", `{"publicKey":"testkey"}`,
 	})
+
 	err := cmd.Execute()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "required flag(s) \"file\" not set")
+	assert.Contains(t, err.Error(), "at least one input file must be specified")
 }
 
 func Test_ValidateInputCmd_PolicyParsingError(t *testing.T) {
@@ -438,6 +441,184 @@ func Test_ValidateInputCmd_DefaultTextOutput(t *testing.T) {
 	assert.Contains(t, output, "Input File: /input.yaml")
 	// Results section should not appear when there are only successes and showSuccesses=false
 	assert.NotContains(t, output, "Results:")
+}
+
+func Test_ValidateInputCmd_PositionalArgsVariants(t *testing.T) {
+	outMock := &output.Output{
+		PolicyCheck: []evaluator.Outcome{
+			{
+				Successes: []evaluator.Result{
+					{Message: "Pass"},
+				},
+			},
+		},
+	}
+
+	cases := []struct {
+		name          string
+		files         map[string]string
+		args          []string
+		expectedFiles []string
+	}{
+		{
+			name:  "single positional arg",
+			files: map[string]string{"/input.yaml": "some: data"},
+			args: []string{
+				"input", "/input.yaml",
+				"--policy", `{"publicKey": "testkey"}`,
+				"--output", "json",
+			},
+			expectedFiles: []string{"/input.yaml"},
+		},
+		{
+			name: "multiple positional args",
+			files: map[string]string{
+				"/input1.yaml": "some: data",
+				"/input2.yaml": "other: data",
+			},
+			args: []string{
+				"input", "/input1.yaml", "/input2.yaml",
+				"--policy", `{"publicKey": "testkey"}`,
+				"--output", "json",
+			},
+			expectedFiles: []string{"/input1.yaml", "/input2.yaml"},
+		},
+		{
+			name: "mixed positional and flag",
+			files: map[string]string{
+				"/flag-file.yaml":       "some: data",
+				"/positional-file.yaml": "other: data",
+			},
+			args: []string{
+				"input", "/positional-file.yaml",
+				"--file", "/flag-file.yaml",
+				"--policy", `{"publicKey": "testkey"}`,
+				"--output", "json",
+			},
+			expectedFiles: []string{"/flag-file.yaml", "/positional-file.yaml"},
+		},
+		{
+			name:  "dedup when same file via both flag and positional",
+			files: map[string]string{"/shared.yaml": "some: data"},
+			args: []string{
+				"input", "/shared.yaml",
+				"--file", "/shared.yaml",
+				"--policy", `{"publicKey": "testkey"}`,
+				"--output", "json",
+			},
+			expectedFiles: []string{"/shared.yaml"},
+		},
+		{
+			name: "flag-only (deprecated but functional, no warning)",
+			files: map[string]string{
+				"/flag-only.yaml": "some: data",
+			},
+			args: []string{
+				"input",
+				"--file", "/flag-only.yaml",
+				"--policy", `{"publicKey": "testkey"}`,
+				"--output", "json",
+			},
+			expectedFiles: []string{"/flag-only.yaml"},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fs := afero.NewMemMapFs()
+			for path, content := range c.files {
+				require.NoError(t, afero.WriteFile(fs, path, []byte(content), 0644))
+			}
+
+			cmd, buf := setUpValidateInputCmd(mockValidate(outMock, nil), fs)
+			cmd.SetArgs(c.args)
+
+			utils.SetTestRekorPublicKey(t)
+			err := cmd.Execute()
+			require.NoError(t, err)
+
+			var outJSON map[string]interface{}
+			err = json.Unmarshal(buf.Bytes(), &outJSON)
+			require.NoError(t, err)
+			require.True(t, outJSON["success"].(bool))
+
+			inputFiles, ok := outJSON["filepaths"].([]interface{})
+			require.True(t, ok, "expected 'filepaths' key in output")
+			require.Len(t, inputFiles, len(c.expectedFiles))
+
+			filePaths := []string{}
+			for _, input := range inputFiles {
+				f, ok := input.(map[string]interface{})["filepath"].(string)
+				require.True(t, ok, "expected 'filepath' key in input object")
+				filePaths = append(filePaths, f)
+			}
+			for _, expected := range c.expectedFiles {
+				assert.Contains(t, filePaths, expected)
+			}
+		})
+	}
+}
+
+func Test_ValidateInputCmd_InvalidPositionalArgs(t *testing.T) {
+	cases := []struct {
+		name        string
+		validate    InputValidationFunc
+		args        []string
+		needsRekor  bool
+		expectedErr string
+	}{
+		{
+			name: "flag-like positional arg rejected",
+			args: []string{
+				"input", "--polcy", "foo.yaml",
+				"--policy", `{"publicKey": "testkey"}`,
+			},
+			expectedErr: "unknown flag: --polcy",
+		},
+		{
+			name: "single-dash flag-like positional arg rejected",
+			args: []string{
+				"input", "-x", "foo.yaml",
+				"--policy", `{"publicKey": "testkey"}`,
+			},
+			expectedErr: "unknown shorthand flag: 'x' in -x",
+		},
+		{
+			name: "empty string positional arg",
+			args: []string{
+				"input", "",
+				"--policy", `{"publicKey": "testkey"}`,
+				"--output", "json",
+			},
+			expectedErr: "at least one input file must be specified",
+		},
+		{
+			name:     "non-existent file path",
+			validate: mockValidate(nil, errors.New("file not found")),
+			args: []string{
+				"input", "/nonexistent/path.yaml",
+				"--policy", `{"publicKey": "testkey"}`,
+				"--output", "json",
+			},
+			needsRekor:  true,
+			expectedErr: "error validating file /nonexistent/path.yaml",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cmd, _ := setUpValidateInputCmd(c.validate, afero.NewMemMapFs())
+			cmd.SetArgs(c.args)
+
+			if c.needsRekor {
+				utils.SetTestRekorPublicKey(t)
+			}
+
+			err := cmd.Execute()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), c.expectedErr)
+		})
+	}
 }
 
 func Test_ValidateInputCmd_TextOutputWithShowSuccesses(t *testing.T) {
