@@ -104,7 +104,6 @@ func removeAbandonedPages(module string, generated []string) error {
 	return nil
 }
 
-
 // hasGeneratedMarker reports whether the first line of the file matches
 // GeneratedMarker.
 func hasGeneratedMarker(path string) (bool, error) {
