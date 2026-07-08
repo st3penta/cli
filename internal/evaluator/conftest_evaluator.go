@@ -221,6 +221,7 @@ func (r conftestRunner) Run(ctx context.Context, fileList []string) (result []Ou
 	var conftestResult []output.CheckResult
 	conftestResult, err = r.TestRunner.Run(ctx, fileList)
 	if err != nil {
+		err = wrapRegoError(err)
 		return
 	}
 
@@ -268,6 +269,7 @@ func (r conftestRunner) Run(ctx context.Context, fileList []string) (result []Ou
 	}
 	engine, err = conftest.LoadWithData(r.Policy, r.Data, compilerOptions)
 	if err != nil {
+		err = wrapRegoError(err)
 		return
 	}
 
@@ -1196,13 +1198,9 @@ func strictCapabilities(ctx context.Context) (string, error) {
 	log.Debug("Network access from rego policies disabled")
 
 	builtins := make([]*ast.Builtin, 0, len(capabilities.Builtins))
-	disallowed := sets.NewString(
-		// disallow access to environment variables
-		"opa.runtime",
-		// disallow external connections. This is a second layer of defense since
-		// AllowNet should prevent external connections in the first place.
-		"http.send", "net.lookup_ip_addr",
-	)
+	// disallowedBuiltins is defined in rego_errors.go as the single source of
+	// truth for security-restricted built-in functions.
+	disallowed := sets.NewString(disallowedBuiltins...)
 	for _, b := range capabilities.Builtins {
 		if !disallowed.Has(b.Name) {
 			builtins = append(builtins, b)
