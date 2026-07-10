@@ -21,6 +21,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -41,10 +42,11 @@ import (
 )
 
 type mockEvaluator struct {
-	mu      sync.Mutex
-	results []evaluator.Outcome
-	err     error
-	target  evaluator.EvaluationTarget
+	mu        sync.Mutex
+	results   []evaluator.Outcome
+	err       error
+	target    evaluator.EvaluationTarget
+	destroyed bool
 }
 
 func (m *mockEvaluator) Evaluate(_ context.Context, target evaluator.EvaluationTarget) ([]evaluator.Outcome, error) {
@@ -60,7 +62,17 @@ func (m *mockEvaluator) Target() evaluator.EvaluationTarget {
 	return m.target
 }
 
-func (m *mockEvaluator) Destroy() {}
+func (m *mockEvaluator) Destroy() {
+	m.mu.Lock()
+	m.destroyed = true
+	m.mu.Unlock()
+}
+
+func (m *mockEvaluator) Destroyed() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.destroyed
+}
 
 func (m *mockEvaluator) CapabilitiesPath() string { return "" }
 
@@ -306,50 +318,52 @@ func TestServerLifecycle(t *testing.T) {
 	port := ln.Addr().(*net.TCPAddr).Port
 	ln.Close()
 
+	mock := &mockEvaluator{}
 	s := &Server{
 		cfg: Config{
-			Port:   port,
-			Policy: &stubPolicy{},
+			Address: "127.0.0.1",
+			Port:    port,
+			Policy:  &stubPolicy{},
 		},
 	}
-	s.evaluators = []evaluator.Evaluator{&mockEvaluator{}}
+	s.evaluators = []evaluator.Evaluator{mock}
 	s.ready.Store(true)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	mux := http.NewServeMux()
+	s.registerRoutes(mux)
+	handler := requestLoggingMiddleware(recoveryMiddleware(mux))
+
+	httpServer := &http.Server{
+		Addr:              fmt.Sprintf("%s:%d", s.cfg.Address, s.cfg.Port),
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      120 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 
 	errCh := make(chan error, 1)
 	go func() {
-		mux := http.NewServeMux()
-		s.registerRoutes(mux)
-		httpServer := &http.Server{
-			Addr:              fmt.Sprintf(":%d", port),
-			Handler:           mux,
-			ReadHeaderTimeout: 10 * time.Second,
+		if err := httpServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
 		}
-
-		go func() {
-			<-ctx.Done()
-			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
-			defer shutdownCancel()
-			_ = httpServer.Shutdown(shutdownCtx)
-		}()
-
-		errCh <- httpServer.ListenAndServe()
+		close(errCh)
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/live", port))
+		if err != nil {
+			return false
+		}
+		resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	}, 2*time.Second, 10*time.Millisecond)
 
-	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/live", port))
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	require.NoError(t, httpServer.Shutdown(shutdownCtx))
+	s.destroyEvaluators()
 
-	cancel()
-
-	select {
-	case err := <-errCh:
-		assert.ErrorIs(t, err, http.ErrServerClosed)
-	case <-time.After(5 * time.Second):
-		t.Fatal("server did not shut down in time")
-	}
+	require.NoError(t, <-errCh)
+	assert.True(t, mock.Destroyed(), "evaluator should be destroyed on shutdown")
 }
