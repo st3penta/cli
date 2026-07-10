@@ -23,6 +23,7 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -189,7 +190,7 @@ func recoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rec := recover(); rec != nil {
-				log.WithField("panic", rec).Error("Recovered from panic in handler")
+				log.WithFields(log.Fields{"panic": rec, "stack": string(debug.Stack())}).Error("Recovered from panic in handler")
 				writeError(w, http.StatusInternalServerError, "internal server error")
 			}
 		}()
