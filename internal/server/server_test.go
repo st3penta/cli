@@ -340,10 +340,9 @@ func TestServerLifecycle(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/live", port))
-	if err == nil {
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		resp.Body.Close()
-	}
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
 
 	cancel()
 
