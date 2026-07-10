@@ -244,6 +244,46 @@ func TestHandleValidateInput_EvaluationError(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 }
 
+func TestHandleValidateInput_MultipleEvaluators(t *testing.T) {
+	passing := &mockEvaluator{
+		results: []evaluator.Outcome{
+			{
+				FileName:  "input",
+				Namespace: "source1.main",
+				Successes: []evaluator.Result{
+					{Message: "check passed", Metadata: map[string]interface{}{"code": "source1.check"}},
+				},
+			},
+		},
+	}
+	failing := &mockEvaluator{
+		results: []evaluator.Outcome{
+			{
+				FileName:  "input",
+				Namespace: "source2.main",
+				Failures: []evaluator.Result{
+					{Message: "check failed", Metadata: map[string]interface{}{"code": "source2.check"}},
+				},
+			},
+		},
+	}
+
+	s := newTestServer(passing, failing)
+
+	body := `{"kind": "Pipeline"}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/validate/input", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	s.handleValidateInput(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var report map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &report))
+	assert.Equal(t, false, report["success"], "should fail when any evaluator reports violations")
+}
+
 func TestHandleValidateInput_YAMLInput(t *testing.T) {
 	mock := &mockEvaluator{
 		results: []evaluator.Outcome{
