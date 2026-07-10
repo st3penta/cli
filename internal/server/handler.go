@@ -86,21 +86,31 @@ func (s *Server) handleValidateInput(w http.ResponseWriter, r *http.Request) {
 	}
 	tmpFile.Close()
 
+	data, err := s.evaluateAndBuildReport(ctx, tmpPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}
+
+func (s *Server) evaluateAndBuildReport(ctx context.Context, inputPath string) ([]byte, error) {
 	evalCtx, evalCancel := context.WithTimeout(ctx, evaluationTimeout)
 	defer evalCancel()
 
 	var allResults []evaluator.Outcome
 	for _, e := range s.evaluators {
-		results, err := e.Evaluate(evalCtx, evaluator.EvaluationTarget{Inputs: []string{tmpPath}})
+		results, err := e.Evaluate(evalCtx, evaluator.EvaluationTarget{Inputs: []string{inputPath}})
 		if err != nil {
 			log.WithField("error", err).Error("Evaluation failed")
-			// Avoid leaking internal details (file paths, engine errors) to API clients.
 			msg := "evaluation failed"
 			if evalCtx.Err() == context.DeadlineExceeded {
 				msg = "evaluation timed out"
 			}
-			writeError(w, http.StatusInternalServerError, msg)
-			return
+			return nil, fmt.Errorf("%s", msg)
 		}
 		allResults = append(allResults, results...)
 	}
@@ -137,20 +147,16 @@ func (s *Server) handleValidateInput(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		log.WithField("error", err).Error("Failed to build report")
-		writeError(w, http.StatusInternalServerError, "failed to build report")
-		return
+		return nil, fmt.Errorf("failed to build report")
 	}
 
 	data, err := json.Marshal(report)
 	if err != nil {
 		log.WithField("error", err).Error("Failed to marshal report")
-		writeError(w, http.StatusInternalServerError, "failed to marshal report")
-		return
+		return nil, fmt.Errorf("failed to marshal report")
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(data)
+	return data, nil
 }
 
 func mediaType(r *http.Request) string {
