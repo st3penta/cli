@@ -77,6 +77,9 @@ func (s *Server) Start(ctx context.Context) error {
 		return fmt.Errorf("loading policy sources: %w", err)
 	}
 	s.evaluators = inp.Evaluators
+	if len(s.evaluators) == 0 {
+		return fmt.Errorf("no evaluators created from policy sources, check policy configuration")
+	}
 	s.ready.Store(true)
 	log.Infof("Policy sources loaded, %d evaluator(s) ready", len(s.evaluators))
 
