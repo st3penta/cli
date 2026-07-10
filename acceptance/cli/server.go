@@ -162,98 +162,65 @@ func getServerState(ctx context.Context) (*serverState, error) {
 	return state, nil
 }
 
-func aGETRequestIsSentToTheServer(ctx context.Context, urlPath string) (context.Context, error) {
+func doRequest(ctx context.Context, method, urlPath, contentType string, body io.Reader) (context.Context, error) {
 	state, err := getServerState(ctx)
 	if err != nil {
 		return ctx, err
 	}
 
 	url := fmt.Sprintf("http://127.0.0.1:%d%s", state.port, urlPath)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
-		return ctx, fmt.Errorf("GET %s: %w", urlPath, err)
+		return ctx, fmt.Errorf("%s %s: %w", method, urlPath, err)
+	}
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return ctx, fmt.Errorf("GET %s: %w", urlPath, err)
+		return ctx, fmt.Errorf("%s %s: %w", method, urlPath, err)
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return ctx, fmt.Errorf("reading response: %w", err)
 	}
 
 	return context.WithValue(ctx, httpResponseKey, &httpResponse{
 		statusCode: resp.StatusCode,
-		body:       string(body),
+		body:       string(respBody),
 	}), nil
+}
+
+func expandBody(ctx context.Context, content *godog.DocString) (string, error) {
+	state, err := getServerState(ctx)
+	if err != nil {
+		return "", err
+	}
+	return os.Expand(content.Content, func(key string) string {
+		return state.vars[key]
+	}), nil
+}
+
+func aGETRequestIsSentToTheServer(ctx context.Context, urlPath string) (context.Context, error) {
+	return doRequest(ctx, http.MethodGet, urlPath, "", nil)
 }
 
 func aPOSTRequestIsSentToTheServerWithBody(ctx context.Context, urlPath string, content *godog.DocString) (context.Context, error) {
-	state, err := getServerState(ctx)
+	body, err := expandBody(ctx, content)
 	if err != nil {
 		return ctx, err
 	}
-
-	body := os.Expand(content.Content, func(key string) string {
-		return state.vars[key]
-	})
-
-	url := fmt.Sprintf("http://127.0.0.1:%d%s", state.port, urlPath)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
-	if err != nil {
-		return ctx, fmt.Errorf("POST %s: %w", urlPath, err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return ctx, fmt.Errorf("POST %s: %w", urlPath, err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return ctx, fmt.Errorf("reading response: %w", err)
-	}
-
-	return context.WithValue(ctx, httpResponseKey, &httpResponse{
-		statusCode: resp.StatusCode,
-		body:       string(respBody),
-	}), nil
+	return doRequest(ctx, http.MethodPost, urlPath, "application/json", strings.NewReader(body))
 }
 
 func aPOSTRequestIsSentToTheServerWithContentTypeAndBody(ctx context.Context, urlPath, contentType string, content *godog.DocString) (context.Context, error) {
-	state, err := getServerState(ctx)
+	body, err := expandBody(ctx, content)
 	if err != nil {
 		return ctx, err
 	}
-
-	body := os.Expand(content.Content, func(key string) string {
-		return state.vars[key]
-	})
-
-	url := fmt.Sprintf("http://127.0.0.1:%d%s", state.port, urlPath)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
-	if err != nil {
-		return ctx, fmt.Errorf("POST %s: %w", urlPath, err)
-	}
-	req.Header.Set("Content-Type", contentType)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return ctx, fmt.Errorf("POST %s: %w", urlPath, err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return ctx, fmt.Errorf("reading response: %w", err)
-	}
-
-	return context.WithValue(ctx, httpResponseKey, &httpResponse{
-		statusCode: resp.StatusCode,
-		body:       string(respBody),
-	}), nil
+	return doRequest(ctx, http.MethodPost, urlPath, contentType, strings.NewReader(body))
 }
 
 func aPOSTRequestIsSentToTheServerWithFile(ctx context.Context, urlPath, filePath string) (context.Context, error) {
@@ -271,27 +238,7 @@ func aPOSTRequestIsSentToTheServerWithFile(ctx context.Context, urlPath, filePat
 		return ctx, fmt.Errorf("reading file %s: %w", expanded, err)
 	}
 
-	url := fmt.Sprintf("http://127.0.0.1:%d%s", state.port, urlPath)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(data)))
-	if err != nil {
-		return ctx, fmt.Errorf("POST %s: %w", urlPath, err)
-	}
-	req.Header.Set("Content-Type", "application/yaml")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return ctx, fmt.Errorf("POST %s: %w", urlPath, err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return ctx, fmt.Errorf("reading response: %w", err)
-	}
-
-	return context.WithValue(ctx, httpResponseKey, &httpResponse{
-		statusCode: resp.StatusCode,
-		body:       string(respBody),
-	}), nil
+	return doRequest(ctx, http.MethodPost, urlPath, "application/yaml", strings.NewReader(string(data)))
 }
 
 func getResponse(ctx context.Context) (*httpResponse, error) {
