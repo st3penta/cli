@@ -24,6 +24,8 @@ The evaluation endpoint returns the same JSON structure as --output json. HTTP 2
 for all completed evaluations (the "success" field distinguishes pass/fail). Restart the server
 to pick up policy changes.
 
+Server limits: request body max 80MB, evaluation timeout 90s.
+
 [source,shell]
 ----
 ec validate input [file ...] [flags]

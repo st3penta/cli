@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -34,9 +35,11 @@ import (
 	"github.com/conforma/cli/internal/utils"
 )
 
-const maxRequestBodySize = 10 << 20 // 10 MB
+const MaxRequestBodySize = 80 << 20 // 80 MB
 
-var evaluationTimeout = 90 * time.Second
+const EvaluationTimeout = 90 * time.Second
+
+var evaluationTimeout = EvaluationTimeout
 
 type errorResponse struct {
 	Error  string `json:"error"`
@@ -46,7 +49,7 @@ type errorResponse struct {
 func (s *Server) handleValidateInput(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBodySize+1))
+	body, err := io.ReadAll(io.LimitReader(r.Body, MaxRequestBodySize+1))
 	if err != nil {
 		log.WithField("error", err).Error("Failed to read request body")
 		writeError(w, http.StatusBadRequest, "failed to read request body")
@@ -56,8 +59,8 @@ func (s *Server) handleValidateInput(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "request body is empty")
 		return
 	}
-	if len(body) > maxRequestBodySize {
-		writeError(w, http.StatusRequestEntityTooLarge, "request body exceeds 10MB limit")
+	if len(body) > MaxRequestBodySize {
+		writeError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("request body exceeds %dMB limit", MaxRequestBodySize>>20))
 		return
 	}
 

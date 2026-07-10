@@ -24,6 +24,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	hd "github.com/MakeNowJust/heredoc"
 	log "github.com/sirupsen/logrus"
@@ -67,7 +68,7 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "input [file ...] [flags]",
 		Short: "Validate arbitrary JSON or yaml file input conformance with the provided policies",
-		Long: hd.Doc(`
+		Long: fmt.Sprintf(hd.Doc(`
 			Validate conformance of arbitrary JSON or yaml file input with the provided policies
 
 			For each file, validation is performed to determine if the file conforms to rego policies
@@ -86,7 +87,9 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 			The evaluation endpoint returns the same JSON structure as --output json. HTTP 200 is returned
 			for all completed evaluations (the "success" field distinguishes pass/fail). Restart the server
 			to pick up policy changes.
-			`),
+
+			Server limits: request body max %dMB, evaluation timeout %ds.
+			`), server.MaxRequestBodySize>>20, server.EvaluationTimeout/time.Second),
 		Example: hd.Doc(`
 			Validate a single file using positional arguments
 			ec validate input /path/to/file.json --policy my-policy.yaml
