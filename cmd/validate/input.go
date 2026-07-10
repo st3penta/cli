@@ -116,15 +116,15 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 
 			  ec validate input --server --policy my-policy.yaml
 
-			Start the server on a custom port:
-
-			  ec validate input --server --server-port 9090 --policy my-policy.yaml
-
 			Send a request to the evaluation endpoint:
 
 			  curl -s -X POST -H 'Content-Type: application/json' --data-binary @input.json http://localhost:8080/v1/validate/input
 
 			  curl -s -X POST -H 'Content-Type: application/yaml' --data-binary @input.yaml http://localhost:8080/v1/validate/input
+
+			Start the server on a custom port:
+
+			  ec validate input --server --server-port 9090 --policy my-policy.yaml
 `),
 		PreRunE: func(cmd *cobra.Command, args []string) (allErrors error) {
 			// Merge positional arguments into filePaths
