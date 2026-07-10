@@ -23,6 +23,7 @@ Feature: validate input server mode
     """
     Then the response status should be 200
     And the response field "success" should be "true"
+    And the response header "X-Conforma-Result" should be "pass"
     And the response should match the snapshot
 
   Scenario: server mode evaluation with violations
@@ -39,6 +40,7 @@ Feature: validate input server mode
     """
     Then the response status should be 200
     And the response field "success" should be "false"
+    And the response header "X-Conforma-Result" should be "fail"
     And the response should match the snapshot
 
   Scenario: server mode health endpoints

@@ -188,6 +188,7 @@ func TestHandleValidateInput_SuccessJSON(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+	assert.Equal(t, "pass", rec.Header().Get("X-Conforma-Result"))
 
 	require.Len(t, mock.Target().Inputs, 1)
 	assert.Equal(t, ".json", filepath.Ext(mock.Target().Inputs[0]))
@@ -221,6 +222,7 @@ func TestHandleValidateInput_WithViolations(t *testing.T) {
 
 	// 200 for completed evaluations, even with violations
 	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "fail", rec.Header().Get("X-Conforma-Result"))
 
 	var report map[string]interface{}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &report))

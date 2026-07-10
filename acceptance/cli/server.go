@@ -56,6 +56,7 @@ type serverState struct {
 type httpResponse struct {
 	statusCode int
 	body       string
+	header     http.Header
 }
 
 type responseKey int
@@ -190,6 +191,7 @@ func doRequest(ctx context.Context, method, urlPath, contentType string, body io
 	return context.WithValue(ctx, httpResponseKey, &httpResponse{
 		statusCode: resp.StatusCode,
 		body:       string(respBody),
+		header:     resp.Header,
 	}), nil
 }
 
@@ -305,6 +307,19 @@ func theResponseFieldShouldBe(ctx context.Context, field, expected string) error
 	return nil
 }
 
+func theResponseHeaderShouldBe(ctx context.Context, header, expected string) error {
+	resp, err := getResponse(ctx)
+	if err != nil {
+		return err
+	}
+
+	actual := resp.header.Get(header)
+	if actual != expected {
+		return fmt.Errorf("expected header %s=%q, got %q", header, expected, actual)
+	}
+	return nil
+}
+
 // AddServerStepsTo registers server mode step definitions
 func AddServerStepsTo(sc *godog.ScenarioContext) {
 	sc.Step(`^ec server is started with "(.+)"$`, ecServerStartedWith)
@@ -316,6 +331,7 @@ func AddServerStepsTo(sc *godog.ScenarioContext) {
 	sc.Step(`^the response should contain "(.+)"$`, theResponseShouldContain)
 	sc.Step(`^the response should match the snapshot$`, theResponseShouldMatchTheSnapshot)
 	sc.Step(`^the response field "(.+)" should be "(.+)"$`, theResponseFieldShouldBe)
+	sc.Step(`^the response header "(.+)" should be "(.+)"$`, theResponseHeaderShouldBe)
 
 	sc.After(func(ctx context.Context, sc *godog.Scenario, scenarioErr error) (context.Context, error) {
 		state, ok := ctx.Value(serverKey).(*serverState)

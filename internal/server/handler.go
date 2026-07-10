@@ -87,18 +87,23 @@ func (s *Server) handleValidateInput(w http.ResponseWriter, r *http.Request) {
 	}
 	tmpFile.Close()
 
-	data, err := s.evaluateAndBuildReport(ctx, tmpPath)
+	data, success, err := s.evaluateAndBuildReport(ctx, tmpPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
+	result := "fail"
+	if success {
+		result = "pass"
+	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Conforma-Result", result)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)
 }
 
-func (s *Server) evaluateAndBuildReport(ctx context.Context, inputPath string) ([]byte, error) {
+func (s *Server) evaluateAndBuildReport(ctx context.Context, inputPath string) ([]byte, bool, error) {
 	logger := requestLogger(ctx)
 
 	evalCtx, evalCancel := context.WithTimeout(ctx, evaluationTimeout)
@@ -113,7 +118,7 @@ func (s *Server) evaluateAndBuildReport(ctx context.Context, inputPath string) (
 			if evalCtx.Err() == context.DeadlineExceeded {
 				msg = "evaluation timed out"
 			}
-			return nil, fmt.Errorf("%s", msg)
+			return nil, false, fmt.Errorf("%s", msg)
 		}
 		allResults = append(allResults, results...)
 	}
@@ -150,16 +155,16 @@ func (s *Server) evaluateAndBuildReport(ctx context.Context, inputPath string) (
 	)
 	if err != nil {
 		logger.WithField("error", err).Error("Failed to build report")
-		return nil, fmt.Errorf("failed to build report")
+		return nil, false, fmt.Errorf("failed to build report")
 	}
 
 	data, err := json.Marshal(report)
 	if err != nil {
 		logger.WithField("error", err).Error("Failed to marshal report")
-		return nil, fmt.Errorf("failed to marshal report")
+		return nil, false, fmt.Errorf("failed to marshal report")
 	}
 
-	return data, nil
+	return data, inp.Success, nil
 }
 
 func mediaType(r *http.Request) string {
