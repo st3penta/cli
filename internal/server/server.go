@@ -118,7 +118,7 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	log.Info("Shutting down server...")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), evaluationTimeout+5*time.Second)
 	defer cancel()
 
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
