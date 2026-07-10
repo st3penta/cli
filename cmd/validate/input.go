@@ -88,6 +88,9 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 			for all completed evaluations (the "success" field distinguishes pass/fail). Restart the server
 			to pick up policy changes.
 
+			Error responses use HTTP 400 (bad request), 413 (body too large), or 500 (internal error) with
+			a JSON body: {"error":"<message>","status":<code>}.
+
 			Server limits: request body max %dMB, evaluation timeout %ds.
 			`), server.MaxRequestBodySize>>20, server.EvaluationTimeout/time.Second),
 		Example: hd.Doc(`

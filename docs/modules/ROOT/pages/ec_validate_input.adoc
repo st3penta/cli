@@ -24,6 +24,9 @@ The evaluation endpoint returns the same JSON structure as --output json. HTTP 2
 for all completed evaluations (the "success" field distinguishes pass/fail). Restart the server
 to pick up policy changes.
 
+Error responses use HTTP 400 (bad request), 413 (body too large), or 500 (internal error) with
+a JSON body: {"error":"<message>","status":<code>}.
+
 Server limits: request body max 80MB, evaluation timeout 90s.
 
 [source,shell]
