@@ -83,3 +83,30 @@
   "status": 400
 }
 ---
+
+[TestFeatures/server mode evaluation with YAML input:response - 1]
+{
+  "success": true,
+  "filepaths": [
+    {
+      "filepath": "input",
+      "violations": [],
+      "warnings": [],
+      "successes": null,
+      "success": true,
+      "success-count": 1
+    }
+  ],
+  "policy": {
+    "sources": [
+      {
+        "policy": [
+          "git::https://${GITHOST}/git/happy-day-policy.git"
+        ]
+      }
+    ]
+  },
+  "ec-version": "${EC_VERSION}",
+  "effective-time": "${TIMESTAMP}"
+}
+---

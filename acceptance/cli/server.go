@@ -223,6 +223,39 @@ func aPOSTRequestIsSentToTheServerWithBody(ctx context.Context, urlPath string, 
 	}), nil
 }
 
+func aPOSTRequestIsSentToTheServerWithContentTypeAndBody(ctx context.Context, urlPath, contentType string, content *godog.DocString) (context.Context, error) {
+	state, err := getServerState(ctx)
+	if err != nil {
+		return ctx, err
+	}
+
+	body := os.Expand(content.Content, func(key string) string {
+		return state.vars[key]
+	})
+
+	url := fmt.Sprintf("http://127.0.0.1:%d%s", state.port, urlPath)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
+	if err != nil {
+		return ctx, fmt.Errorf("POST %s: %w", urlPath, err)
+	}
+	req.Header.Set("Content-Type", contentType)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return ctx, fmt.Errorf("POST %s: %w", urlPath, err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ctx, fmt.Errorf("reading response: %w", err)
+	}
+
+	return context.WithValue(ctx, httpResponseKey, &httpResponse{
+		statusCode: resp.StatusCode,
+		body:       string(respBody),
+	}), nil
+}
+
 func aPOSTRequestIsSentToTheServerWithFile(ctx context.Context, urlPath, filePath string) (context.Context, error) {
 	state, err := getServerState(ctx)
 	if err != nil {
@@ -330,6 +363,7 @@ func AddServerStepsTo(sc *godog.ScenarioContext) {
 	sc.Step(`^ec server is started with "(.+)"$`, ecServerStartedWith)
 	sc.Step(`^a GET request is sent to the server at "(.+)"$`, aGETRequestIsSentToTheServer)
 	sc.Step(`^a POST request is sent to the server at "(.+)" with body$`, aPOSTRequestIsSentToTheServerWithBody)
+	sc.Step(`^a POST request is sent to the server at "(.+)" with content type "(.+)" and body$`, aPOSTRequestIsSentToTheServerWithContentTypeAndBody)
 	sc.Step(`^a POST request is sent to the server at "(.+)" with file "(.+)"$`, aPOSTRequestIsSentToTheServerWithFile)
 	sc.Step(`^the response status should be (\d+)$`, theResponseStatusShouldBe)
 	sc.Step(`^the response should contain "(.+)"$`, theResponseShouldContain)
