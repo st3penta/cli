@@ -173,6 +173,13 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if data.serverMode {
+				ignoredInServerMode := []string{"output", "strict", "workers", "filter-type", "no-color", "color"}
+				for _, name := range ignoredInServerMode {
+					if cmd.Flags().Changed(name) {
+						log.Warnf("Flag --%s has no effect in server mode", name)
+					}
+				}
+
 				showSuccesses, _ := cmd.Flags().GetBool("show-successes")
 				showWarnings, _ := cmd.Flags().GetBool("show-warnings")
 				showPolicyDocsLink, _ := cmd.Flags().GetBool("show-policy-docs-link")
