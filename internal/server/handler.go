@@ -48,6 +48,7 @@ func (s *Server) handleValidateInput(w http.ResponseWriter, r *http.Request) {
 
 	body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBodySize+1))
 	if err != nil {
+		log.WithField("error", err).Error("Failed to read request body")
 		writeError(w, http.StatusBadRequest, "failed to read request body")
 		return
 	}
@@ -67,6 +68,7 @@ func (s *Server) handleValidateInput(w http.ResponseWriter, r *http.Request) {
 
 	tmpFile, err := os.CreateTemp("", "ec-server-input-*"+inputExtension(r, body))
 	if err != nil {
+		log.WithField("error", err).Error("Failed to create temp file")
 		writeError(w, http.StatusInternalServerError, "failed to create temp file")
 		return
 	}
@@ -75,6 +77,7 @@ func (s *Server) handleValidateInput(w http.ResponseWriter, r *http.Request) {
 
 	if _, err := tmpFile.Write(body); err != nil {
 		tmpFile.Close()
+		log.WithField("error", err).Error("Failed to write temp file")
 		writeError(w, http.StatusInternalServerError, "failed to write temp file")
 		return
 	}
@@ -137,6 +140,7 @@ func (s *Server) handleValidateInput(w http.ResponseWriter, r *http.Request) {
 
 	data, err := json.Marshal(report)
 	if err != nil {
+		log.WithField("error", err).Error("Failed to marshal report")
 		writeError(w, http.StatusInternalServerError, "failed to marshal report")
 		return
 	}
