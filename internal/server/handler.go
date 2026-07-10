@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"time"
@@ -144,8 +145,17 @@ func (s *Server) handleValidateInput(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
+func mediaType(r *http.Request) string {
+	ct := r.Header.Get("Content-Type")
+	if ct == "" {
+		return ""
+	}
+	mt, _, _ := mime.ParseMediaType(ct)
+	return mt
+}
+
 func inputExtension(r *http.Request, body []byte) string {
-	switch r.Header.Get("Content-Type") {
+	switch mediaType(r) {
 	case "application/json":
 		return ".json"
 	case "application/yaml", "application/x-yaml", "text/yaml":
@@ -159,8 +169,7 @@ func inputExtension(r *http.Request, body []byte) string {
 }
 
 func isValidInput(r *http.Request, body []byte) bool {
-	ct := r.Header.Get("Content-Type")
-	switch ct {
+	switch mediaType(r) {
 	case "application/json":
 		return utils.IsJson(string(body))
 	case "application/yaml", "application/x-yaml", "text/yaml":
