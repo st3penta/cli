@@ -71,8 +71,9 @@ type PolicySource interface {
 
 type PolicyUrl struct {
 	// A string containing a go-getter style source url compatible with conftest pull
-	Url  string
-	Kind PolicyType
+	Url     string
+	Kind    PolicyType
+	pinOnce sync.Once
 }
 
 // downloadCache is a concurrent map used to cache downloaded files.
@@ -186,13 +187,16 @@ func (p *PolicyUrl) GetPolicy(ctx context.Context, workDir string, showMsg bool)
 		return "", err
 	}
 
-	p.Url, err = metadata.GetPinnedURL(p.Url)
-	log.Debug("Pinned URL: ", p.Url)
-	if err != nil {
-		return "", err
+	var pinErr error
+	p.pinOnce.Do(func() {
+		p.Url, pinErr = metadata.GetPinnedURL(p.Url)
+		log.Debug("Pinned URL: ", p.Url)
+	})
+	if pinErr != nil {
+		return "", pinErr
 	}
 
-	return dest, err
+	return dest, nil
 }
 
 func (p *PolicyUrl) PolicyUrl() string {
@@ -204,7 +208,7 @@ func (p *PolicyUrl) Subdir() string {
 	return string(p.Kind)
 }
 
-func (p PolicyUrl) Type() PolicyType {
+func (p *PolicyUrl) Type() PolicyType {
 	return p.Kind
 }
 
