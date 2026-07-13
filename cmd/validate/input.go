@@ -45,7 +45,6 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 	data := struct {
 		effectiveTime       string
 		filePaths           []string
-		filterType          string
 		forceColor          bool
 		info                bool
 		namespaces          []string
@@ -61,7 +60,6 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 	}{
 		strict:        true,
 		workers:       5,
-		filterType:    "include-exclude", // Default to include-exclude filter
 		serverAddress: "127.0.0.1",
 		serverPort:    8080,
 	}
@@ -179,7 +177,7 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if data.serverMode {
-				ignoredInServerMode := []string{"output", "strict", "workers", "filter-type", "no-color", "color"}
+				ignoredInServerMode := []string{"output", "strict", "workers", "no-color", "color"}
 				for _, name := range ignoredInServerMode {
 					if cmd.Flags().Changed(name) {
 						log.Warnf("Flag --%s has no effect in server mode", name)
@@ -358,11 +356,6 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 
 	cmd.Flags().IntVar(&data.workers, "workers", data.workers, hd.Doc(`
 		Number of workers to use for validation. Defaults to 5.`))
-
-	cmd.Flags().StringVar(&data.filterType, "filter-type", data.filterType, hd.Doc(`
-		Filter type to use for policy evaluation. Options: "include-exclude" (default) or "ec-policy".
-		- "include-exclude": Uses traditional include/exclude filtering without pipeline intentions
-		- "ec-policy": Uses Enterprise Contract policy filtering with pipeline intention support`))
 
 	cmd.Flags().BoolVar(&data.noColor, "no-color", false, hd.Doc(`
 		Disable color when using text output even when the current terminal supports it`))
