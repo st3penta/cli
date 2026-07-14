@@ -24,6 +24,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	hd "github.com/MakeNowJust/heredoc"
 	log "github.com/sirupsen/logrus"
@@ -33,6 +34,7 @@ import (
 	"github.com/conforma/cli/internal/input"
 	"github.com/conforma/cli/internal/output"
 	"github.com/conforma/cli/internal/policy"
+	"github.com/conforma/cli/internal/server"
 	"github.com/conforma/cli/internal/utils"
 	validate_utils "github.com/conforma/cli/internal/validate"
 )
@@ -43,7 +45,6 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 	data := struct {
 		effectiveTime       string
 		filePaths           []string
-		filterType          string
 		forceColor          bool
 		info                bool
 		namespaces          []string
@@ -53,15 +54,19 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 		policyConfiguration string
 		strict              bool
 		workers             int
+		serverMode          bool
+		serverAddress       string
+		serverPort          int
 	}{
-		strict:     true,
-		workers:    5,
-		filterType: "include-exclude", // Default to include-exclude filter
+		strict:        true,
+		workers:       5,
+		serverAddress: "127.0.0.1",
+		serverPort:    8080,
 	}
 	cmd := &cobra.Command{
 		Use:   "input [file ...] [flags]",
 		Short: "Validate arbitrary JSON or yaml file input conformance with the provided policies",
-		Long: hd.Doc(`
+		Long: fmt.Sprintf(hd.Doc(`
 			Validate conformance of arbitrary JSON or yaml file input with the provided policies
 
 			For each file, validation is performed to determine if the file conforms to rego policies
@@ -69,7 +74,23 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 
 			Input files can be specified as positional arguments or via the --file flag (deprecated).
 			If both are provided, the values are combined.
-			`),
+
+			When --server is provided, a persistent HTTP server is started instead of running a one-shot
+			evaluation. Policies are loaded once at startup. The server exposes the following endpoints:
+
+			  POST /v1/validate/input  - Evaluate input (JSON or YAML body)
+			  GET  /live               - Liveness probe (always 200)
+			  GET  /ready              - Readiness probe (200 when policies are loaded)
+
+			The evaluation endpoint returns the same JSON structure as --output json. HTTP 200 is returned
+			for all completed evaluations (the "success" field distinguishes pass/fail). Restart the server
+			to pick up policy changes.
+
+			Error responses use HTTP 400 (bad request), 413 (body too large), or 500 (internal error) with
+			a JSON body: {"error":"<message>","status":<code>}.
+
+			Server limits: request body max %dMB, evaluation timeout %ds.
+			`), server.MaxRequestBodySize>>20, server.EvaluationTimeout/time.Second),
 		Example: hd.Doc(`
 			Validate a single file using positional arguments
 			ec validate input /path/to/file.json --policy my-policy.yaml
@@ -95,6 +116,19 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 
 			  ec validate input /path/to/file.yaml --policy github.com/user/repo
 
+			Start a persistent HTTP server for policy evaluation over REST:
+
+			  ec validate input --server --policy my-policy.yaml
+
+			Send a request to the evaluation endpoint:
+
+			  curl -s -X POST -H 'Content-Type: application/json' --data-binary @input.json http://localhost:8080/v1/validate/input
+
+			  curl -s -X POST -H 'Content-Type: application/yaml' --data-binary @input.yaml http://localhost:8080/v1/validate/input
+
+			Start the server on a custom port:
+
+			  ec validate input --server --server-port 9090 --policy my-policy.yaml
 `),
 		PreRunE: func(cmd *cobra.Command, args []string) (allErrors error) {
 			// Merge positional arguments into filePaths
@@ -116,7 +150,11 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 				return strings.TrimSpace(s) == ""
 			})
 
-			if len(data.filePaths) == 0 {
+			if data.serverMode && len(data.filePaths) > 0 {
+				allErrors = errors.Join(allErrors, fmt.Errorf("--server and input files are mutually exclusive"))
+				return
+			}
+			if !data.serverMode && len(data.filePaths) == 0 {
 				allErrors = errors.Join(allErrors, fmt.Errorf("at least one input file must be specified as a positional argument or via the --file flag"))
 				return
 			}
@@ -138,6 +176,30 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 			return
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if data.serverMode {
+				ignoredInServerMode := []string{"output", "strict", "workers", "no-color", "color"}
+				for _, name := range ignoredInServerMode {
+					if cmd.Flags().Changed(name) {
+						log.Warnf("Flag --%s has no effect in server mode", name)
+					}
+				}
+
+				showSuccesses, _ := cmd.Flags().GetBool("show-successes")
+				showWarnings, _ := cmd.Flags().GetBool("show-warnings")
+				showPolicyDocsLink, _ := cmd.Flags().GetBool("show-policy-docs-link")
+
+				srv := server.New(server.Config{
+					Address:            data.serverAddress,
+					Port:               data.serverPort,
+					Policy:             data.policy,
+					Info:               data.info,
+					ShowSuccesses:      showSuccesses,
+					ShowWarnings:       showWarnings,
+					ShowPolicyDocsLink: showPolicyDocsLink,
+				})
+				return srv.Start(cmd.Context())
+			}
+
 			if trace.IsEnabled() {
 				ctx, task := trace.NewTask(cmd.Context(), "ec:validate-inputs")
 				cmd.SetContext(ctx)
@@ -295,11 +357,6 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 	cmd.Flags().IntVar(&data.workers, "workers", data.workers, hd.Doc(`
 		Number of workers to use for validation. Defaults to 5.`))
 
-	cmd.Flags().StringVar(&data.filterType, "filter-type", data.filterType, hd.Doc(`
-		Filter type to use for policy evaluation. Options: "include-exclude" (default) or "ec-policy".
-		- "include-exclude": Uses traditional include/exclude filtering without pipeline intentions
-		- "ec-policy": Uses Enterprise Contract policy filtering with pipeline intention support`))
-
 	cmd.Flags().BoolVar(&data.noColor, "no-color", false, hd.Doc(`
 		Disable color when using text output even when the current terminal supports it`))
 
@@ -309,6 +366,20 @@ func validateInputCmd(validate InputValidationFunc) *cobra.Command {
 	if err := cmd.Flags().MarkHidden("file"); err != nil {
 		panic(err)
 	}
+
+	cmd.Flags().BoolVar(&data.serverMode, "server", false, hd.Doc(`
+		Start a persistent HTTP server instead of running a one-shot evaluation.
+		Mutually exclusive with input files. Policies are loaded once at startup.
+		Note: the server has no built-in authentication or rate limiting.
+		Use a reverse proxy or network policy to restrict access in production.`))
+
+	cmd.Flags().StringVar(&data.serverAddress, "server-address", data.serverAddress, hd.Doc(`
+		Address for the HTTP server to bind to when running in server mode.
+		Defaults to 127.0.0.1 (localhost only). Set to 0.0.0.0 to listen
+		on all interfaces.`))
+
+	cmd.Flags().IntVar(&data.serverPort, "server-port", data.serverPort, hd.Doc(`
+		Port for the HTTP server when running in server mode.`))
 
 	if err := cmd.MarkFlagRequired("policy"); err != nil {
 		panic(err)

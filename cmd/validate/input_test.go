@@ -23,8 +23,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -266,6 +270,83 @@ func Test_ValidateInputCmd_NoPolicyProvided(t *testing.T) {
 	err := cmd.Execute()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "required flag(s) \"policy\" not set")
+}
+
+func Test_ValidateInputCmd_ServerAndFileMutuallyExclusive(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	require.NoError(t, afero.WriteFile(fs, "/input.yaml", []byte("some: data"), 0o644))
+
+	cmd, _ := setUpValidateInputCmd(nil, fs)
+	cmd.SetArgs([]string{
+		"input",
+		"--server",
+		"--file", "/input.yaml",
+		"--policy", `{"publicKey":"testkey"}`,
+	})
+
+	err := cmd.Execute()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "--server and input files are mutually exclusive")
+}
+
+func Test_ValidateInputCmd_ServerMode(t *testing.T) {
+	fs := afero.NewMemMapFs()
+
+	validateCmd := NewValidateCmd()
+	cmd := validateInputCmd(nil)
+	validateCmd.AddCommand(cmd)
+
+	client := fake.FakeClient{}
+	// The timeout lets the server start and bind, then triggers ctx.Done() which
+	// srv.Start observes for graceful shutdown. No sleep/goroutine race needed.
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	ctx = utils.WithFS(ctx, fs)
+	ctx = oci.WithClient(ctx, &client)
+	validateCmd.SetContext(ctx)
+
+	utils.SetTestRekorPublicKey(t)
+
+	validateCmd.SetArgs([]string{
+		"input",
+		"--server",
+		"--server-port", "0",
+		"--policy", `{"publicKey":"testkey"}`,
+	})
+
+	err := validateCmd.Execute()
+	assert.ErrorContains(t, err, "no evaluators created from policy sources")
+}
+
+func Test_ValidateInputCmd_ServerModeWithEvaluator(t *testing.T) {
+	policyDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(policyDir, "allow_all.rego"),
+		[]byte("package main\nimport rego.v1\nallow := []\n"), 0600))
+
+	fs := afero.NewMemMapFs()
+
+	validateCmd := NewValidateCmd()
+	cmd := validateInputCmd(nil)
+	validateCmd.AddCommand(cmd)
+
+	client := fake.FakeClient{}
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	ctx = utils.WithFS(ctx, fs)
+	ctx = oci.WithClient(ctx, &client)
+	validateCmd.SetContext(ctx)
+
+	// Need a policy with at least one source group
+	policyJSON := fmt.Sprintf(`{"sources":[{"policy":["file::%s"]}]}`, policyDir)
+	validateCmd.SetArgs([]string{
+		"input",
+		"--server",
+		"--server-port", "0",
+		"--policy", policyJSON,
+	})
+
+	err := validateCmd.Execute()
+	assert.NoError(t, err)
 }
 
 func Test_ValidateInputCmd_NoFileProvided(t *testing.T) {
