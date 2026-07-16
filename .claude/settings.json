@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if echo \"$CLAUDE_FILE_PATHS\" | grep -q '\\.go$'; then gofmt -l \"$CLAUDE_FILE_PATHS\" 2>/dev/null; fi"
+            "command": "echo \"$CLAUDE_FILE_PATHS\" | while IFS= read -r f; do case \"$f\" in *.go) gofmt -w \"$f\" 2>/dev/null;; esac; done"
           }
         ]
       }
