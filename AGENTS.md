@@ -55,6 +55,13 @@ Acceptance tests require `/etc/hosts` entries:
 127.0.0.1 rekor.localhost
 ```
 
+## Single-File Verification
+
+```bash
+golangci-lint run internal/evaluator/evaluator.go   # Lint a single file (fast)
+gofmt -l internal/evaluator/evaluator.go            # Check formatting on a single file
+```
+
 ## Design Documents
 
 Read these before modifying the corresponding areas:

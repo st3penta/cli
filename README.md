@@ -11,6 +11,17 @@ such as:
 Consult the [documentation][docs] for available sub-commands, descriptions and
 examples of use.
 
+## Installation
+
+Install a pre-built binary from the [latest release](https://github.com/conforma/cli/releases),
+or build from source:
+
+```bash
+make build        # builds dist/ec for your platform
+```
+
+See the [documentation][docs] for usage examples.
+
 ## Building
 
 Run `make build` from the root directory and use the `dist/ec` executable, or
