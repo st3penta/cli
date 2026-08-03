@@ -41,8 +41,8 @@ Tests use build tags with different timeouts:
 
 - **Multi-module project:** root, `acceptance/`, `tools/` each have their own go.mod.
   Run `go mod tidy` in the right module.
-- **Debug mode:** `--debug` or `EC_DEBUG=1` preserves `ec-work-*` temp directories for inspection.
-- Conventional commits with Jira key encouraged (e.g., `feat(EC-1234): description`).
+- **Debug mode:** `EC_DEBUG=1` preserves `ec-work-*` temp directories for inspection.
+  The `--debug` flag only increases log verbosity.
 
 ## CGO and DNS Resolution
 
