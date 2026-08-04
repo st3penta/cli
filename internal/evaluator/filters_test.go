@@ -776,7 +776,7 @@ func TestUnifiedCategorizeResultsFutureEffectiveOn(t *testing.T) {
 	tests := []struct {
 		name            string
 		effectiveTime   time.Time
-		effectiveOn     string
+		effectiveOn     interface{}
 		severity        string
 		expectWarning   bool
 		expectEnhanced  bool
@@ -802,12 +802,22 @@ func TestUnifiedCategorizeResultsFutureEffectiveOn(t *testing.T) {
 			effectiveTime: now,
 			effectiveOn:   pastDate,
 		},
+		{
+			name:          "missing effective_on stays as failure without panic",
+			effectiveTime: now,
+		},
+		{
+			name:          "non-string effective_on stays as failure without panic",
+			effectiveTime: now,
+			effectiveOn:   true,
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			metadata := map[string]interface{}{
-				metadataEffectiveOn: tc.effectiveOn,
+			metadata := map[string]interface{}{}
+			if tc.effectiveOn != nil {
+				metadata[metadataEffectiveOn] = tc.effectiveOn
 			}
 			if tc.severity != "" {
 				metadata["severity"] = tc.severity
@@ -857,7 +867,7 @@ func TestLegacyCategorizeResultsFutureEffectiveOn(t *testing.T) {
 	tests := []struct {
 		name            string
 		effectiveTime   time.Time
-		effectiveOn     string
+		effectiveOn     interface{}
 		severity        string
 		expectWarning   bool
 		expectEnhanced  bool
@@ -883,13 +893,24 @@ func TestLegacyCategorizeResultsFutureEffectiveOn(t *testing.T) {
 			effectiveTime: now,
 			effectiveOn:   pastDate,
 		},
+		{
+			name:          "missing effective_on stays as failure without panic",
+			effectiveTime: now,
+		},
+		{
+			name:          "non-string effective_on stays as failure without panic",
+			effectiveTime: now,
+			effectiveOn:   true,
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			metadata := map[string]interface{}{
-				metadataCode:        "test.future_rule",
-				metadataEffectiveOn: tc.effectiveOn,
+				metadataCode: "test.future_rule",
+			}
+			if tc.effectiveOn != nil {
+				metadata[metadataEffectiveOn] = tc.effectiveOn
 			}
 			if tc.severity != "" {
 				metadata["severity"] = tc.severity
