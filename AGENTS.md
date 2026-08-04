@@ -43,6 +43,10 @@ Tests use build tags with different timeouts:
   Run `go mod tidy` in the right module.
 - **Debug mode:** `EC_DEBUG=1` preserves `ec-work-*` temp directories for inspection.
   The `--debug` flag only increases log verbosity.
+- **Product name:** This project is "Conforma CLI" (binary name: `ec`). Use "Conforma CLI" in new
+  user-facing strings, error messages, and documentation. Legacy identifiers required for
+  compatibility (e.g., `quay.io/enterprise-contract/ec-cli`, Tekton parameter names) must be
+  preserved as-is.
 
 ## CGO and DNS Resolution
 
