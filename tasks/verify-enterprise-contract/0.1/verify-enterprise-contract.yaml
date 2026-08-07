@@ -262,6 +262,7 @@ spec:
         limits:
           memory: 256Mi
       image: quay.io/conforma/cli:latest
+      imagePullPolicy: IfNotPresent
       command: [ec]
       args:
         - sigstore
@@ -294,6 +295,7 @@ spec:
         - name: SNAPSHOT_PATH
           value: $(params.HOMEDIR)/snapshot.json
       image: quay.io/conforma/cli:latest
+      imagePullPolicy: IfNotPresent
       onError: continue # progress even if the step fails so we can see the debug logs
       command: [reduce-snapshot.sh]
 
@@ -310,11 +312,13 @@ spec:
         - name: POLICY_BUNDLE_DIGEST
           value: $(params.POLICY_BUNDLE_DIGEST)
       image: quay.io/conforma/cli:latest
+      imagePullPolicy: IfNotPresent
       onError: continue
       command: [pin-konflux-policy-bundle.sh]
 
     - name: validate
       image: quay.io/conforma/cli:latest
+      imagePullPolicy: IfNotPresent
       onError: continue # progress even if the step fails so we can see the debug logs
       script: |
         #!/bin/bash
@@ -468,6 +472,7 @@ spec:
         limits:
           memory: 256Mi
       image: quay.io/conforma/cli:latest
+      imagePullPolicy: IfNotPresent
       onError: continue  # progress even if the step fails so we can see the debug logs
       command: [sh, -c]
       args:
@@ -487,6 +492,7 @@ spec:
         limits:
           memory: 256Mi
       image: quay.io/conforma/cli:latest
+      imagePullPolicy: IfNotPresent
       onError: continue  # progress even if the step fails so we can see the debug logs
       command: [jq]
       args:
@@ -501,6 +507,7 @@ spec:
         limits:
           memory: 256Mi
       image: quay.io/conforma/cli:latest
+      imagePullPolicy: IfNotPresent
       command: [ec]
       args:
         - version
@@ -513,6 +520,7 @@ spec:
         limits:
           memory: 256Mi
       image: quay.io/conforma/cli:latest
+      imagePullPolicy: IfNotPresent
       command: [jq]
       args:
         - '{policy: .policy, key: .key, "effective-time": .["effective-time"]}'
@@ -520,6 +528,7 @@ spec:
 
     - name: detailed-report
       image: quay.io/conforma/cli:latest
+      imagePullPolicy: IfNotPresent
       onError: continue
       command: ["cat"]
       args:
@@ -533,6 +542,7 @@ spec:
         limits:
           memory: 256Mi
       image: quay.io/conforma/cli:latest
+      imagePullPolicy: IfNotPresent
       command: [jq]
       args:
         - "--argjson"
