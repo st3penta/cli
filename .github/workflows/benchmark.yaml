@@ -34,7 +34,7 @@ jobs:
     timeout-minutes: 15
     continue-on-error: true
     env:
-      # Tuned for 4 vCPU / 16 GB CI runners to complete within 6-8 minutes.
+      # Tuned for 4 vCPU / 16 GB CI runners to complete within 5 minutes.
       # Code defaults are 10 components / 35 workers.
       EC_STRESS_COMPONENTS: "10"
       EC_STRESS_WORKERS: "10"
